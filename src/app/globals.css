@@ -1,0 +1,924 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff; 
+  --bg-base: #0c0e12;
+  --foreground: #e5e6e8;
+  --card: #1f1f23;
+  --stroke: rgba(204, 204, 204, 0.11029380963341695);
+  --muted: #8b8fa0;
+
+  --primary: #ff4d00;
+  --secondary: #efa243;
+
+  --accent: #d352f4;
+  --accent-2: #6aea53;
+
+  --roster-rail-number: #ff4d00; /* light: orange */
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+
+    /* Knexus overlay tokens (dark) */
+    --bg-base: var(--background);
+    --card: rgba(18, 18, 20, 0.92);
+    --stroke: rgba(255, 255, 255, 0.12);
+    --muted: rgba(237, 237, 237, 0.62);
+
+    /* Brand */
+    --primary: #ff4d00;
+    --secondary: #efa243;
+
+    /* Accents (default to brand for now) */
+    --accent: var(--primary);
+    --accent-2: var(--secondary);
+
+     --roster-rail-number: #ffffff; /* dark: white */
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* UI primitives (token-driven) */
+.ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+
+  border-radius: 0.9rem;
+  border: 1px solid color-mix(in oklab, var(--stroke) 92%, transparent);
+
+  font-weight: 600;
+  line-height: 1;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+
+  transition: transform 120ms ease, opacity 120ms ease, background 120ms ease,
+    border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.ui-btn:active {
+  transform: translateY(1px);
+}
+
+.ui-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ui-btn--sm {
+  height: 2.25rem;
+  padding: 0 0.9rem;
+  font-size: 0.875rem;
+}
+
+.ui-btn--md {
+  height: 2.5rem;
+  padding: 0 1rem;
+  font-size: 0.95rem;
+}
+
+.ui-btn--lg {
+  height: 2.75rem;
+  padding: 0 1.1rem;
+  font-size: 1rem;
+}
+
+.ui-btn--primary {
+  background: linear-gradient(90deg, var(--primary), var(--secondary));
+  color: rgba(0, 0, 0, 0.92);
+  border-color: color-mix(in oklab, var(--primary) 55%, var(--stroke));
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--primary) 18%, transparent) inset;
+}
+
+.ui-btn--secondary {
+  background: color-mix(in oklab, var(--card) 78%, transparent);
+  color: var(--foreground);
+}
+
+.ui-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--foreground);
+}
+
+.ui-btn--danger {
+  background: color-mix(in oklab, #ef4444 72%, var(--card));
+  border-color: color-mix(in oklab, #ef4444 55%, var(--stroke));
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.ui-card {
+  border-radius: 1.25rem;
+  border: 1px solid color-mix(in oklab, var(--stroke) 92%, transparent);
+  background: color-mix(in oklab, var(--card) 92%, transparent);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.22);
+}
+
+.ui-card__header {
+  padding: 1rem 1rem 0.5rem 1rem;
+}
+
+.ui-card__title {
+  color: var(--foreground);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.ui-card__subtitle {
+  margin-top: 0.25rem;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.ui-card__content {
+  padding: 0.75rem 1rem 1rem 1rem;
+}
+
+/* Hover + focus affordances */
+@media (hover: hover) and (pointer: fine) {
+  .ui-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+
+  .ui-btn--primary:hover:not(:disabled) {
+    filter: saturate(1.05) brightness(1.03);
+    box-shadow:
+      0 10px 26px rgba(0, 0, 0, 0.22),
+      0 0 0 1px color-mix(in oklab, var(--primary) 22%, transparent) inset;
+  }
+
+  .ui-btn--secondary:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--card) 86%, var(--bg-base));
+    border-color: color-mix(in oklab, var(--stroke) 78%, transparent);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.14);
+  }
+
+  .ui-btn--ghost:hover:not(:disabled) {
+    background: color-mix(in oklab, var(--card) 40%, transparent);
+    border-color: color-mix(in oklab, var(--stroke) 70%, transparent);
+  }
+
+  .ui-btn--danger:hover:not(:disabled) {
+    filter: saturate(1.05) brightness(1.02);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
+  }
+}
+
+/* Keyboard focus */
+.ui-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px color-mix(in oklab, var(--primary) 28%, transparent),
+    0 0 0 1px color-mix(in oklab, var(--stroke) 70%, transparent) inset;
+}
+
+/* Press feel */
+.ui-btn:active:not(:disabled) {
+  transform: translateY(1px);
+  filter: brightness(0.98);
+}
+
+/* --------------------------- */
+/* Toggle */
+/* --------------------------- */
+.ui-toggle {
+  position: relative;
+  width: 44px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--stroke) 92%, transparent);
+  background: color-mix(in oklab, var(--card) 72%, var(--bg-base));
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--stroke) 55%, transparent) inset;
+  transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease,
+    background 120ms ease, filter 120ms ease;
+}
+
+.ui-toggle:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ui-toggle__track {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+}
+
+.ui-toggle__thumb {
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  transform: translateY(-50%);
+  background: color-mix(in oklab, var(--foreground) 8%, var(--card));
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+  transition: left 140ms ease, background 120ms ease, box-shadow 120ms ease;
+}
+
+.ui-toggle--checked {
+  background: color-mix(in oklab, var(--accent) 24%, var(--card));
+  border-color: color-mix(in oklab, var(--accent) 42%, var(--stroke));
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--accent) 18%, transparent) inset;
+}
+
+.ui-toggle--checked .ui-toggle__thumb {
+  left: 21px;
+  background: color-mix(in oklab, var(--accent) 18%, var(--card));
+}
+
+.ui-toggle:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px color-mix(in oklab, var(--accent) 28%, transparent),
+    0 0 0 1px color-mix(in oklab, var(--stroke) 70%, transparent) inset;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ui-toggle:hover:not(:disabled) {
+    filter: brightness(1.03);
+    transform: translateY(-1px);
+  }
+}
+
+/* --------------------------- */
+/* Radio Group */
+/* --------------------------- */
+.ui-radio-group {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.ui-radio {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7rem;
+  width: 100%;
+  text-align: left;
+
+  border-radius: 1rem;
+  border: 1px solid color-mix(in oklab, var(--stroke) 90%, transparent);
+  background: color-mix(in oklab, var(--bg-base) 70%, transparent);
+  padding: 0.65rem 0.75rem;
+
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease,
+    box-shadow 120ms ease, filter 120ms ease;
+}
+
+.ui-radio--disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ui-radio__dot {
+  margin-top: 0.15rem;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklab, var(--stroke) 92%, transparent);
+  background: color-mix(in oklab, var(--card) 78%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--stroke) 60%, transparent) inset;
+  flex: none;
+  position: relative;
+}
+
+.ui-radio--checked .ui-radio__dot {
+  border-color: color-mix(in oklab, var(--accent) 50%, var(--stroke));
+}
+
+.ui-radio--checked .ui-radio__dot::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary), var(--secondary));
+}
+
+.ui-radio__text {
+  display: grid;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.ui-radio__label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--foreground);
+  line-height: 1.15;
+}
+
+.ui-radio__desc {
+  font-size: 0.8rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.ui-radio:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px color-mix(in oklab, var(--accent) 24%, transparent),
+    0 0 0 1px color-mix(in oklab, var(--stroke) 70%, transparent) inset;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ui-radio:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: color-mix(in oklab, var(--stroke) 78%, transparent);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
+  }
+}
+
+/* --------------------------- */
+/* Slider */
+/* --------------------------- */
+.ui-slider-wrap {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.ui-slider {
+  position: relative;
+  height: 36px;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in oklab, var(--stroke) 90%, transparent);
+  background: color-mix(in oklab, var(--bg-base) 70%, transparent);
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease,
+    filter 120ms ease;
+}
+
+.ui-slider--disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.ui-slider__track {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  height: 6px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--stroke) 40%, transparent);
+}
+
+.ui-slider__fill {
+  position: absolute;
+  left: 12px;
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--primary), var(--secondary));
+}
+
+.ui-slider__thumb {
+  position: absolute;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  background: color-mix(in oklab, var(--card) 88%, transparent);
+  border: 1px solid color-mix(in oklab, var(--stroke) 85%, transparent);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.22);
+}
+
+.ui-slider:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 3px color-mix(in oklab, var(--accent) 24%, transparent),
+    0 0 0 1px color-mix(in oklab, var(--stroke) 70%, transparent) inset;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ui-slider:hover:not(.ui-slider--disabled) {
+    transform: translateY(-1px);
+    filter: brightness(1.02);
+  }
+}
+
+.ui-slider__meta {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.ui-slider__value {
+  font-size: 0.8rem;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+/* --------------------------- */
+/* Dialog */
+/* --------------------------- */
+.ui-dialog {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+}
+
+.ui-dialog__overlay {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in oklab, var(--bg-base) 55%, black);
+  opacity: 0.62;
+}
+
+.ui-dialog__panel {
+  position: relative;
+  width: min(720px, calc(100vw - 24px));
+  border-radius: 1.25rem;
+  border: 1px solid color-mix(in oklab, var(--stroke) 92%, transparent);
+  background: color-mix(in oklab, var(--card) 92%, transparent);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(10px);
+  outline: none;
+}
+
+.ui-dialog__header {
+  padding: 1rem 1rem 0.25rem 1rem;
+}
+
+.ui-dialog__title {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--foreground);
+  letter-spacing: -0.01em;
+}
+
+.ui-dialog__desc {
+  margin-top: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.ui-dialog__content {
+  padding: 0.75rem 1rem 1rem 1rem;
+}
+
+/* --------------------------- */
+/* Accordion */
+/* --------------------------- */
+.ui-accordion {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.ui-acc-item {
+  border-radius: 1rem;
+  border: 1px solid color-mix(in oklab, var(--stroke) 90%, transparent);
+  background: color-mix(in oklab, var(--bg-base) 70%, transparent);
+  overflow: hidden;
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+
+.ui-acc-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.85rem 0.9rem;
+  color: var(--foreground);
+  font-weight: 800;
+  text-align: left;
+}
+
+.ui-acc-trigger__chev {
+  width: 10px;
+  height: 10px;
+  border-right: 2px solid color-mix(in oklab, var(--muted) 80%, transparent);
+  border-bottom: 2px solid color-mix(in oklab, var(--muted) 80%, transparent);
+  transform: rotate(45deg);
+  transition: transform 160ms ease;
+  flex: none;
+  margin-right: 2px;
+}
+
+.ui-acc-item--open .ui-acc-trigger__chev {
+  transform: rotate(-135deg);
+}
+
+.ui-acc-trigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 22%, transparent);
+}
+
+.ui-acc-content__inner {
+  padding: 0 0.9rem 0.9rem 0.9rem;
+  color: color-mix(in oklab, var(--foreground) 88%, transparent);
+  line-height: 1.45;
+  font-size: 0.9rem;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ui-acc-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 10px 26px rgba(0, 0, 0, 0.16);
+  }
+}
+
+/* ============================================================
+   ROSTER (moved from styled-jsx)
+   Scoped under .rosterPage to prevent global collisions.
+============================================================ */
+
+.rosterPage .rosterHeroWrapper {
+  padding: 0;
+  margin: 0;
+}
+
+/* Bigger title/subtitle everywhere */
+.rosterPage .rosterHero .CardTitle,
+.rosterPage .rosterHero h2,
+.rosterPage .rosterHero h3 {
+  font-size: 26px;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.rosterPage .rosterHero .CardSubtitle {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+@media (min-width: 640px) {
+  .rosterPage .rosterHero .CardTitle,
+  .rosterPage .rosterHero h2,
+  .rosterPage .rosterHero h3 {
+    font-size: 30px;
+  }
+
+  .rosterPage .rosterHero .CardSubtitle {
+    font-size: 15px;
+  }
+}
+
+.rosterPage .rosterHero {
+  border-radius: 22px;
+  padding: 18px 18px 16px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--primary) 28%, var(--bg-base)),
+    color-mix(in oklab, var(--bg-base) 92%, transparent) 65%
+  );
+  box-shadow:
+    0 40px 120px color-mix(in oklab, var(--bg-base) 80%, transparent),
+    0 0 0 1px color-mix(in oklab, var(--primary) 18%, transparent) inset;
+  position: relative;
+  overflow: hidden;
+}
+
+.rosterPage .tigersLogoHero {
+  position: absolute;
+  inset: 0 0 0 auto;
+  width: min(52%, 420px);
+  opacity: 0.95;
+
+  /* FULL COLOR IMAGE (no mask) */
+  background: url("/TigersLogoColor.png") no-repeat;
+  background-position: right 18px center;
+  background-size: contain;
+
+  filter: drop-shadow(
+    0 18px 42px color-mix(in oklab, var(--bg-base) 70%, transparent)
+  );
+
+  animation: logoSweep 700ms cubic-bezier(0.2, 0.9, 0.2, 1) both,
+             logoFade 1200ms ease-out 120ms both;
+
+  pointer-events: none;
+}
+
+/* WHITE FLASH OVERLAY (masked silhouette only) */
+.rosterPage .tigersLogoHero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+
+  background: #ffffff;
+
+  /* Use the logo as a mask ONLY for the flash */
+  -webkit-mask-image: url("/TigersLogoColor.png");
+  mask-image: url("/TigersLogoColor.png");
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: right 18px center;
+  mask-position: right 18px center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+
+  /* Flash feel */
+  opacity: 0;
+  filter: blur(0.25px);
+  animation: logoFlash 520ms ease-out 80ms both;
+}
+
+/* Remove any old tint animation that was repainting the masked layer */
+@keyframes logoFlash {
+  0%   { opacity: 0; transform: translateX(18px); }
+  12%  { opacity: 1; }
+  100% { opacity: 0; transform: translateX(0px); }
+}
+
+@keyframes logoSweep {
+  from {
+    transform: translateX(-42px);
+    opacity: 0;
+    filter: blur(3px);
+  }
+  to {
+    transform: translateX(0px);
+    opacity: 0.95;
+    filter: blur(0px);
+  }
+}
+
+@keyframes logoTint {
+  0% {
+    background: #ffffff;
+  }
+  100% {
+    background: var(--primary);
+  }
+}
+
+@keyframes logoFade {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.72;
+  }
+}
+
+.rosterPage .rosterHero:before {
+  content: "";
+  position: absolute;
+  inset: -40px -60px auto -60px;
+  height: 140px;
+  background: radial-gradient(
+    600px 140px at 30% 30%,
+    color-mix(in oklab, var(--primary) 22%, transparent),
+    transparent 60%
+  );
+  pointer-events: none;
+  filter: blur(2px);
+  opacity: 0.9;
+}
+
+.rosterPage .rosterHeroInner {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: 10px;
+  min-height: 120px;
+}
+
+.rosterPage .rosterHeroTop {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.rosterPage .rosterHeroMid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 60%;
+}
+
+.rosterPage .rosterHeroBottom {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding-top: 6px;
+}
+
+@media (max-width: 639px) {
+  .rosterPage .rosterHeroBottom {
+    justify-content: flex-start;
+  }
+
+  .rosterPage .recordPillBig {
+    min-width: 110px;
+    padding: 9px 14px;
+  }
+
+  .rosterPage .recordValue {
+    font-size: 18px;
+  }
+}
+
+@media (min-width: 640px) {
+  .rosterPage .rosterHeroBottom {
+    justify-content: center;
+  }
+}
+
+.rosterPage .recordPillBig {
+  border-radius: 16px;
+  border: 1px solid color-mix(in oklab, var(--stroke) 92%, transparent);
+  padding: 10px 16px;
+  background: color-mix(in oklab, var(--bg-base) 58%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--primary) 12%, transparent) inset,
+    0 10px 26px color-mix(in oklab, var(--bg-base) 70%, transparent);
+  text-align: center;
+  min-width: 120px;
+}
+
+.rosterPage .recordValue {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+}
+
+/* Player rows */
+.rosterPage .playerRow {
+  display: grid;
+  grid-template-columns: 86px 1fr; /* left rail + body */
+  align-items: stretch;
+  gap: 0;
+  border-radius: 18px;
+  overflow: hidden;
+
+  border: 1px solid color-mix(in oklab, var(--stroke) 92%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--card) 92%, var(--bg-base) 8%),
+    var(--card)
+  );
+
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--primary) 10%, transparent) inset,
+    0 18px 50px rgba(0, 0, 0, 0.22);
+
+  text-decoration: none;
+
+  transition:
+    transform 160ms ease,
+    box-shadow 200ms ease,
+    filter 200ms ease;
+  will-change: transform;
+}
+
+.rosterPage .playerRow:active {
+  transform: scale(0.995);
+}
+
+@media (hover: hover) {
+  .rosterPage .playerRow:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--primary) 16%, transparent) inset,
+      0 30px 90px rgba(0, 0, 0, 0.28);
+  }
+}
+
+.rosterPage .numberRail {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 12px 10px;
+  border-right: 1px solid color-mix(in oklab, var(--stroke) 92%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--primary) 26%, transparent),
+    color-mix(in oklab, var(--bg-base) 66%, transparent)
+  );
+}
+
+.rosterPage .numberRailGlow {
+  position: absolute;
+  inset: -50px -5px auto -40px;
+  height: 140px;
+  background: radial-gradient(
+    210px 140px at 50% 40%,
+    color-mix(in oklab, var(--primary) 28%, transparent),
+    transparent 65%
+  );
+  opacity: 0.95;
+  filter: blur(2px);
+  pointer-events: none;
+}
+
+.rosterPage .numberRailValue {
+  position: relative;
+  z-index: 1;
+  font-size: 34px;
+  font-weight: 950;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  color: var(--roster-rail-number);
+  text-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+.rosterPage .playerBody {
+  padding: 14px 14px 16px;
+  min-width: 0;
+}
+
+.rosterPage .playerTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rosterPage .playerName {
+  font-size: 18px;
+  line-height: 1.15;
+  font-weight: 850;
+  letter-spacing: -0.01em;
+  color: var(--secondary);
+
+  white-space: normal; /* allow wrap */
+  overflow: hidden;
+
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2; /* show up to 2 lines */
+}
+
+@media (min-width: 640px) {
+  .rosterPage .playerName {
+    font-size: 20px;
+  }
+}
+
+.rosterPage .playerTopRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.rosterPage .rankPill {
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--stroke) 92%, transparent);
+  padding: 6px 10px;
+  min-width: 36px;
+  text-align: center;
+  background: color-mix(in oklab, var(--bg-base) 55%, transparent);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+}
+
+.rosterPage .rankValue {
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--primary);
+}
+
+.rosterPage .movementChip {
+  height: 32px;
+  width: 32px;
+  border-radius: 14px;
+  border: 1px solid;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  opacity: 0.95;
+}
+
+html[data-theme="light"] {
+  --roster-rail-number: #ff4d00; /* orange */
+}
+
+html[data-theme="dark"] {
+  --roster-rail-number: #ffffff; /* white */
+}
+
+/* Admin stat entry grid: auto-wrap without overlap */
+.adminStatGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 8px;
+  align-items: start;
+}
