@@ -13,9 +13,8 @@ import {
   serverTimestamp,
   increment,
 } from "firebase/firestore";
-import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
-
-import { firebaseAuth, firestore } from "@/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
+import { getFirebaseAuth, getFirestoreDb, signInWithEmailAndPassword } from "@/lib/firebase.client";
 import { useRosterPlayers, DEFAULT_SEASON_ID } from "@/lib/rosterStore";
 import type { Player, PlayerBattingStats } from "@/lib/roster";
 
@@ -193,8 +192,11 @@ export default function AdminClient() {
   const canEdit = uid !== null && isAllowlisted === true;
   const effectiveSeasonId = seasonId || DEFAULT_SEASON_ID;
 
+  const auth = React.useMemo(() => getFirebaseAuth(), []);
+const db = React.useMemo(() => getFirestoreDb(), []);
+
   React.useEffect(() => {
-    const unsub = onAuthStateChanged(firebaseAuth, async (u) => {
+    const unsub = onAuthStateChanged(auth, async (u) => {
       setUid(u?.uid ?? null);
       setAuthReady(true);
 
@@ -204,7 +206,7 @@ export default function AdminClient() {
       }
 
       try {
-        const adminRef = doc(firestore, "admins", u.uid);
+        const adminRef = doc(db, "admins", u.uid);
         const snap = await getDoc(adminRef);
         setIsAllowlisted(snap.exists());
       } catch {
@@ -285,7 +287,7 @@ export default function AdminClient() {
     setSigningIn(true);
 
     try {
-      await signInWithEmailAndPassword(firebaseAuth, email.trim(), password);
+      await signInWithEmailAndPassword(auth, email.trim(), password);
       setPassword("");
     } catch (e: unknown) {
       const msg =
@@ -385,7 +387,7 @@ export default function AdminClient() {
         return;
       }
 
-      const batch = writeBatch(firestore);
+      const batch = writeBatch(db);
       let wrote = 0;
 
       for (const p of ps) {
@@ -401,7 +403,7 @@ export default function AdminClient() {
         const n = parseOptionalInt(edit.number);
 
         const playerRef = doc(
-          firestore,
+          db,
           "seasons",
           effectiveSeasonId,
           "players",
@@ -464,7 +466,7 @@ export default function AdminClient() {
         return;
       }
 
-      const seasonRef = doc(firestore, "seasons", nextId);
+      const seasonRef = doc(db, "seasons", nextId);
       await setDoc(
         seasonRef,
         {
@@ -477,7 +479,7 @@ export default function AdminClient() {
         { merge: true },
       );
 
-      const cfgRef = doc(firestore, "app", "config");
+      const cfgRef = doc(db, "app", "config");
       await setDoc(
         cfgRef,
         { currentSeasonId: nextId, updatedAt: serverTimestamp() },
@@ -549,10 +551,10 @@ export default function AdminClient() {
         return;
       }
 
-      const playersCol = collection(firestore, "seasons", effectiveSeasonId, "players");
+      const playersCol = collection(db, "seasons", effectiveSeasonId, "players");
       const snap = await getDocs(query(playersCol));
 
-      const batch = writeBatch(firestore);
+      const batch = writeBatch(db);
       snap.forEach((docSnap) => batch.delete(docSnap.ref));
 
       for (let i = 0; i < cleaned.length; i++) {
@@ -568,7 +570,7 @@ export default function AdminClient() {
 
         if (d.primaryPos) player.primaryPos = d.primaryPos;
 
-        const pref = doc(firestore, "seasons", effectiveSeasonId, "players", id);
+        const pref = doc(db, "seasons", effectiveSeasonId, "players", id);
 
         batch.set(
           pref,
@@ -581,7 +583,7 @@ export default function AdminClient() {
         );
       }
 
-      const seasonRef = doc(firestore, "seasons", effectiveSeasonId);
+      const seasonRef = doc(db, "seasons", effectiveSeasonId);
       batch.set(
         seasonRef,
         {
@@ -635,10 +637,10 @@ export default function AdminClient() {
 
       const gid = `${date.replaceAll("-", "")}-${slug}-${Date.now()}`;
 
-      const seasonRef = doc(firestore, "seasons", effectiveSeasonId);
-      const gameRef = doc(firestore, "seasons", effectiveSeasonId, "games", gid);
+      const seasonRef = doc(db, "seasons", effectiveSeasonId);
+      const gameRef = doc(db, "seasons", effectiveSeasonId, "games", gid);
 
-      const batch = writeBatch(firestore);
+      const batch = writeBatch(db);
 
       batch.set(
         gameRef,
@@ -679,7 +681,7 @@ export default function AdminClient() {
         wroteLines++;
 
         const lineRef = doc(
-          firestore,
+          db,
           "seasons",
           effectiveSeasonId,
           "games",
@@ -700,7 +702,7 @@ export default function AdminClient() {
         );
 
         const playerRef = doc(
-          firestore,
+          db,
           "seasons",
           effectiveSeasonId,
           "players",

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { LogOut } from "lucide-react";
+import { LogOut, Shield } from "lucide-react";
 
 import { clearSession, readSession } from "@/lib/session";
 import {
@@ -36,6 +36,33 @@ function IconButton(props: {
     >
       {props.children}
     </button>
+  );
+}
+
+function PillLink(props: {
+  href: string;
+  title: string;
+  disabled?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={props.disabled ? "#" : props.href}
+      aria-label={props.title}
+      title={props.title}
+      className={[
+        "inline-flex h-9 items-center gap-2 rounded-xl border px-3 text-sm font-semibold shadow-sm transition-opacity",
+        props.disabled ? "pointer-events-none opacity-60" : "hover:opacity-90",
+      ].join(" ")}
+      style={{
+        borderColor: "color-mix(in oklab, var(--stroke) 92%, transparent)",
+        background:
+          "linear-gradient(180deg, color-mix(in oklab, var(--card) 92%, transparent), color-mix(in oklab, var(--card) 72%, transparent))",
+        color: "var(--foreground)",
+      }}
+    >
+      {props.children}
+    </Link>
   );
 }
 
@@ -82,7 +109,8 @@ export function Navbar(props: { title: string; seasonLabel?: string }) {
       <div
         className="h-0.5 w-full"
         style={{
-          background: "linear-gradient(90deg, var(--primary), var(--secondary))",
+          background:
+            "linear-gradient(90deg, var(--primary), var(--secondary))",
           opacity: 0.9,
         }}
         aria-hidden="true"
@@ -117,7 +145,19 @@ export function Navbar(props: { title: string; seasonLabel?: string }) {
           </Link>
 
           <div className="flex items-center gap-2 shrink-0">
+            {isAdmin ? (
+              <PillLink href="/admin" title="Go to admin" disabled={loggingOut}>
+                <Shield
+                  className="h-4 w-4"
+                  style={{ color: "var(--secondary)" }}
+                  aria-hidden="true"
+                />
+                <span className="text-[13px]">Admin</span>
+              </PillLink>
+            ) : null}
+
             <ThemeModeToggle disabled={loggingOut} />
+
             <IconButton
               title={loggingOut ? "Signing out…" : "Sign out"}
               onClickAction={onSignOutAction}
@@ -153,7 +193,10 @@ export function Navbar(props: { title: string; seasonLabel?: string }) {
                 </div>
 
                 {isAdmin ? (
-                  <div className="text-[11px]" style={{ color: "var(--muted)" }}>
+                  <div
+                    className="text-[11px]"
+                    style={{ color: "var(--muted)" }}
+                  >
                     Admin
                   </div>
                 ) : null}
@@ -175,7 +218,19 @@ export function Navbar(props: { title: string; seasonLabel?: string }) {
 
           {/* Right */}
           <div className="flex items-center justify-end gap-2">
+            {isAdmin ? (
+              <PillLink href="/admin" title="Go to admin" disabled={loggingOut}>
+                <Shield
+                  className="h-4 w-4"
+                  style={{ color: "var(--secondary)" }}
+                  aria-hidden="true"
+                />
+                <span>Admin</span>
+              </PillLink>
+            ) : null}
+
             <ThemeModeToggle disabled={loggingOut} />
+
             <IconButton
               title={loggingOut ? "Signing out…" : "Sign out"}
               onClickAction={onSignOutAction}

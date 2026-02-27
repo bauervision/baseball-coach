@@ -1,3 +1,4 @@
+//components/roster/Roster.tsx
 "use client";
 
 import * as React from "react";
@@ -20,6 +21,26 @@ import {
 } from "@/components/ui/Card";
 import { Stat } from "./Stat";
 import { ArrowDown, ArrowUp, Star } from "lucide-react";
+import { OpeningDayCountdown } from "./OpeningDayCountdown";
+
+// near top of file
+const OPENING_DAY_DATE = "2026-03-28";
+
+function parseLocalMidnight(dateISO: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateISO);
+  if (!m) return null;
+  const y = Number(m[1]);
+  const mo = Number(m[2]) - 1;
+  const d = Number(m[3]);
+  const dt = new Date(y, mo, d, 0, 0, 0, 0);
+  return Number.isFinite(dt.getTime()) ? dt : null;
+}
+
+function isPreseason(now = new Date()): boolean {
+  const target = parseLocalMidnight(OPENING_DAY_DATE);
+  if (!target) return false;
+  return now.getTime() < target.getTime();
+}
 
 function hasAnyRecordedStats(p: {
   stats: {
@@ -47,6 +68,26 @@ function hasAnyRecordedStats(p: {
     s.hitByPitch;
 
   return total > 0;
+}
+
+function lastNameKey(fullName: string): string {
+  const parts = fullName.trim().toLowerCase().split(/\s+/).filter(Boolean);
+
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0];
+
+  // basic: last token is last name
+  return parts[parts.length - 1]!;
+}
+
+function sortByLastNameThenFirst(aName: string, bName: string): number {
+  const aLast = lastNameKey(aName);
+  const bLast = lastNameKey(bName);
+
+  const byLast = aLast.localeCompare(bLast);
+  if (byLast !== 0) return byLast;
+
+  return aName.localeCompare(bName);
 }
 
 type Movement = "star" | "up" | "down" | "none";
@@ -109,8 +150,8 @@ export function Roster() {
     const arr = [...src];
 
     if (!anyStatsExist) {
-      // Default: alphabetical before any stats are entered.
-      arr.sort((a, b) => a.name.localeCompare(b.name));
+      // Default: last-name alphabetical before any stats are entered.
+      arr.sort((a, b) => sortByLastNameThenFirst(a.name, b.name));
       return arr;
     }
 
@@ -131,47 +172,37 @@ export function Roster() {
 
   const leaders = React.useMemo(() => computeLeaders(list), [list]);
 
+  const preSeason = isPreseason();
+
   return (
     <div className="rosterPage grid gap-5">
       <div className="rosterHeroWrapper">
         <div className="rosterHero">
-          <div className="rosterHero">
-            <div className="tigersLogoHero" aria-hidden="true" />
-
-            <div className="rosterHeroInner">
-              <div className="rosterHeroTop">
-                <div className="min-w-0">
-                  <CardTitle>{meta.teamName}</CardTitle>
-                  <CardSubtitle>{meta.seasonLabel}</CardSubtitle>
-                </div>
+          <div className="rosterHeroInner">
+            <div className="rosterHeroGrid2">
+              <div className="rosterHeroLeft2">
+                {preSeason ? (
+                  <OpeningDayCountdown
+                    dateISO="2026-03-28"
+                    label="Opening Day"
+                  />
+                ) : (
+                  <div className="recordPillBig">
+                    <div className="text-xs" style={{ color: "var(--muted)" }}>
+                      Record
+                    </div>
+                    <div className="recordValue">
+                      {meta.record.wins}-{meta.record.losses}
+                      {typeof meta.record.ties === "number"
+                        ? `-${meta.record.ties}`
+                        : ""}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              <div className="rosterHeroMid">
-                {error ? (
-                  <div
-                    className="text-sm"
-                    style={{
-                      color:
-                        "color-mix(in oklab, var(--accent) 65%, var(--foreground))",
-                    }}
-                  >
-                    {error}
-                  </div>
-                ) : null}
-              </div>
-
-              <div className="rosterHeroBottom">
-                <div className="recordPillBig">
-                  <div className="text-xs" style={{ color: "var(--muted)" }}>
-                    Record
-                  </div>
-                  <div className="recordValue">
-                    {meta.record.wins}-{meta.record.losses}
-                    {typeof meta.record.ties === "number"
-                      ? `-${meta.record.ties}`
-                      : ""}
-                  </div>
-                </div>
+              <div className="rosterHeroRight2" aria-hidden="true">
+                <div className="tigersLogoGrid" />
               </div>
             </div>
           </div>
@@ -186,7 +217,7 @@ export function Roster() {
 
         <CardContent>
           <div className="grid gap-3">
-            {list.map((p, idx) => {
+            {list.map((p) => {
               const ba = battingAverage(p);
               const obp = onBasePercentage(p);
               const slg = slugging(p);
@@ -216,13 +247,6 @@ export function Roster() {
 
                       <div className="playerTopRight">
                         <MovementIcon kind={move} />
-
-                        <div
-                          className="rankPill"
-                          aria-label={`Rank ${idx + 1}`}
-                        >
-                          <div className="rankValue">{idx + 1}</div>
-                        </div>
                       </div>
                     </div>
 
@@ -317,8 +341,6 @@ export function Roster() {
           </div>
         </CardContent>
       </Card>
-
-     
     </div>
   );
 }

@@ -1,0 +1,379 @@
+/* src/styles/roster.css
+   ROSTER (moved from styled-jsx)
+   Scoped under .rosterPage to prevent global collisions.
+*/
+
+/* Wrapper */
+.rosterPage .rosterHeroWrapper {
+  padding: 0;
+  margin: 0;
+}
+
+/* Bigger title/subtitle everywhere */
+.rosterPage .rosterHero .CardTitle,
+.rosterPage .rosterHero h2,
+.rosterPage .rosterHero h3 {
+  font-size: 26px;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+}
+
+.rosterPage .rosterHero .CardSubtitle {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+@media (min-width: 640px) {
+  .rosterPage .rosterHero .CardTitle,
+  .rosterPage .rosterHero h2,
+  .rosterPage .rosterHero h3 {
+    font-size: 30px;
+  }
+
+  .rosterPage .rosterHero .CardSubtitle {
+    font-size: 15px;
+  }
+}
+
+/* Hero card container */
+.rosterPage .rosterHero {
+  border-radius: 22px;
+  padding: 18px 18px 16px;
+  background: linear-gradient(
+    135deg,
+    color-mix(in oklab, var(--primary) 28%, var(--bg-base)),
+    color-mix(in oklab, var(--bg-base) 92%, transparent) 65%
+  );
+  box-shadow:
+    0 40px 120px color-mix(in oklab, var(--bg-base) 80%, transparent),
+    0 0 0 1px color-mix(in oklab, var(--primary) 18%, transparent) inset;
+  position: relative;
+  overflow: hidden;
+}
+
+.rosterPage .rosterHero:before {
+  content: "";
+  position: absolute;
+  inset: -40px -60px auto -60px;
+  height: 140px;
+  background: radial-gradient(
+    600px 140px at 30% 30%,
+    color-mix(in oklab, var(--primary) 22%, transparent),
+    transparent 60%
+  );
+  pointer-events: none;
+  filter: blur(2px);
+  opacity: 0.9;
+}
+
+/* Hero inner wrapper */
+.rosterPage .rosterHeroInner {
+  position: relative;
+  z-index: 1;
+  min-height: 120px;
+}
+
+/* HERO: always left/right */
+.rosterPage .rosterHeroGrid2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+}
+
+.rosterPage .rosterHeroLeft2 {
+  min-width: 0;
+}
+
+.rosterPage .rosterHeroRight2 {
+  min-width: 0;
+  display: grid;
+  place-items: center;
+}
+
+/* Logo: single source of truth
+   Base = mobile size, sm+ = desktop size, tiny = extra small */
+.rosterPage .tigersLogoGrid {
+  width: 240px;
+  height: 150px;
+
+  background: url("/TigersLogoColor.png") no-repeat;
+  background-position: center;
+  background-size: contain;
+
+  filter: drop-shadow(
+    0 18px 42px color-mix(in oklab, var(--bg-base) 70%, transparent)
+  );
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+/* White flash overlay that fades out */
+.rosterPage .tigersLogoGrid::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+
+  background: #ffffff;
+
+  /* Use the same image as a mask so the flash matches the logo shape */
+  -webkit-mask-image: url("/TigersLogoColor.png");
+  mask-image: url("/TigersLogoColor.png");
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center right;
+  mask-position: center right;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+
+  opacity: 0;
+  animation: logoFlash 700ms ease-out both;
+  pointer-events: none;
+}
+
+/* Mobile alignment for the mask overlay too */
+@media (max-width: 639px) {
+  .rosterPage .tigersLogoGrid::after {
+    -webkit-mask-position: center;
+    mask-position: center;
+  }
+}
+
+/* Tiny phones */
+@media (max-width: 420px) {
+  .rosterPage .tigersLogoGrid {
+    width: 160px;
+    height: 120px;
+  }
+}
+
+/* sm+ adjustments */
+@media (min-width: 640px) {
+  .rosterPage .rosterHeroGrid2 {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, 0.9fr);
+    gap: 18px;
+  }
+
+  .rosterPage .tigersLogoGrid {
+    width: 320px;
+    height: 180px;
+    background-position: center right;
+  }
+}
+
+/* Record pill */
+.rosterPage .recordPillBig {
+  border-radius: 16px;
+  border: 1px solid color-mix(in oklab, var(--stroke) 92%, transparent);
+  padding: 10px 16px;
+  background: color-mix(in oklab, var(--bg-base) 58%, transparent);
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--primary) 12%, transparent) inset,
+    0 10px 26px color-mix(in oklab, var(--bg-base) 70%, transparent);
+  text-align: center;
+  min-width: 120px;
+}
+
+.rosterPage .recordValue {
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+}
+
+@media (max-width: 639px) {
+  .rosterPage .recordPillBig {
+    min-width: 110px;
+    padding: 9px 14px;
+  }
+
+  .rosterPage .recordValue {
+    font-size: 18px;
+  }
+}
+
+/* Player rows */
+.rosterPage .playerRow {
+  display: grid;
+  grid-template-columns: 86px 1fr; /* left rail + body */
+  align-items: stretch;
+  gap: 0;
+  border-radius: 18px;
+  overflow: hidden;
+
+  border: 1px solid color-mix(in oklab, var(--stroke) 92%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--card) 92%, var(--bg-base) 8%),
+    var(--card)
+  );
+
+  box-shadow:
+    0 0 0 1px color-mix(in oklab, var(--primary) 10%, transparent) inset,
+    0 18px 50px rgba(0, 0, 0, 0.22);
+
+  text-decoration: none;
+
+  transition:
+    transform 160ms ease,
+    box-shadow 200ms ease,
+    filter 200ms ease;
+  will-change: transform;
+}
+
+.rosterPage .playerRow:active {
+  transform: scale(0.995);
+}
+
+@media (hover: hover) {
+  .rosterPage .playerRow:hover {
+    transform: translateY(-1px);
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--primary) 16%, transparent) inset,
+      0 30px 90px rgba(0, 0, 0, 0.28);
+  }
+}
+
+/* Left number rail */
+.rosterPage .numberRail {
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 12px 10px;
+  border-right: 1px solid color-mix(in oklab, var(--stroke) 92%, transparent);
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--primary) 26%, transparent),
+    color-mix(in oklab, var(--bg-base) 66%, transparent)
+  );
+}
+
+.rosterPage .numberRailGlow {
+  position: absolute;
+  inset: -50px -5px auto -40px;
+  height: 140px;
+  background: radial-gradient(
+    210px 140px at 50% 40%,
+    color-mix(in oklab, var(--primary) 28%, transparent),
+    transparent 65%
+  );
+  opacity: 0.95;
+  filter: blur(2px);
+  pointer-events: none;
+}
+
+.rosterPage .numberRailValue {
+  position: relative;
+  z-index: 1;
+  font-size: 34px;
+  font-weight: 950;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  color: var(--roster-rail-number);
+  text-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+}
+
+/* Right content */
+.rosterPage .playerBody {
+  padding: 14px 14px 16px;
+  min-width: 0;
+}
+
+.rosterPage .playerTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.rosterPage .playerName {
+  font-size: 18px;
+  line-height: 1.15;
+  font-weight: 850;
+  letter-spacing: -0.01em;
+  color: var(--secondary);
+
+  white-space: normal; /* allow wrap */
+  overflow: hidden;
+
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2; /* show up to 2 lines */
+}
+
+@media (min-width: 640px) {
+  .rosterPage .playerName {
+    font-size: 20px;
+  }
+}
+
+.rosterPage .playerTopRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Optional pills/chips */
+.rosterPage .rankPill {
+  border-radius: 14px;
+  border: 1px solid color-mix(in oklab, var(--stroke) 92%, transparent);
+  padding: 6px 10px;
+  min-width: 36px;
+  text-align: center;
+  background: color-mix(in oklab, var(--bg-base) 55%, transparent);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+}
+
+.rosterPage .rankValue {
+  font-size: 14px;
+  font-weight: 900;
+  line-height: 1;
+  color: var(--primary);
+}
+
+.rosterPage .movementChip {
+  height: 32px;
+  width: 32px;
+  border-radius: 14px;
+  border: 1px solid;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  opacity: 0.95;
+}
+
+/* Admin stat entry grid: auto-wrap without overlap */
+.adminStatGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  gap: 8px;
+  align-items: start;
+}
+
+@keyframes logoSweep {
+  from {
+    transform: translateX(-42px);
+    opacity: 0;
+    filter: blur(3px);
+  }
+  to {
+    transform: translateX(0px);
+    opacity: 0.95;
+    filter: blur(0px);
+  }
+}
+
+@keyframes logoFlash {
+  0% {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  12% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(0px);
+  }
+}

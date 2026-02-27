@@ -1,11 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { ShellLayout } from "@/components/shell/ShellLayout";
-import { AuthOverlay } from "@/components/auth/AuthOverlay";
-
 import "./globals.css";
-import AuthOverlayHost from "@/components/layout/AuthOverlayHost";
-import { ThemeBoot } from "@/components/theme/ThemeBoot";
+import { AuthOverlayWrapper } from "@/components/auth/AuthOverlayWrapper";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,22 +18,11 @@ export const metadata: Metadata = {
   description: "Knexus app",
 };
 
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout(props: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <ThemeBoot />
-        <AuthOverlayHost/>
-        <AuthOverlay>
-          <ShellLayout>{children}</ShellLayout>
-          
-        </AuthOverlay>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <AuthOverlayWrapper>{props.children}</AuthOverlayWrapper>
       </body>
     </html>
   );

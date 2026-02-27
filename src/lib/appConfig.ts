@@ -1,21 +1,32 @@
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { firestore } from "@/lib/firebase";
+// lib/appConfig.ts
+"use client";
 
-export const APP_CONFIG_DOC = doc(firestore, "app", "config");
+
+import { getFirestoreDb } from "@/lib/firebase.client";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+
+function appConfigDoc() {
+  const db = getFirestoreDb();
+  return doc(db, "app", "config");
+}
 
 export async function readCurrentSeasonId(): Promise<string | null> {
-  const snap = await getDoc(APP_CONFIG_DOC);
+  const snap = await getDoc(appConfigDoc());
   if (!snap.exists()) return null;
+
   const data = snap.data() as { currentSeasonId?: unknown };
-  return typeof data.currentSeasonId === "string" && data.currentSeasonId.length
-    ? data.currentSeasonId
-    : null;
+  const v = data.currentSeasonId;
+
+  return typeof v === "string" && v.trim().length ? v.trim() : null;
 }
 
 export async function writeCurrentSeasonId(seasonId: string) {
+  const sid = seasonId.trim();
+  if (!sid) throw new Error("seasonId is required");
+
   await setDoc(
-    APP_CONFIG_DOC,
-    { currentSeasonId: seasonId, updatedAt: serverTimestamp() },
+    appConfigDoc(),
+    { currentSeasonId: sid, updatedAt: serverTimestamp() },
     { merge: true },
   );
 }

@@ -12,8 +12,11 @@ import {
   finishEnterOverlay,
 } from "@/components/layout/AuthOverlayHost";
 
-import { signInWithEmailAndPassword } from "firebase/auth";
-import { firebaseAuth } from "@/lib/firebase";
+import {
+  getFirebaseAuth,
+  signInWithEmailAndPassword,
+  type Auth,
+} from "@/lib/firebase.client";
 
 type PendingKind = "enter" | null;
 
@@ -21,6 +24,14 @@ const OVERLAY_MS = 2000;
 
 export function AuthOverlay(props: { children: React.ReactNode }) {
   const router = useRouter();
+  const [auth, setAuth] = React.useState<Auth | null>(null);
+
+  React.useEffect(() => {
+    // client-only
+    setAuth(getFirebaseAuth());
+  }, []);
+
+
   const [ready, setReady] = React.useState(false);
   const [session, setSession] = React.useState<AppSession | null>(null);
   const [pending, setPending] = React.useState<PendingKind>(null);
@@ -170,12 +181,10 @@ export function AuthOverlay(props: { children: React.ReactNode }) {
       timersRef.current.push(t);
     });
 
+    if (!auth) return;
+
     try {
-      const credPromise = signInWithEmailAndPassword(
-        firebaseAuth,
-        email,
-        password,
-      );
+      const credPromise = signInWithEmailAndPassword(auth, email, password);
 
       const [cred] = await Promise.all([credPromise, minDelay]);
 
@@ -206,7 +215,7 @@ export function AuthOverlay(props: { children: React.ReactNode }) {
       }, 700);
       timersRef.current.push(t);
     }
-  }, [pending, adminBusy, adminEmail, adminPassword, router]);
+  }, [pending, adminBusy, adminEmail, adminPassword, router, auth]);
 
   if (!ready) return null;
 

@@ -1,4 +1,6 @@
 // lib/rosterStore.ts
+"use client";
+
 import * as React from "react";
 import {
   collection,
@@ -8,16 +10,10 @@ import {
   onSnapshot,
   query,
   type Unsubscribe,
+  type Firestore,
 } from "firebase/firestore";
-import { firestore } from "@/lib/firebase";
+import { getFirestoreDb } from "@/lib/firebase.client";
 import type { Player, PlayerBattingStats } from "@/lib/roster";
-
-/**
- * Single source of truth for which season is public.
- * Doc: app/config
- * Field: currentSeasonId: string
- */
-const APP_CONFIG_DOC = doc(firestore, "app", "config");
 
 /**
  * Fallback if app/config is missing.
@@ -138,6 +134,21 @@ function readCurrentSeasonIdFromConfigData(data: unknown): string | null {
   return null;
 }
 
+function configDoc(db: Firestore) {
+  // Doc: app/config
+  return doc(db, "app", "config");
+}
+
+function seasonDoc(db: Firestore, seasonId: string) {
+  // Doc: seasons/{seasonId}
+  return doc(db, "seasons", seasonId);
+}
+
+function playersQuery(db: Firestore, seasonId: string) {
+  // Collection: seasons/{seasonId}/players
+  return query(collection(db, "seasons", seasonId, "players"));
+}
+
 export function useRosterPlayers(): {
   seasonId: string;
   meta: RosterMeta;
@@ -149,12 +160,15 @@ export function useRosterPlayers(): {
   const [players, setPlayers] = React.useState<Player[] | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
+  const lastSeasonIdRef = React.useRef<string>("");
+
   React.useEffect(() => {
+    const db = getFirestoreDb();
+
+    let active = true;
+
     let seasonUnsub: Unsubscribe | null = null;
     let playersUnsub: Unsubscribe | null = null;
-
-    // Critical: guard against rapid rewire churn.
-    const lastSeasonIdRef = { current: "" as string };
 
     function cleanupSeasonListeners() {
       if (seasonUnsub) {
@@ -167,73 +181,89 @@ export function useRosterPlayers(): {
       }
     }
 
-    function wireSeasonListeners(nextSeasonId: string) {
-      if (!nextSeasonId) nextSeasonId = DEFAULT_SEASON_ID;
+    function safeSet<T>(fn: () => void) {
+      if (!active) return;
+      fn();
+    }
 
-      // Only rewire if the season actually changed.
-      if (lastSeasonIdRef.current === nextSeasonId) return;
-      lastSeasonIdRef.current = nextSeasonId;
+    function wireSeasonListeners(nextSeasonId: string) {
+      const sid = nextSeasonId?.trim()
+        ? nextSeasonId.trim()
+        : DEFAULT_SEASON_ID;
+
+      if (lastSeasonIdRef.current === sid) return;
+      lastSeasonIdRef.current = sid;
 
       cleanupSeasonListeners();
 
-      setSeasonId(nextSeasonId);
+      safeSet(() => {
+        setSeasonId(sid);
+        setError(null);
+      });
 
-      // Meta: seasons/{seasonId}
-      const seasonRef = doc(firestore, "seasons", nextSeasonId);
       seasonUnsub = onSnapshot(
-        seasonRef,
+        seasonDoc(db, sid),
         (seasonSnap) => {
-          if (!seasonSnap.exists()) {
-            setMeta(DEFAULT_META);
-            return;
-          }
-          setMeta(normalizeMeta(seasonSnap.data()));
+          safeSet(() => {
+            if (!seasonSnap.exists()) {
+              setMeta(DEFAULT_META);
+              return;
+            }
+            setMeta(normalizeMeta(seasonSnap.data()));
+          });
         },
         (e) => {
-          setMeta(DEFAULT_META);
-          setError(e?.message ?? "Failed to load season.");
+          safeSet(() => {
+            setMeta(DEFAULT_META);
+            setError(e?.message ?? "Failed to load season.");
+          });
         },
       );
 
-      // Players: seasons/{seasonId}/players
-      const qy = query(collection(firestore, "seasons", nextSeasonId, "players"));
       playersUnsub = onSnapshot(
-        qy,
+        playersQuery(db, sid),
         (psnap) => {
           const out: Player[] = [];
           psnap.forEach((docSnap) => {
             const p = normalizePlayer(docSnap.data(), docSnap.id);
             if (p) out.push(p);
           });
-          setPlayers(out);
-          setError(null);
+
+          safeSet(() => {
+            setPlayers(out);
+            setError(null);
+          });
         },
         (e) => {
-          setError(e?.message ?? "Failed to load roster.");
-          setPlayers([]);
+          safeSet(() => {
+            setError(e?.message ?? "Failed to load roster.");
+            setPlayers([]);
+          });
         },
       );
     }
 
-    // Subscribe to app/config to get currentSeasonId.
     const configUnsub = onSnapshot(
-      APP_CONFIG_DOC,
+      configDoc(db),
       (snap) => {
         const cfgSeasonId =
-          (snap.exists() ? readCurrentSeasonIdFromConfigData(snap.data()) : null) ??
-          DEFAULT_SEASON_ID;
+          (snap.exists()
+            ? readCurrentSeasonIdFromConfigData(snap.data())
+            : null) ?? DEFAULT_SEASON_ID;
 
         wireSeasonListeners(cfgSeasonId);
       },
       (e) => {
-        // If config fails, fall back but keep app usable.
-        setError(e?.message ?? "Failed to load app config.");
-        setMeta(DEFAULT_META);
+        safeSet(() => {
+          setError(e?.message ?? "Failed to load app config.");
+          setMeta(DEFAULT_META);
+        });
         wireSeasonListeners(DEFAULT_SEASON_ID);
       },
     );
 
     return () => {
+      active = false;
       configUnsub();
       cleanupSeasonListeners();
     };
@@ -243,8 +273,8 @@ export function useRosterPlayers(): {
 }
 
 export async function fetchPlayers(seasonId: string): Promise<Player[]> {
-  const qy = query(collection(firestore, "seasons", seasonId, "players"));
-  const snap = await getDocs(qy);
+  const db = getFirestoreDb();
+  const snap = await getDocs(playersQuery(db, seasonId));
 
   const out: Player[] = [];
   snap.forEach((docSnap) => {
@@ -256,7 +286,8 @@ export async function fetchPlayers(seasonId: string): Promise<Player[]> {
 }
 
 export async function fetchCurrentSeasonId(): Promise<string> {
-  const snap = await getDoc(APP_CONFIG_DOC);
+  const db = getFirestoreDb();
+  const snap = await getDoc(configDoc(db));
   const seasonId = snap.exists()
     ? readCurrentSeasonIdFromConfigData(snap.data())
     : null;
