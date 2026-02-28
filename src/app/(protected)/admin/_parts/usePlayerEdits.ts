@@ -6,6 +6,12 @@ import type { Firestore } from "firebase/firestore";
 import type { Player } from "@/lib/roster";
 
 import { savePlayerEdits } from "./adminActions";
+type PlayerEdit = {
+  name: string;
+  number: string;
+  shirtSize: string;
+  dirty: boolean;
+};
 
 export function usePlayerEdits(opts: {
   db: Firestore;
@@ -16,7 +22,7 @@ export function usePlayerEdits(opts: {
   const { db, seasonId, players, canEdit } = opts;
 
   const [playerEdits, setPlayerEdits] = React.useState<
-    Record<string, { name: string; number: string; dirty: boolean }>
+    Record<string, PlayerEdit>
   >({});
   const [playerBusy, setPlayerBusy] = React.useState(false);
   const [playerMsg, setPlayerMsg] = React.useState<string | null>(null);
@@ -28,18 +34,26 @@ export function usePlayerEdits(opts: {
     if (ps === null) return;
 
     setPlayerEdits((prev) => {
-      const out: Record<string, { name: string; number: string; dirty: boolean }> =
-        { ...prev };
-
+      const out: Record<string, PlayerEdit> = { ...prev };
       for (const p of ps) {
         const existing = out[p.id];
         if (!existing) {
-          out[p.id] = { name: p.name, number: String(p.number ?? 0), dirty: false };
+          out[p.id] = {
+            name: p.name,
+            number: String(p.number ?? 0),
+            shirtSize: String(p.shirtSize ?? ""),
+            dirty: false,
+          };
           continue;
         }
 
         if (!existing.dirty) {
-          out[p.id] = { name: p.name, number: String(p.number ?? 0), dirty: false };
+          out[p.id] = {
+            name: p.name,
+            number: String(p.number ?? 0),
+            shirtSize: String(p.shirtSize ?? ""),
+            dirty: false,
+          };
         }
       }
 
@@ -53,15 +67,22 @@ export function usePlayerEdits(opts: {
 
   function setPlayerEditValue(
     playerId: string,
-    patch: Partial<{ name: string; number: string }>,
+    patch: Partial<{ name: string; number: string; shirtSize: string }>,
   ) {
     setPlayerEdits((prev) => {
-      const cur = prev[playerId] ?? { name: "", number: "0", dirty: false };
+      const cur = prev[playerId] ?? {
+        name: "",
+        number: "0",
+        shirtSize: "",
+        dirty: false,
+      };
+
       return {
         ...prev,
         [playerId]: {
           name: patch.name ?? cur.name,
           number: patch.number ?? cur.number,
+          shirtSize: patch.shirtSize ?? cur.shirtSize,
           dirty: true,
         },
       };

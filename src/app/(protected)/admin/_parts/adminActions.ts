@@ -71,7 +71,10 @@ export async function savePlayerEdits(opts: {
   db: Firestore;
   seasonId: string;
   players: Player[];
-  edits: Record<string, { name: string; number: string; dirty: boolean }>;
+  edits: Record<
+    string,
+    { name: string; number: string; shirtSize: string; dirty: boolean }
+  >;
 }): Promise<{ wrote: number }> {
   const { db, seasonId, players, edits } = opts;
 
@@ -88,11 +91,16 @@ export async function savePlayerEdits(opts: {
     if (!name) throw new Error("Player name cannot be empty.");
 
     const n = parseOptionalInt(edit.number);
-
+    const shirtSize = edit.shirtSize.trim();
     const playerRef = doc(db, "seasons", seasonId, "players", p.id);
     batch.set(
       playerRef,
-      { name, number: n, updatedAt: serverTimestamp() },
+      {
+        name,
+        number: n,
+        shirtSize: shirtSize ? shirtSize : null,
+        updatedAt: serverTimestamp(),
+      },
       { merge: true },
     );
     wrote++;

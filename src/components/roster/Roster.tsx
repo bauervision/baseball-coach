@@ -137,6 +137,11 @@ function MovementIcon(props: { kind: Movement }) {
   );
 }
 
+function shirtSizeLabel(v: unknown): string {
+  const s = String(v ?? "").trim();
+  return s ? s : "—";
+}
+
 export function Roster() {
   const { meta, players, error } = useRosterPlayers();
 
@@ -307,6 +312,24 @@ export function Roster() {
                   <div className="numberRail" aria-hidden="true">
                     <div className="numberRailGlow" />
                     <div className="numberRailValue">{p.number}</div>
+
+                    <div className="mt-2 grid gap-1 px-2 pb-2">
+                      <div
+                        className="text-[10px] font-semibold uppercase tracking-wide"
+                        style={{ color: "var(--muted)" }}
+                      >
+                        Size
+                      </div>
+                      <div
+                        className="text-xs font-extrabold leading-none"
+                        style={{ color: "var(--secondary)" }}
+                      >
+                        {shirtSizeLabel(
+                          (p as unknown as { shirtSize?: string | null })
+                            .shirtSize,
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   {/* RIGHT: content (name + stats) */}

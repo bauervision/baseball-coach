@@ -4,7 +4,13 @@
 import * as React from "react";
 import type { Player } from "@/lib/roster";
 
-import { Card, CardContent, CardHeader, CardTitle, CardSubtitle } from "@/components/ui/Card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardSubtitle,
+} from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 
 import { Field } from "../adminUiHelpers";
@@ -14,12 +20,15 @@ export function PlayersTab(props: {
   canEdit: boolean;
   players: Player[] | null;
 
-  playerEdits: Record<string, { name: string; number: string; dirty: boolean }>;
+  playerEdits: Record<
+    string,
+    { name: string; number: string; shirtSize: string; dirty: boolean }
+  >;
+
   setPlayerEditValueAction: (
     playerId: string,
-    patch: Partial<{ name: string; number: string }>,
+    patch: Partial<{ name: string; number: string; shirtSize: string }>,
   ) => void;
-
   dirtyPlayersCount: number;
   playerBusy: boolean;
   playerMsg: string | null;
@@ -38,11 +47,26 @@ export function PlayersTab(props: {
     onSavePlayerEditsAction,
   } = props;
 
+  const SHIRT_SIZES = [
+    "",
+    "YXS",
+    "YS",
+    "YM",
+    "YL",
+    "YXL",
+    "AS",
+    "AM",
+    "AL",
+    "AXL",
+  ] as const;
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Player Update</CardTitle>
-        <CardSubtitle>Edit player name and number for the current season.</CardSubtitle>
+        <CardSubtitle>
+          Edit player name and number for the current season.
+        </CardSubtitle>
       </CardHeader>
 
       <CardContent className="grid gap-4">
@@ -53,13 +77,19 @@ export function PlayersTab(props: {
         ) : null}
 
         {playerErr ? (
-          <div className="rounded-xl border px-3 py-2 text-xs" style={toastStyle("err")}>
+          <div
+            className="rounded-xl border px-3 py-2 text-xs"
+            style={toastStyle("err")}
+          >
             {playerErr}
           </div>
         ) : null}
 
         {playerMsg ? (
-          <div className="rounded-xl border px-3 py-2 text-xs" style={toastStyle("ok")}>
+          <div
+            className="rounded-xl border px-3 py-2 text-xs"
+            style={toastStyle("ok")}
+          >
             {playerMsg}
           </div>
         ) : null}
@@ -86,6 +116,7 @@ export function PlayersTab(props: {
                 const edit = playerEdits[p.id] ?? {
                   name: p.name,
                   number: String(p.number ?? 0),
+                  shirtSize: String(p.shirtSize ?? ""),
                   dirty: false,
                 };
 
@@ -94,7 +125,8 @@ export function PlayersTab(props: {
                     key={p.id}
                     className="rounded-2xl border p-3"
                     style={{
-                      borderColor: "color-mix(in oklab, var(--stroke) 92%, transparent)",
+                      borderColor:
+                        "color-mix(in oklab, var(--stroke) 92%, transparent)",
                       background:
                         "linear-gradient(180deg, color-mix(in oklab, var(--card) 92%, var(--bg-base) 8%), var(--card))",
                       boxShadow:
@@ -106,7 +138,9 @@ export function PlayersTab(props: {
                         <Field
                           label="Name"
                           value={edit.name}
-                          onChangeAction={(v) => setPlayerEditValueAction(p.id, { name: v })}
+                          onChangeAction={(v) =>
+                            setPlayerEditValueAction(p.id, { name: v })
+                          }
                           disabled={!canEdit || playerBusy}
                         />
                       </div>
@@ -115,14 +149,57 @@ export function PlayersTab(props: {
                         <Field
                           label="Number"
                           value={edit.number}
-                          onChangeAction={(v) => setPlayerEditValueAction(p.id, { number: v })}
+                          onChangeAction={(v) =>
+                            setPlayerEditValueAction(p.id, { number: v })
+                          }
                           inputMode="numeric"
                           disabled={!canEdit || playerBusy}
                         />
                       </div>
 
+                      <div className="sm:col-span-2">
+                        <div className="grid gap-1">
+                          <div
+                            className="text-xs"
+                            style={{ color: "var(--muted)" }}
+                          >
+                            Shirt size
+                          </div>
+
+                          <select
+                            value={edit.shirtSize}
+                            onChange={(e) =>
+                              setPlayerEditValueAction(p.id, {
+                                shirtSize: e.target.value,
+                              })
+                            }
+                            disabled={!canEdit || playerBusy}
+                            className="h-10 w-full rounded-xl border px-3 text-sm outline-none"
+                            style={{
+                              borderColor:
+                                "color-mix(in oklab, var(--stroke) 92%, transparent)",
+                              background:
+                                "color-mix(in oklab, var(--card) 92%, var(--bg-base) 8%)",
+                              color: "var(--foreground)",
+                            }}
+                          >
+                            {SHIRT_SIZES.map((s) => (
+                              <option
+                                key={s}
+                                value={s}
+                                style={{ color: "#000" }}
+                              >
+                                {s === "" ? "Select…" : s}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
                       <div className="sm:col-span-2 flex items-center justify-end gap-2">
-                        <div className="text-xs" style={{ color: "var(--muted)" }}>
+                        <div
+                          className="text-xs"
+                          style={{ color: "var(--muted)" }}
+                        >
                           {edit.dirty ? "Edited" : "Saved"}
                         </div>
                       </div>

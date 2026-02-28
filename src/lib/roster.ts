@@ -18,10 +18,13 @@ export type PlayerBattingStats = {
   assists: number;
 };
 
+export type ShirtSize = "YXS" | "YS" | "YM" | "YL" | "YXL" | "AS" | "AM" | "AL" | "AXL";
+
 export type Player = {
   id: string;
   name: string;
   number: number;
+  shirtSize?: ShirtSize | null;
   primaryPos?: string;
   stats: PlayerBattingStats;
 };
