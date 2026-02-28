@@ -13,6 +13,9 @@ export type PlayerBattingStats = {
   walks: number;
   strikeouts: number;
   hitByPitch: number;
+  // Defensive
+  putOuts: number;
+  assists: number;
 };
 
 export type Player = {

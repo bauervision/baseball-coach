@@ -37,7 +37,8 @@ const STAT_HELP: Record<
   },
   OBP: {
     title: "On-Base Percentage",
-    description: "How often a player reaches base (hit, walk, or hit by pitch).",
+    description:
+      "How often a player reaches base (hit, walk, or hit by pitch).",
     formula: "(H + BB + HBP) ÷ Plate Appearances",
     tip: "Often a better “getting on base” metric than AVG.",
   },
@@ -150,8 +151,6 @@ export default function PlayerPageClient() {
             <span style={{ color: "var(--foreground)" }}>{id}</span>
           </div>
 
-          
-
           <Link
             href="/"
             className="text-sm underline"
@@ -184,7 +183,6 @@ export default function PlayerPageClient() {
           <div className="text-xs" style={{ color: "var(--muted)" }}>
             {meta.teamName} • {meta.seasonLabel}
           </div>
-          
         </div>
       </div>
 
@@ -250,7 +248,10 @@ export default function PlayerPageClient() {
           </div>
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            <SmallStat label="Games Played" value={String(player.stats.games)} />
+            <SmallStat
+              label="Games Played"
+              value={String(player.stats.games)}
+            />
             <SmallStat
               label="Plate Appearances"
               value={String(player.stats.plateAppearances)}
@@ -284,8 +285,36 @@ export default function PlayerPageClient() {
 
           <Card>
             <CardHeader>
+              <CardTitle>Defensive</CardTitle>
+              <CardSubtitle>
+                Fielding contributions (official scoring)
+              </CardSubtitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <SmallStat
+                  label="Put Outs (PO)"
+                  value={String(player.stats.putOuts)}
+                />
+                <SmallStat
+                  label="Assists (A)"
+                  value={String(player.stats.assists)}
+                />
+              </div>
+
+              <div className="mt-3 text-xs" style={{ color: "var(--muted)" }}>
+                Example: SS → 1B groundout is usually Assist for SS and Put Out
+                for 1B.
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* <Card>
+            <CardHeader>
               <CardTitle>Trends</CardTitle>
-              <CardSubtitle>Stub for now (next step: last N games)</CardSubtitle>
+              <CardSubtitle>
+                Stub for now (next step: last N games)
+              </CardSubtitle>
             </CardHeader>
             <CardContent>
               <div className="text-sm" style={{ color: "var(--muted)" }}>
@@ -293,7 +322,7 @@ export default function PlayerPageClient() {
                 sparkline.
               </div>
             </CardContent>
-          </Card>
+          </Card> */}
         </CardContent>
       </Card>
 
@@ -496,11 +525,7 @@ export function IconBat() {
 export function IconDiamond() {
   return (
     <SvgIcon>
-      <path
-        d="M12 3l8 9-8 9-8-9 8-9z"
-        stroke="currentColor"
-        strokeWidth="2"
-      />
+      <path d="M12 3l8 9-8 9-8-9 8-9z" stroke="currentColor" strokeWidth="2" />
       <circle cx="12" cy="12" r="1.6" fill="currentColor" />
     </SvgIcon>
   );

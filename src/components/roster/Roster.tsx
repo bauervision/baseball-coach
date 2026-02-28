@@ -20,7 +20,7 @@ import {
   CardSubtitle,
 } from "@/components/ui/Card";
 import { Stat } from "./Stat";
-import { ArrowDown, ArrowUp, Star } from "lucide-react";
+import { ArrowDown, ArrowUp, Star, Trophy } from "lucide-react";
 import { OpeningDayCountdown } from "./OpeningDayCountdown";
 
 // near top of file
@@ -209,6 +209,77 @@ export function Roster() {
         </div>
       </div>
 
+      <Link
+        href="/trophies"
+        className="group rounded-2xl border p-4 sm:p-5 transition-opacity hover:opacity-95"
+        style={{
+          borderColor: "color-mix(in oklab, var(--stroke) 92%, transparent)",
+          background:
+            "linear-gradient(90deg, color-mix(in oklab, var(--secondary) 22%, var(--card)), color-mix(in oklab, var(--primary) 16%, var(--card)))",
+          boxShadow:
+            "0 0 0 1px color-mix(in oklab, var(--secondary) 14%, transparent) inset",
+        }}
+        aria-label="Open Trophy Case"
+      >
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <div className="flex items-center gap-3">
+              <div
+                className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl border"
+                style={{
+                  borderColor:
+                    "color-mix(in oklab, var(--secondary) 40%, transparent)",
+                  background:
+                    "color-mix(in oklab, var(--secondary) 14%, var(--card))",
+                  boxShadow:
+                    "0 12px 28px color-mix(in oklab, var(--secondary) 18%, transparent)",
+                }}
+                aria-hidden="true"
+              >
+                <Trophy
+                  className="h-8 w-8"
+                  style={{
+                    color:
+                      "color-mix(in oklab, var(--secondary) 82%, var(--foreground))",
+                    filter:
+                      "drop-shadow(0 10px 18px color-mix(in oklab, var(--stroke) 45%, transparent))",
+                  }}
+                />
+              </div>
+
+              <div className="min-w-0">
+                <div
+                  className="text-base sm:text-lg font-extrabold leading-tight"
+                  style={{ color: "var(--foreground)" }}
+                >
+                  Trophy Case
+                </div>
+                <div
+                  className="mt-1 text-xs sm:text-sm"
+                  style={{ color: "var(--muted)" }}
+                >
+                  Updates During Season • Tap to learn how awards are calculated
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="shrink-0">
+            <div
+              className="rounded-xl border px-3 py-2 text-sm font-semibold transition-opacity group-hover:opacity-95"
+              style={{
+                borderColor:
+                  "color-mix(in oklab, var(--stroke) 92%, transparent)",
+                background:
+                  "linear-gradient(90deg, var(--primary), var(--secondary))",
+                color: "rgba(0,0,0,0.92)",
+              }}
+            >
+              View trophies
+            </div>
+          </div>
+        </div>
+      </Link>
       <Card>
         <CardHeader>
           <CardTitle>Roster</CardTitle>

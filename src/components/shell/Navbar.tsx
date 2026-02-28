@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { LogOut, Shield } from "lucide-react";
+import { LogOut, Shield, Trophy } from "lucide-react";
 
 import { clearSession, readSession } from "@/lib/session";
 import {
@@ -156,6 +156,14 @@ export function Navbar(props: { title: string; seasonLabel?: string }) {
               </PillLink>
             ) : null}
 
+<PillLink href="/trophies" title="Trophy Case" disabled={loggingOut}>
+  <Trophy
+    className="h-4 w-4"
+    style={{ color: "var(--secondary)" }}
+    aria-hidden="true"
+  />
+  <span>Trophies</span>
+</PillLink>
             <ThemeModeToggle disabled={loggingOut} />
 
             <IconButton
@@ -228,6 +236,15 @@ export function Navbar(props: { title: string; seasonLabel?: string }) {
                 <span>Admin</span>
               </PillLink>
             ) : null}
+
+<PillLink href="/trophies" title="Trophy Case" disabled={loggingOut}>
+  <Trophy
+    className="h-4 w-4"
+    style={{ color: "var(--secondary)" }}
+    aria-hidden="true"
+  />
+  <span className="text-[13px]">Trophies</span>
+</PillLink>
 
             <ThemeModeToggle disabled={loggingOut} />
 

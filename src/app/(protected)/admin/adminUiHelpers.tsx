@@ -92,3 +92,32 @@ export function MiniNumber(props: {
     </label>
   );
 }
+
+
+
+export function TabButton(props: {
+  label: string;
+  active: boolean;
+  onClickAction: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={props.onClickAction}
+      disabled={props.disabled}
+      className="h-10 rounded-xl border px-3 text-sm font-semibold transition-opacity hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60"
+      style={{
+        borderColor: props.active
+          ? "color-mix(in oklab, var(--primary) 45%, transparent)"
+          : "color-mix(in oklab, var(--stroke) 92%, transparent)",
+        background: props.active
+          ? "color-mix(in oklab, var(--primary) 16%, var(--card))"
+          : "color-mix(in oklab, var(--bg-base) 65%, transparent)",
+        color: "var(--foreground)",
+      }}
+    >
+      {props.label}
+    </button>
+  );
+}
