@@ -99,11 +99,26 @@ function normalizeStats(v: unknown): PlayerBattingStats {
     runs: asInt(d.runs),
     rbi: asInt(d.rbi),
     walks: asInt(d.walks),
-    strikeouts: asInt(d.strikeouts),
+    pitchingStrikeouts: asInt(d.pitchingStrikeouts),
     hitByPitch: asInt(d.hitByPitch),
 
     putOuts: asInt(d.putOuts),
     assists: asInt(d.assists),
+    stolenBases: asInt(d.stolenBases),
+    pitchingSaves: asInt(d.pitchingSaves),
+    flyBallCatches: asInt(d.flyBallCatches),
+
+    charlieHustleAwards: asInt(d.charlieHustleAwards),
+    mostImprovedAwards: asInt(d.mostImprovedAwards),
+    bestPitcherAwards: asInt(d.bestPitcherAwards),
+    bestCatcherAwards: asInt(d.bestCatcherAwards),
+    bestFirstBasemanAwards: asInt(d.bestFirstBasemanAwards),
+    bestSecondBasemanAwards: asInt(d.bestSecondBasemanAwards),
+    bestThirdBasemanAwards: asInt(d.bestThirdBasemanAwards),
+    bestShortstopAwards: asInt(d.bestShortstopAwards),
+    bestLeftFielderAwards: asInt(d.bestLeftFielderAwards),
+    bestCenterFielderAwards: asInt(d.bestCenterFielderAwards),
+    bestRightFielderAwards: asInt(d.bestRightFielderAwards),
   };
 }
 

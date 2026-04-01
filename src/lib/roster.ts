@@ -11,14 +11,38 @@ export type PlayerBattingStats = {
   runs: number;
   rbi: number;
   walks: number;
-  strikeouts: number;
   hitByPitch: number;
+  stolenBases: number;
   // Defensive
   putOuts: number;
   assists: number;
+  pitchingStrikeouts: number;
+  pitchingSaves: number;
+  flyBallCatches: number;
+  //coach pick
+  charlieHustleAwards: number;
+  mostImprovedAwards: number;
+  bestPitcherAwards: number;
+  bestCatcherAwards: number;
+  bestFirstBasemanAwards: number;
+  bestSecondBasemanAwards: number;
+  bestThirdBasemanAwards: number;
+  bestShortstopAwards: number;
+  bestLeftFielderAwards: number;
+  bestCenterFielderAwards: number;
+  bestRightFielderAwards: number;
 };
 
-export type ShirtSize = "YXS" | "YS" | "YM" | "YL" | "YXL" | "AS" | "AM" | "AL" | "AXL";
+export type ShirtSize =
+  | "YXS"
+  | "YS"
+  | "YM"
+  | "YL"
+  | "YXL"
+  | "AS"
+  | "AM"
+  | "AL"
+  | "AXL";
 
 export type Player = {
   id: string;

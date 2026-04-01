@@ -12,6 +12,14 @@ export type LineDelta = {
   rbi: number;
   walks: number;
   hitByPitch: number;
+  stolenBases: number;
+
+  putOuts: number;
+  assists: number;
+
+  pitchingStrikeouts: number;
+  pitchingSaves: number;
+  flyBallCatches: number;
 };
 
 export type LineState = {
@@ -29,6 +37,14 @@ export const EMPTY_DELTA: LineDelta = {
   rbi: 0,
   walks: 0,
   hitByPitch: 0,
+  stolenBases: 0,
+
+  putOuts: 0,
+  assists: 0,
+
+  pitchingStrikeouts: 0,
+  pitchingSaves: 0,
+  flyBallCatches: 0,
 };
 
 export function anyNonZero(d: LineDelta) {
@@ -41,7 +57,13 @@ export function anyNonZero(d: LineDelta) {
     d.runs !== 0 ||
     d.rbi !== 0 ||
     d.walks !== 0 ||
-    d.hitByPitch !== 0
+    d.hitByPitch !== 0 ||
+    d.stolenBases !== 0 ||
+    d.putOuts !== 0 ||
+    d.assists !== 0 ||
+    d.pitchingStrikeouts !== 0 ||
+    d.pitchingSaves !== 0 ||
+    d.flyBallCatches !== 0
   );
 }
 
@@ -59,7 +81,6 @@ export function todayISO() {
   const dd = String(d.getDate()).padStart(2, "0");
   return `${yyyy}-${mm}-${dd}`;
 }
-
 
 export type AdminTab = "stats" | "players" | "season";
 
@@ -81,10 +102,24 @@ export const EMPTY_STATS: PlayerBattingStats = {
   runs: 0,
   rbi: 0,
   walks: 0,
-  strikeouts: 0,
+  pitchingStrikeouts: 0,
   hitByPitch: 0,
   putOuts: 0,
-  assists: 0
+  assists: 0,
+  stolenBases: 0,
+  pitchingSaves: 0,
+  flyBallCatches: 0,
+  charlieHustleAwards: 0,
+  mostImprovedAwards: 0,
+  bestPitcherAwards: 0,
+  bestCatcherAwards: 0,
+  bestFirstBasemanAwards: 0,
+  bestSecondBasemanAwards: 0,
+  bestThirdBasemanAwards: 0,
+  bestShortstopAwards: 0,
+  bestLeftFielderAwards: 0,
+  bestCenterFielderAwards: 0,
+  bestRightFielderAwards: 0,
 };
 
 export function newDraftPlayer(): DraftPlayer {
@@ -134,3 +169,32 @@ export function toastStyle(kind: "err" | "ok") {
     color: "var(--foreground)",
   } as const;
 }
+
+export type CoachPickKey =
+  | "charlieHustle"
+  | "mostImproved"
+  | "bestPitcher"
+  | "bestCatcher"
+  | "bestFirstBaseman"
+  | "bestSecondBaseman"
+  | "bestThirdBaseman"
+  | "bestShortstop"
+  | "bestLeftFielder"
+  | "bestCenterFielder"
+  | "bestRightFielder";
+
+export type CoachPicks = Record<CoachPickKey, string>;
+
+export const EMPTY_COACH_PICKS: CoachPicks = {
+  charlieHustle: "",
+  mostImproved: "",
+  bestPitcher: "",
+  bestCatcher: "",
+  bestFirstBaseman: "",
+  bestSecondBaseman: "",
+  bestThirdBaseman: "",
+  bestShortstop: "",
+  bestLeftFielder: "",
+  bestCenterFielder: "",
+  bestRightFielder: "",
+};

@@ -1,4 +1,3 @@
-// app/trophies/TrophiesClient.tsx
 "use client";
 
 import * as React from "react";
@@ -6,6 +5,12 @@ import Link from "next/link";
 import { Trophy } from "lucide-react";
 
 import { useRosterPlayers } from "@/lib/rosterStore";
+import {
+  getTrophyDefinitions,
+  computeTrophies,
+  type TrophyTone,
+  type TrophyAward,
+} from "@/lib/trophies";
 
 import {
   Card,
@@ -21,83 +26,8 @@ type TrophyDef = {
   key: string;
   title: string;
   subtitle: string;
-  tone?: "primary" | "secondary" | "accent" | "accent2";
+  tone?: TrophyTone;
 };
-
-const TROPHIES: TrophyDef[] = [
-  {
-    key: "batting_champ",
-    title: "Batting Champ",
-    subtitle: "Highest AVG (min 10 AB)",
-    tone: "primary",
-  },
-  {
-    key: "on_base_king",
-    title: "On-Base King",
-    subtitle: "Highest OBP (min 10 PA)",
-    tone: "accent",
-  },
-  {
-    key: "slugger",
-    title: "Slugger",
-    subtitle: "Highest SLG (min 10 AB)",
-    tone: "secondary",
-  },
-  {
-    key: "ops_star",
-    title: "OPS Star",
-    subtitle: "Best all-around (min 10 PA)",
-    tone: "accent2",
-  },
-  {
-    key: "rbi_producer",
-    title: "RBI Producer",
-    subtitle: "Most RBI",
-    tone: "primary",
-  },
-  {
-    key: "run_machine",
-    title: "Run Machine",
-    subtitle: "Most Runs",
-    tone: "secondary",
-  },
-  {
-    key: "hit_leader",
-    title: "Hit Leader",
-    subtitle: "Most Hits",
-    tone: "accent",
-  },
-  {
-    key: "iron_tiger",
-    title: "Iron Tiger",
-    subtitle: "Most Games Played",
-    tone: "accent2",
-  },
-  {
-    key: "gold_glove",
-    title: "Gold Glove",
-    subtitle: "Most Put Outs (PO)",
-    tone: "secondary",
-  },
-  {
-    key: "cannon_arm",
-    title: "Cannon Arm",
-    subtitle: "Most Assists (A)",
-    tone: "primary",
-  },
-  {
-    key: "walk_wizard",
-    title: "Walk Wizard",
-    subtitle: "Most Walks (BB)",
-    tone: "accent",
-  },
-  {
-    key: "brick_wall",
-    title: "The Brick Wall",
-    subtitle: "Most Hit By Pitch (HBP)",
-    tone: "accent2",
-  },
-];
 
 function toneVar(tone?: TrophyDef["tone"]) {
   return tone === "secondary"
@@ -112,6 +42,17 @@ function toneVar(tone?: TrophyDef["tone"]) {
 export default function TrophiesClient() {
   const { meta, players, error } = useRosterPlayers();
   const [openHow, setOpenHow] = React.useState(false);
+
+  const trophies = React.useMemo(() => getTrophyDefinitions(), []);
+  const awards = React.useMemo(() => computeTrophies(players ?? []), [players]);
+
+  const awardByKey = React.useMemo(() => {
+    const map = new Map<string, TrophyAward>();
+    for (const award of awards) {
+      map.set(award.trophy.key, award);
+    }
+    return map;
+  }, [awards]);
 
   if (error) {
     return (
@@ -181,7 +122,9 @@ export default function TrophiesClient() {
               <CardTitle style={{ color: "var(--secondary)" }}>
                 Trophy Case
               </CardTitle>
-              <CardSubtitle>Updates During Season</CardSubtitle>
+              <CardSubtitle>
+                Reveal strengths across the whole season
+              </CardSubtitle>
             </div>
 
             <div className="shrink-0">
@@ -203,13 +146,18 @@ export default function TrophiesClient() {
               color: "var(--muted)",
             }}
           >
-            We’ll keep this page updated as the season goes. Winners won’t show
-            until later — every Tiger will earn one unique award.
+            Every Tiger should be recognized for a real strength. Some trophies
+            will not have an active leader yet early in the season, but this
+            page shows the full set of awards that can come into play.
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {TROPHIES.map((t) => (
-              <TrophyTile key={t.key} trophy={t} />
+            {trophies.map((t) => (
+              <TrophyTile
+                key={t.key}
+                trophy={t}
+                award={awardByKey.get(t.key) ?? null}
+              />
             ))}
           </div>
         </CardContent>
@@ -218,7 +166,7 @@ export default function TrophiesClient() {
       <Dialog open={openHow} onOpenChangeAction={setOpenHow}>
         <DialogContent
           title="How trophies are calculated"
-          description="Simple, stat-based, and designed so every player earns exactly one."
+          description="Simple, stat-based, and designed to reveal strengths across the roster."
           className="max-w-lg"
         >
           <div className="grid gap-3 text-sm" style={{ color: "var(--muted)" }}>
@@ -227,12 +175,13 @@ export default function TrophiesClient() {
                 className="font-semibold"
                 style={{ color: "var(--foreground)" }}
               >
-                1) Each trophy has a primary stat
+                1) Every trophy points to a strength
               </div>
               <div className="mt-1">
-                Example: Batting Champ uses AVG, RBI Producer uses RBI, Gold
-                Glove uses Put Outs (PO), Cannon Arm uses Assists (A), and The
-                Brick Wall uses Hit By Pitch (HBP).
+                Some awards reward production, some reward power, some reward
+                toughness, speed, pitching, or defense. The goal is not just to
+                hand out leftovers — it is to spotlight what each player does
+                well.
               </div>
             </div>
 
@@ -241,12 +190,13 @@ export default function TrophiesClient() {
                 className="font-semibold"
                 style={{ color: "var(--foreground)" }}
               >
-                2) Minimum qualifiers prevent weird early-season results
+                2) Some trophies need real stats before they activate
               </div>
               <div className="mt-1">
-                Rate stats like AVG/OBP/SLG/OPS require a minimum number of
-                chances (AB or PA). Counting stats (RBI, runs, put outs,
-                assists) don’t need a qualifier.
+                If nobody has a put out, assist, pitching save, stolen base, or
+                other tracked event yet, that trophy still appears here as part
+                of the season award set, but it will not show an active leader
+                until the team records those stats.
               </div>
             </div>
 
@@ -255,13 +205,11 @@ export default function TrophiesClient() {
                 className="font-semibold"
                 style={{ color: "var(--foreground)" }}
               >
-                3) Ties use common-sense tie-breakers
+                3) Rate stats still use minimum qualifiers
               </div>
               <div className="mt-1">
-                If two players are tied on the primary stat, we break ties with
-                the larger sample (more AB/PA), then other relevant stats, then
-                games played. If everything is still tied, we use a
-                deterministic fallback (name) so the page is stable.
+                AVG, OBP, SLG, and OPS use minimum chances so one small sample
+                does not unfairly dominate early.
               </div>
             </div>
 
@@ -270,13 +218,12 @@ export default function TrophiesClient() {
                 className="font-semibold"
                 style={{ color: "var(--foreground)" }}
               >
-                4) One trophy per player (unique awards)
+                4) The goal is to reveal strengths, not punish roles
               </div>
               <div className="mt-1">
-                If a player leads multiple categories, they receive the
-                highest-priority trophy first. For the next trophy, we skip
-                anyone who already won and award it to the next best player.
-                This guarantees every Tiger earns one unique award.
+                We want awards that feel meaningful. That is why the trophy set
+                includes specialty awards like Singles, Doubles, Speed, Pitching
+                Strikeouts, and position-based fielding recognition.
               </div>
             </div>
 
@@ -305,8 +252,8 @@ export default function TrophiesClient() {
   );
 }
 
-function TrophyTile(props: { trophy: TrophyDef }) {
-  const { trophy } = props;
+function TrophyTile(props: { trophy: TrophyDef; award: TrophyAward | null }) {
+  const { trophy, award } = props;
   const tone = toneVar(trophy.tone);
 
   return (
@@ -352,16 +299,46 @@ function TrophyTile(props: { trophy: TrophyDef }) {
         </div>
       </div>
 
-      <div
-        className="mt-4 rounded-xl border px-3 py-2 text-xs font-semibold"
-        style={{
-          borderColor: "color-mix(in oklab, var(--stroke) 88%, transparent)",
-          background: "color-mix(in oklab, var(--bg-base) 65%, transparent)",
-          color: "var(--muted)",
-        }}
-      >
-        Updates during season
-      </div>
+      {award ? (
+        <div
+          className="mt-4 rounded-xl border px-3 py-3"
+          style={{
+            borderColor: `color-mix(in oklab, ${tone} 28%, transparent)`,
+            background: `color-mix(in oklab, ${tone} 10%, var(--bg-base))`,
+          }}
+        >
+          <div
+            className="text-sm font-extrabold leading-tight"
+            style={{ color: "var(--foreground)" }}
+          >
+            {award.leaders.map((p) => p.name).join(", ")}
+          </div>
+          <div className="mt-1 text-xs font-semibold" style={{ color: tone }}>
+            {award.valueLabel}
+          </div>
+          {award.valueSub ? (
+            <div className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
+              {award.valueSub}
+            </div>
+          ) : null}
+          {award.leaders.length > 1 ? (
+            <div className="mt-1 text-[11px]" style={{ color: "var(--muted)" }}>
+              Tied leaders
+            </div>
+          ) : null}
+        </div>
+      ) : (
+        <div
+          className="mt-4 rounded-xl border px-3 py-2 text-xs font-semibold"
+          style={{
+            borderColor: "color-mix(in oklab, var(--stroke) 88%, transparent)",
+            background: "color-mix(in oklab, var(--bg-base) 65%, transparent)",
+            color: "var(--muted)",
+          }}
+        >
+          Available this season
+        </div>
+      )}
     </div>
   );
 }

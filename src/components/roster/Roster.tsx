@@ -1,4 +1,3 @@
-//components/roster/Roster.tsx
 "use client";
 
 import * as React from "react";
@@ -22,8 +21,9 @@ import {
 import { Stat } from "./Stat";
 import { ArrowDown, ArrowUp, Star, Trophy } from "lucide-react";
 import { OpeningDayCountdown } from "./OpeningDayCountdown";
+import { exportLeaderboardPdf } from "@/lib/exportLeaderBoardPdf";
+import { computeTrophies } from "@/lib/trophies";
 
-// near top of file
 const OPENING_DAY_DATE = "2026-03-28";
 
 function parseLocalMidnight(dateISO: string): Date | null {
@@ -76,7 +76,6 @@ function lastNameKey(fullName: string): string {
   if (parts.length === 0) return "";
   if (parts.length === 1) return parts[0];
 
-  // basic: last token is last name
   return parts[parts.length - 1]!;
 }
 
@@ -92,11 +91,6 @@ function sortByLastNameThenFirst(aName: string, bName: string): number {
 
 type Movement = "star" | "up" | "down" | "none";
 
-/**
- * Stub for now:
- * - later: compare previousRankById vs current idx+1
- * - star: if they've held this position historically
- */
 function movementForPlayer(_playerId: string): Movement {
   return "none";
 }
@@ -155,12 +149,10 @@ export function Roster() {
     const arr = [...src];
 
     if (!anyStatsExist) {
-      // Default: last-name alphabetical before any stats are entered.
       arr.sort((a, b) => sortByLastNameThenFirst(a.name, b.name));
       return arr;
     }
 
-    // Once stats exist: BA sort with tie-breakers.
     arr.sort((a, b) => {
       const ba = battingAverage(a);
       const bb = battingAverage(b);
@@ -192,11 +184,31 @@ export function Roster() {
                     label="Opening Day"
                   />
                 ) : (
-                  <div className="recordPillBig">
-                    <div className="text-xs" style={{ color: "var(--muted)" }}>
+                  <div
+                    className="rounded-3xl border px-6 py-5 sm:px-7 sm:py-6"
+                    style={{
+                      borderColor:
+                        "color-mix(in oklab, var(--stroke) 88%, transparent)",
+                      background:
+                        "linear-gradient(180deg, color-mix(in oklab, var(--card) 88%, transparent), color-mix(in oklab, var(--bg-base) 62%, transparent))",
+                      boxShadow:
+                        "0 0 0 1px color-mix(in oklab, var(--primary) 10%, transparent) inset, 0 16px 36px color-mix(in oklab, var(--stroke) 18%, transparent)",
+                      width: "fit-content",
+                      minWidth: "clamp(150px, 20vw, 220px)",
+                      maxWidth: "100%",
+                    }}
+                  >
+                    <div
+                      className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em]"
+                      style={{ color: "var(--muted)" }}
+                    >
                       Record
                     </div>
-                    <div className="recordValue">
+
+                    <div
+                      className="mt-2 text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-none"
+                      style={{ color: "var(--foreground)" }}
+                    >
                       {meta.record.wins}-{meta.record.losses}
                       {typeof meta.record.ties === "number"
                         ? `-${meta.record.ties}`
@@ -213,7 +225,27 @@ export function Roster() {
           </div>
         </div>
       </div>
-
+      <button
+        onClick={() => {
+          exportLeaderboardPdf({
+            teamName: meta.teamName,
+            seasonLabel: meta.seasonLabel,
+            record: meta.record,
+            players: list,
+            leaders,
+            awards: computeTrophies(list),
+          });
+        }}
+        className="rounded-xl border px-3 py-2 text-sm font-semibold"
+        style={{
+          borderColor: "color-mix(in oklab, var(--stroke) 92%, transparent)",
+          background:
+            "linear-gradient(90deg, var(--primary), var(--secondary))",
+          color: "rgba(0,0,0,0.92)",
+        }}
+      >
+        Download Leaderboard PDF
+      </button>
       <Link
         href="/trophies"
         className="group rounded-2xl border p-4 sm:p-5 transition-opacity hover:opacity-95"
@@ -269,7 +301,7 @@ export function Roster() {
             </div>
           </div>
 
-          <div className="shrink-0">
+          <div className="hidden sm:block shrink-0">
             <div
               className="rounded-xl border px-3 py-2 text-sm font-semibold transition-opacity group-hover:opacity-95"
               style={{
@@ -285,6 +317,7 @@ export function Roster() {
           </div>
         </div>
       </Link>
+
       <Card>
         <CardHeader>
           <CardTitle>Roster</CardTitle>
@@ -292,6 +325,12 @@ export function Roster() {
         </CardHeader>
 
         <CardContent>
+          {error ? (
+            <div className="mb-4 text-sm" style={{ color: "var(--muted)" }}>
+              {error}
+            </div>
+          ) : null}
+
           <div className="grid gap-3">
             {list.map((p) => {
               const ba = battingAverage(p);
@@ -308,12 +347,15 @@ export function Roster() {
                   className="playerRow"
                   aria-label={`Open ${p.name}`}
                 >
-                  {/* LEFT: player number rail (full height) */}
-                  <div className="numberRail" aria-hidden="true">
+                  <div
+                    className="numberRail"
+                    aria-hidden="true"
+                    style={{ width: "clamp(72px, 18vw, 92px)" }}
+                  >
                     <div className="numberRailGlow" />
                     <div className="numberRailValue">{p.number}</div>
 
-                    <div className="mt-2 grid gap-1 px-2 pb-2">
+                    {/* <div className="mt-2 grid gap-1 px-2 pb-2">
                       <div
                         className="text-[10px] font-semibold uppercase tracking-wide"
                         style={{ color: "var(--muted)" }}
@@ -329,14 +371,13 @@ export function Roster() {
                             .shirtSize,
                         )}
                       </div>
-                    </div>
+                    </div> */}
                   </div>
 
-                  {/* RIGHT: content (name + stats) */}
-                  <div className="playerBody">
+                  <div className="playerBody min-w-0">
                     <div className="playerTop">
                       <div className="min-w-0">
-                        <div className="playerName">{p.name}</div>
+                        <div className="playerName truncate">{p.name}</div>
                       </div>
 
                       <div className="playerTopRight">
@@ -344,8 +385,7 @@ export function Roster() {
                       </div>
                     </div>
 
-                    <div className="mt-4">
-                      {/* Mobile */}
+                    <div className="mt-3 sm:mt-4">
                       <div className="sm:hidden grid gap-2">
                         <div className="grid grid-cols-4 gap-2">
                           <Stat
@@ -353,29 +393,63 @@ export function Roster() {
                             value={fmt3(ba)}
                             leader={leaders.avg.includes(p.id)}
                             tone="primary"
+                            compact
                           />
                           <Stat
                             label="OBP"
                             value={fmt3(obp)}
                             leader={leaders.obp.includes(p.id)}
                             tone="accent"
+                            compact
                           />
                           <Stat
                             label="SLG"
                             value={fmt3(slg)}
                             leader={leaders.slg.includes(p.id)}
                             tone="secondary"
+                            compact
                           />
                           <Stat
                             label="OPS"
                             value={fmt3(OPS)}
                             leader={leaders.ops.includes(p.id)}
                             tone="accent2"
+                            compact
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-4 gap-2">
+                          <Stat
+                            label="H"
+                            value={String(p.stats.hits)}
+                            leader={leaders.hits.includes(p.id)}
+                            tone="primary"
+                            compact
+                          />
+                          <Stat
+                            label="AB"
+                            value={String(p.stats.atBats)}
+                            leader={leaders.atBats.includes(p.id)}
+                            tone="secondary"
+                            compact
+                          />
+                          <Stat
+                            label="RBI"
+                            value={String(p.stats.rbi)}
+                            leader={leaders.rbi.includes(p.id)}
+                            tone="accent"
+                            compact
+                          />
+                          <Stat
+                            label="R"
+                            value={String(p.stats.runs)}
+                            leader={leaders.runs.includes(p.id)}
+                            tone="accent2"
+                            compact
                           />
                         </div>
                       </div>
 
-                      {/* Desktop */}
                       <div className="hidden sm:grid grid-cols-8 gap-2">
                         <Stat
                           label="AVG"
@@ -401,7 +475,6 @@ export function Roster() {
                           leader={leaders.ops.includes(p.id)}
                           tone="accent2"
                         />
-
                         <Stat
                           label="H"
                           value={String(p.stats.hits)}

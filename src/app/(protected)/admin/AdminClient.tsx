@@ -207,6 +207,11 @@ export default function AdminClient() {
           setScoreUsAction={game.setScoreUs}
           scoreThem={game.scoreThem}
           setScoreThemAction={game.setScoreThem}
+          savedGames={game.savedGames}
+          gamesLoading={game.gamesLoading}
+          loadingGame={game.loadingGame}
+          editingGameId={game.editingGameId}
+          loadExistingGameAction={game.loadExistingGameAction}
           setDeltaValueAction={game.setDeltaValue}
           toggleHiddenAction={game.toggleHidden}
           unhideAllAction={game.unhideAllAction}
@@ -215,6 +220,8 @@ export default function AdminClient() {
           saveError={game.saveError}
           savedMsg={game.savedMsg}
           onSaveGameAction={game.onSaveGameAction}
+          coachPicks={game.coachPicks}
+          setCoachPickAction={game.setCoachPickAction}
         />
       ) : tab === "players" ? (
         <PlayersTab
