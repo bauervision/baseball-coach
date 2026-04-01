@@ -310,6 +310,10 @@ export default function PlayerPageClient() {
                 label="Hit By Pitch"
                 value={String(player.stats.hitByPitch)}
               />
+              <SmallStat
+                label="Stolen Bases"
+                value={String(player.stats.stolenBases)}
+              />
             </div>
 
             <Card>
@@ -326,6 +330,14 @@ export default function PlayerPageClient() {
                     value={String(player.stats.pitchingStrikeouts)}
                   />
                   <SmallStat
+                    label="Pitching Saves"
+                    value={String(player.stats.pitchingSaves)}
+                  />
+                  <SmallStat
+                    label="Fly Balls Caught"
+                    value={String(player.stats.flyBallCatches)}
+                  />
+                  <SmallStat
                     label="Put Outs (PO)"
                     value={String(player.stats.putOuts)}
                   />
@@ -336,7 +348,7 @@ export default function PlayerPageClient() {
                 </div>
 
                 <div className="mt-3 text-xs" style={{ color: "var(--muted)" }}>
-                  Example: SS → 1B groundout is usually Assist for SS and Put
+                  Example: SS → 1B groundout is an Assist for SS and Put
                   Out for 1B.
                 </div>
               </CardContent>
