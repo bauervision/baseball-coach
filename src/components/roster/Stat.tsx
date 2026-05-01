@@ -1,13 +1,22 @@
 "use client";
 
 function displayValue(value: string): string {
-  if (/^\d+\.000$/.test(value)) {
-    return value.slice(0, -1);
+  const trimmed = value.trim();
+
+  if (/^\d+\.000$/.test(trimmed)) {
+    return trimmed.slice(0, -1);
   }
 
-  return value;
-}
+  if (/^\d+\.\d{3}$/.test(trimmed)) {
+    return Number(trimmed).toFixed(2);
+  }
 
+  if (/^\.\d{3}$/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return trimmed;
+}
 export function Stat(props: {
   label: string;
   value: string;
@@ -31,8 +40,8 @@ export function Stat(props: {
     <div
       className={
         compact
-          ? "rounded-xl border px-2 py-1.5 min-w-0"
-          : "rounded-xl border px-2 py-2 min-w-0"
+          ? "min-w-16 rounded-xl border px-2 py-1.5"
+          : "min-w-0 rounded-xl border px-2 py-2"
       }
       style={{
         borderColor: leader
@@ -54,8 +63,8 @@ export function Stat(props: {
       <div
         className={
           compact
-            ? "text-[9px] font-semibold tracking-wide uppercase truncate text-center"
-            : "text-[10px] font-semibold tracking-wide uppercase truncate text-center"
+            ? "truncate text-center text-[8px] font-semibold uppercase tracking-wide"
+            : "truncate text-center text-[9px] font-semibold uppercase tracking-wide"
         }
         style={{
           color: leader
@@ -69,8 +78,8 @@ export function Stat(props: {
       <div
         className={
           compact
-            ? "text-[13px] font-semibold leading-tight text-center"
-            : "text-sm font-semibold text-center"
+            ? "text-center text-[clamp(10px,3.1vw,13px)] font-semibold leading-tight"
+            : "text-center text-[clamp(11px,1vw,14px)] font-semibold leading-tight"
         }
         style={{ color: "var(--foreground)" }}
       >

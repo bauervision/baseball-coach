@@ -91,7 +91,13 @@ export async function savePlayerEdits(opts: {
   players: Player[];
   edits: Record<
     string,
-    { name: string; number: string; shirtSize: string; dirty: boolean }
+    {
+      name: string;
+      number: string;
+      shirtSize: string;
+      leaderboardHidden: boolean;
+      dirty: boolean;
+    }
   >;
 }): Promise<{ wrote: number }> {
   const { db, seasonId, players, edits } = opts;
@@ -111,16 +117,19 @@ export async function savePlayerEdits(opts: {
     const n = parseOptionalInt(edit.number);
     const shirtSize = edit.shirtSize.trim();
     const playerRef = doc(db, "seasons", seasonId, "players", p.id);
+
     batch.set(
       playerRef,
       {
         name,
         number: n,
         shirtSize: shirtSize ? shirtSize : null,
+        leaderboardHidden: edit.leaderboardHidden === true,
         updatedAt: serverTimestamp(),
       },
       { merge: true },
     );
+
     wrote++;
   }
 

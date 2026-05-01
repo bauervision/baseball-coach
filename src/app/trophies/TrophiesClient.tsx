@@ -307,22 +307,47 @@ function TrophyTile(props: { trophy: TrophyDef; award: TrophyAward | null }) {
             background: `color-mix(in oklab, ${tone} 10%, var(--bg-base))`,
           }}
         >
+          <div className="text-xs font-semibold" style={{ color: tone }}>
+            Current leader{award.leaders.length > 1 ? "s" : ""}
+          </div>
+
           <div
-            className="text-sm font-extrabold leading-tight"
+            className="mt-1 text-sm font-extrabold leading-tight"
             style={{ color: "var(--foreground)" }}
           >
             {award.leaders.map((p) => p.name).join(", ")}
           </div>
+
           <div className="mt-1 text-xs font-semibold" style={{ color: tone }}>
             {award.valueLabel}
           </div>
+
           {award.valueSub ? (
             <div className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
               {award.valueSub}
             </div>
           ) : null}
+
+          {award.runnerUp ? (
+            <div
+              className="mt-3 rounded-lg border px-2 py-2 text-xs"
+              style={{
+                borderColor:
+                  "color-mix(in oklab, var(--stroke) 88%, transparent)",
+                background:
+                  "color-mix(in oklab, var(--bg-base) 65%, transparent)",
+                color: "var(--muted)",
+              }}
+            >
+              <span style={{ color: "var(--foreground)", fontWeight: 800 }}>
+                Runner-up:
+              </span>{" "}
+              {award.runnerUp.name}
+            </div>
+          ) : null}
+
           {award.leaders.length > 1 ? (
-            <div className="mt-1 text-[11px]" style={{ color: "var(--muted)" }}>
+            <div className="mt-2 text-[11px]" style={{ color: "var(--muted)" }}>
               Tied leaders
             </div>
           ) : null}

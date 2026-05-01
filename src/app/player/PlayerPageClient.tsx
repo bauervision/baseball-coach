@@ -26,6 +26,7 @@ import { Dialog, DialogContent, DialogClose } from "@/components/ui/Dialog";
 
 import { usePlayerGameLog } from "@/components/roster/usePlayerGameLog";
 import { AnimatedBackgroundSkin } from "@/components/shell/AnimatedBackgroundSkin";
+import { exportPlayerStatsPdf } from "@/lib/exportPlayerStatsPdf";
 
 type StatKey = "AVG" | "OBP" | "SLG" | "OPS";
 
@@ -217,9 +218,33 @@ export default function PlayerPageClient() {
             <span>Back</span>
           </Link>
 
-          <div className="text-right">
-            <div className="text-xs" style={{ color: "var(--muted)" }}>
-              {meta.teamName} • {meta.seasonLabel}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() =>
+                exportPlayerStatsPdf({
+                  teamName: meta.teamName,
+                  seasonLabel: meta.seasonLabel,
+                  player,
+                  awards: playerTrophyAwards,
+                })
+              }
+              className="rounded-xl border px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-90"
+              style={{
+                borderColor:
+                  "color-mix(in oklab, var(--stroke) 92%, transparent)",
+                background:
+                  "linear-gradient(90deg, var(--primary), var(--secondary))",
+                color: "rgba(0,0,0,0.92)",
+              }}
+            >
+              Print PDF
+            </button>
+
+            <div className="text-right">
+              <div className="text-xs" style={{ color: "var(--muted)" }}>
+                {meta.teamName} • {meta.seasonLabel}
+              </div>
             </div>
           </div>
         </div>
@@ -348,8 +373,8 @@ export default function PlayerPageClient() {
                 </div>
 
                 <div className="mt-3 text-xs" style={{ color: "var(--muted)" }}>
-                  Example: SS → 1B groundout is an Assist for SS and Put
-                  Out for 1B.
+                  Example: SS → 1B groundout is an Assist for SS and Put Out for
+                  1B.
                 </div>
               </CardContent>
             </Card>

@@ -1,5 +1,3 @@
-// lib/roster.ts
-
 export type PlayerBattingStats = {
   games: number;
   plateAppearances: number;
@@ -13,13 +11,11 @@ export type PlayerBattingStats = {
   walks: number;
   hitByPitch: number;
   stolenBases: number;
-  // Defensive
   putOuts: number;
   assists: number;
   pitchingStrikeouts: number;
   pitchingSaves: number;
   flyBallCatches: number;
-  //coach pick
   charlieHustleAwards: number;
   mostImprovedAwards: number;
   bestPitcherAwards: number;
@@ -50,6 +46,7 @@ export type Player = {
   number: number;
   shirtSize?: ShirtSize | null;
   primaryPos?: string;
+  leaderboardHidden?: boolean;
   stats: PlayerBattingStats;
 };
 
@@ -88,7 +85,6 @@ export function ops(p: Player): number {
 }
 
 export function fmt3(n: number): string {
-  // Baseball formatting: show .000 style by removing leading 0
   const s = n.toFixed(3);
   return s.startsWith("0") ? s.slice(1) : s;
 }
@@ -101,11 +97,17 @@ export type StatKey =
   | "hits"
   | "atBats"
   | "rbi"
-  | "runs";
+  | "runs"
+  | "walks"
+  | "hitByPitch"
+  | "doubles"
+  | "triples"
+  | "homeRuns"
+  | "pitchingStrikeouts";
 
 export type LeadersMap = Record<StatKey, string[]>;
 
-function near(a: number, b: number, eps: number) {
+function near(a: number, b: number, eps: number): boolean {
   return Math.abs(a - b) <= eps;
 }
 
@@ -127,24 +129,33 @@ function statValue(p: Player, k: StatKey): number {
       return p.stats.rbi;
     case "runs":
       return p.stats.runs;
+    case "walks":
+      return p.stats.walks;
+    case "hitByPitch":
+      return p.stats.hitByPitch;
+    case "doubles":
+      return p.stats.doubles;
+    case "triples":
+      return p.stats.triples;
+    case "homeRuns":
+      return p.stats.homeRuns;
+    case "pitchingStrikeouts":
+      return p.stats.pitchingStrikeouts;
   }
 }
 
-function isRate(k: StatKey) {
+function isRate(k: StatKey): boolean {
   return k === "avg" || k === "obp" || k === "slg" || k === "ops";
 }
 
-function isCounting(k: StatKey) {
+function isCounting(k: StatKey): boolean {
   return !isRate(k);
 }
 
 function eligibleForRate(p: Player, k: StatKey): boolean {
   const s = p.stats;
 
-  // AVG/SLG/OPS need AB > 0.
   if (k === "avg" || k === "slg" || k === "ops") return s.atBats > 0;
-
-  // OBP denominator uses AB+BB+HBP.
   if (k === "obp") return s.atBats + s.walks + s.hitByPitch > 0;
 
   return false;
@@ -160,45 +171,52 @@ export function computeLeaders(players: Player[]): LeadersMap {
     "atBats",
     "rbi",
     "runs",
+    "walks",
+    "hitByPitch",
+    "doubles",
+    "triples",
+    "homeRuns",
+    "pitchingStrikeouts",
   ];
 
+  const eligiblePlayers = players.filter((p) => !p.leaderboardHidden);
   const out: Partial<LeadersMap> = {};
 
   for (const k of keys) {
     const eps = isRate(k) ? 0.0005 : 0;
 
-    // Find max among eligible players
     let max = -Infinity;
-    for (const p of players) {
+
+    for (const p of eligiblePlayers) {
       if (isRate(k) && !eligibleForRate(p, k)) continue;
+
       const v = statValue(p, k);
       if (v > max) max = v;
     }
 
-    // If nobody is eligible, or max is not meaningful, no leaders.
     if (!Number.isFinite(max)) {
       out[k] = [];
       continue;
     }
 
-    // For counting stats: if max is 0, nobody "leads".
     if (isCounting(k) && max <= 0) {
       out[k] = [];
       continue;
     }
 
-    // For rate stats: if max is 0, also don't show leaders (everyone is 0.000).
     if (isRate(k) && max <= 0) {
       out[k] = [];
       continue;
     }
 
     const leaders: string[] = [];
-    for (const p of players) {
+
+    for (const p of eligiblePlayers) {
       if (isRate(k) && !eligibleForRate(p, k)) continue;
 
       const v = statValue(p, k);
       const isLeader = eps > 0 ? near(v, max, eps) : v === max;
+
       if (isLeader) leaders.push(p.id);
     }
 

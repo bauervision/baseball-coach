@@ -351,6 +351,18 @@ const TROPHIES: TrophyDef[] = [
     subtitle: "Top fielding impact at RF",
     tone: "primary",
   },
+  {
+    key: "most_improved",
+    title: "Most Improved",
+    subtitle: "Coach-selected improvement award",
+    tone: "accent",
+  },
+  {
+    key: "charlie_hustle",
+    title: "Charlie Hustle",
+    subtitle: "Coach-selected hustle award",
+    tone: "primary",
+  },
 ];
 
 export function getTrophyDefinitions(): TrophyDef[] {

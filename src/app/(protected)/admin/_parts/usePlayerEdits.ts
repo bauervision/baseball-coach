@@ -1,4 +1,3 @@
-// app/admin/_parts/usePlayerEdits.ts
 "use client";
 
 import * as React from "react";
@@ -6,12 +5,31 @@ import type { Firestore } from "firebase/firestore";
 import type { Player } from "@/lib/roster";
 
 import { savePlayerEdits } from "./adminActions";
-type PlayerEdit = {
+
+export type PlayerEdit = {
   name: string;
   number: string;
   shirtSize: string;
+  leaderboardHidden: boolean;
   dirty: boolean;
 };
+
+type PlayerEditPatch = Partial<{
+  name: string;
+  number: string;
+  shirtSize: string;
+  leaderboardHidden: boolean;
+}>;
+
+function editFromPlayer(p: Player): PlayerEdit {
+  return {
+    name: p.name,
+    number: String(p.number ?? 0),
+    shirtSize: String(p.shirtSize ?? ""),
+    leaderboardHidden: p.leaderboardHidden === true,
+    dirty: false,
+  };
+}
 
 export function usePlayerEdits(opts: {
   db: Firestore;
@@ -28,32 +46,23 @@ export function usePlayerEdits(opts: {
   const [playerMsg, setPlayerMsg] = React.useState<string | null>(null);
   const [playerErr, setPlayerErr] = React.useState<string | null>(null);
 
-  // Keep Player Update form state in sync with roster changes
   React.useEffect(() => {
     const ps = players ?? null;
     if (ps === null) return;
 
     setPlayerEdits((prev) => {
       const out: Record<string, PlayerEdit> = { ...prev };
+
       for (const p of ps) {
         const existing = out[p.id];
+
         if (!existing) {
-          out[p.id] = {
-            name: p.name,
-            number: String(p.number ?? 0),
-            shirtSize: String(p.shirtSize ?? ""),
-            dirty: false,
-          };
+          out[p.id] = editFromPlayer(p);
           continue;
         }
 
         if (!existing.dirty) {
-          out[p.id] = {
-            name: p.name,
-            number: String(p.number ?? 0),
-            shirtSize: String(p.shirtSize ?? ""),
-            dirty: false,
-          };
+          out[p.id] = editFromPlayer(p);
         }
       }
 
@@ -65,15 +74,13 @@ export function usePlayerEdits(opts: {
     });
   }, [players]);
 
-  function setPlayerEditValue(
-    playerId: string,
-    patch: Partial<{ name: string; number: string; shirtSize: string }>,
-  ) {
+  function setPlayerEditValue(playerId: string, patch: PlayerEditPatch) {
     setPlayerEdits((prev) => {
       const cur = prev[playerId] ?? {
         name: "",
         number: "0",
         shirtSize: "",
+        leaderboardHidden: false,
         dirty: false,
       };
 
@@ -83,6 +90,7 @@ export function usePlayerEdits(opts: {
           name: patch.name ?? cur.name,
           number: patch.number ?? cur.number,
           shirtSize: patch.shirtSize ?? cur.shirtSize,
+          leaderboardHidden: patch.leaderboardHidden ?? cur.leaderboardHidden,
           dirty: true,
         },
       };
@@ -121,6 +129,7 @@ export function usePlayerEdits(opts: {
         e && typeof e === "object" && "message" in e
           ? String((e as { message?: unknown }).message)
           : "Failed to save player changes.";
+
       setPlayerErr(msg);
     } finally {
       setPlayerBusy(false);

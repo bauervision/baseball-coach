@@ -1,4 +1,3 @@
-// app/admin/_parts/PlayersTab.tsx
 "use client";
 
 import * as React from "react";
@@ -15,20 +14,24 @@ import { Button } from "@/components/ui/Button";
 
 import { Field } from "../adminUiHelpers";
 import { toastStyle } from "../adminHelpers";
+import type { PlayerEdit } from "./usePlayerEdits";
 
 export function PlayersTab(props: {
   canEdit: boolean;
   players: Player[] | null;
 
-  playerEdits: Record<
-    string,
-    { name: string; number: string; shirtSize: string; dirty: boolean }
-  >;
+  playerEdits: Record<string, PlayerEdit>;
 
   setPlayerEditValueAction: (
     playerId: string,
-    patch: Partial<{ name: string; number: string; shirtSize: string }>,
+    patch: Partial<{
+      name: string;
+      number: string;
+      shirtSize: string;
+      leaderboardHidden: boolean;
+    }>,
   ) => void;
+
   dirtyPlayersCount: number;
   playerBusy: boolean;
   playerMsg: string | null;
@@ -65,7 +68,7 @@ export function PlayersTab(props: {
       <CardHeader>
         <CardTitle>Player Update</CardTitle>
         <CardSubtitle>
-          Edit player name and number for the current season.
+          Edit player name, number, shirt size, and leaderboard visibility.
         </CardSubtitle>
       </CardHeader>
 
@@ -117,6 +120,7 @@ export function PlayersTab(props: {
                   name: p.name,
                   number: String(p.number ?? 0),
                   shirtSize: String(p.shirtSize ?? ""),
+                  leaderboardHidden: p.leaderboardHidden === true,
                   dirty: false,
                 };
 
@@ -134,7 +138,7 @@ export function PlayersTab(props: {
                     }}
                   >
                     <div className="grid gap-2 sm:grid-cols-12 sm:items-end">
-                      <div className="sm:col-span-7">
+                      <div className="sm:col-span-6">
                         <Field
                           label="Name"
                           value={edit.name}
@@ -145,7 +149,7 @@ export function PlayersTab(props: {
                         />
                       </div>
 
-                      <div className="sm:col-span-3">
+                      <div className="sm:col-span-2">
                         <Field
                           label="Number"
                           value={edit.number}
@@ -195,7 +199,42 @@ export function PlayersTab(props: {
                           </select>
                         </div>
                       </div>
-                      <div className="sm:col-span-2 flex items-center justify-end gap-2">
+
+                      <div className="sm:col-span-2">
+                        <label
+                          className="flex h-10 items-center gap-2 rounded-xl border px-3 text-xs"
+                          style={{
+                            borderColor:
+                              "color-mix(in oklab, var(--stroke) 92%, transparent)",
+                            background:
+                              "color-mix(in oklab, var(--card) 92%, var(--bg-base) 8%)",
+                            color: "var(--foreground)",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={edit.leaderboardHidden}
+                            onChange={(e) =>
+                              setPlayerEditValueAction(p.id, {
+                                leaderboardHidden: e.target.checked,
+                              })
+                            }
+                            disabled={!canEdit || playerBusy}
+                          />
+                          Hide leaders
+                        </label>
+                      </div>
+
+                      <div className="sm:col-span-12 flex items-center justify-between gap-2">
+                        <div
+                          className="text-xs"
+                          style={{ color: "var(--muted)" }}
+                        >
+                          {edit.leaderboardHidden
+                            ? "This player still appears on the roster, but is excluded from leaderboard leader calculations."
+                            : "This player is included in leaderboard leader calculations."}
+                        </div>
+
                         <div
                           className="text-xs"
                           style={{ color: "var(--muted)" }}

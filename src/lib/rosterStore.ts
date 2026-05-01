@@ -133,6 +133,7 @@ function normalizePlayer(data: unknown, fallbackId: string): Player | null {
   if (!name) return null;
 
   const primaryPos = asNonEmptyString(d.primaryPos);
+  const leaderboardHidden = d.leaderboardHidden === true;
 
   const allowed = new Set([
     "YXS",
@@ -145,6 +146,7 @@ function normalizePlayer(data: unknown, fallbackId: string): Player | null {
     "AL",
     "AXL",
   ]);
+
   const shirtSize =
     typeof d.shirtSize === "string" && allowed.has(d.shirtSize.trim())
       ? (d.shirtSize.trim() as Player["shirtSize"])
@@ -154,7 +156,8 @@ function normalizePlayer(data: unknown, fallbackId: string): Player | null {
     id,
     name,
     number,
-    shirtSize, // add
+    shirtSize,
+    leaderboardHidden,
     stats: normalizeStats(d.stats),
   };
 

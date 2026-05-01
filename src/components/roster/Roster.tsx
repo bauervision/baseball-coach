@@ -136,6 +136,144 @@ function shirtSizeLabel(v: unknown): string {
   return s ? s : "—";
 }
 
+type RosterStatItem = {
+  label: string;
+  value: string;
+  leader: boolean;
+  tone: "primary" | "secondary" | "accent" | "accent2";
+};
+
+function rosterStatsForPlayer(args: {
+  playerId: string;
+  stats: {
+    hits: number;
+    atBats: number;
+    rbi: number;
+    runs: number;
+    walks: number;
+    hitByPitch: number;
+    doubles: number;
+    triples: number;
+    homeRuns: number;
+    pitchingStrikeouts: number;
+    stolenBases: number;
+    putOuts: number;
+    assists: number;
+  };
+  avg: string;
+  obp: string;
+  slg: string;
+  opsValue: string;
+  leaders: ReturnType<typeof computeLeaders>;
+}): RosterStatItem[] {
+  const { playerId, stats, avg, obp, slg, opsValue, leaders } = args;
+
+  return [
+    {
+      label: "AVG",
+      value: avg,
+      leader: leaders.avg.includes(playerId),
+      tone: "primary",
+    },
+    {
+      label: "OBP",
+      value: obp,
+      leader: leaders.obp.includes(playerId),
+      tone: "accent",
+    },
+    {
+      label: "SLG",
+      value: slg,
+      leader: leaders.slg.includes(playerId),
+      tone: "secondary",
+    },
+    {
+      label: "OPS",
+      value: opsValue,
+      leader: leaders.ops.includes(playerId),
+      tone: "accent2",
+    },
+    {
+      label: "H",
+      value: String(stats.hits),
+      leader: leaders.hits.includes(playerId),
+      tone: "primary",
+    },
+    {
+      label: "AB",
+      value: String(stats.atBats),
+      leader: leaders.atBats.includes(playerId),
+      tone: "secondary",
+    },
+    {
+      label: "RBI",
+      value: String(stats.rbi),
+      leader: leaders.rbi.includes(playerId),
+      tone: "accent",
+    },
+    {
+      label: "R",
+      value: String(stats.runs),
+      leader: leaders.runs.includes(playerId),
+      tone: "accent2",
+    },
+    {
+      label: "BB",
+      value: String(stats.walks),
+      leader: leaders.walks.includes(playerId),
+      tone: "primary",
+    },
+    {
+      label: "HBP",
+      value: String(stats.hitByPitch),
+      leader: leaders.hitByPitch.includes(playerId),
+      tone: "accent",
+    },
+    {
+      label: "2B",
+      value: String(stats.doubles),
+      leader: leaders.doubles.includes(playerId),
+      tone: "secondary",
+    },
+    {
+      label: "3B",
+      value: String(stats.triples),
+      leader: leaders.triples.includes(playerId),
+      tone: "accent2",
+    },
+    {
+      label: "HR",
+      value: String(stats.homeRuns),
+      leader: leaders.homeRuns.includes(playerId),
+      tone: "primary",
+    },
+    {
+      label: "SB",
+      value: String(stats.stolenBases),
+      leader: false,
+      tone: "secondary",
+    },
+    {
+      label: "PO",
+      value: String(stats.putOuts),
+      leader: false,
+      tone: "accent",
+    },
+    {
+      label: "A",
+      value: String(stats.assists),
+      leader: false,
+      tone: "accent2",
+    },
+    {
+      label: "P-K",
+      value: String(stats.pitchingStrikeouts),
+      leader: leaders.pitchingStrikeouts.includes(playerId),
+      tone: "primary",
+    },
+  ];
+}
+
 export function Roster() {
   const { meta, players, error } = useRosterPlayers();
 
@@ -146,25 +284,39 @@ export function Roster() {
 
   const list = React.useMemo(() => {
     const src = players ?? [];
-    const arr = [...src];
 
-    if (!anyStatsExist) {
-      arr.sort((a, b) => sortByLastNameThenFirst(a.name, b.name));
-      return arr;
+    const visiblePlayers = src.filter((p) => p.leaderboardHidden !== true);
+    const hiddenPlayers = src.filter((p) => p.leaderboardHidden === true);
+
+    function sortVisiblePlayers(
+      arr: typeof visiblePlayers,
+    ): typeof visiblePlayers {
+      const next = [...arr];
+
+      if (!anyStatsExist) {
+        next.sort((a, b) => sortByLastNameThenFirst(a.name, b.name));
+        return next;
+      }
+
+      next.sort((a, b) => {
+        const ba = battingAverage(a);
+        const bb = battingAverage(b);
+
+        if (bb !== ba) return bb - ba;
+        if (b.stats.hits !== a.stats.hits) return b.stats.hits - a.stats.hits;
+        if (b.stats.rbi !== a.stats.rbi) return b.stats.rbi - a.stats.rbi;
+
+        return a.name.localeCompare(b.name);
+      });
+
+      return next;
     }
 
-    arr.sort((a, b) => {
-      const ba = battingAverage(a);
-      const bb = battingAverage(b);
+    const sortedHiddenPlayers = [...hiddenPlayers].sort((a, b) =>
+      sortByLastNameThenFirst(a.name, b.name),
+    );
 
-      if (bb !== ba) return bb - ba;
-
-      if (b.stats.hits !== a.stats.hits) return b.stats.hits - a.stats.hits;
-      if (b.stats.rbi !== a.stats.rbi) return b.stats.rbi - a.stats.rbi;
-      return a.name.localeCompare(b.name);
-    });
-
-    return arr;
+    return [...sortVisiblePlayers(visiblePlayers), ...sortedHiddenPlayers];
   }, [players, anyStatsExist]);
 
   const leaders = React.useMemo(() => computeLeaders(list), [list]);
@@ -185,7 +337,7 @@ export function Roster() {
                   />
                 ) : (
                   <div
-                    className="rounded-3xl border px-6 py-5 sm:px-7 sm:py-6"
+                    className="grid place-items-center rounded-3xl border px-6 py-6 sm:px-8 sm:py-7"
                     style={{
                       borderColor:
                         "color-mix(in oklab, var(--stroke) 88%, transparent)",
@@ -194,25 +346,22 @@ export function Roster() {
                       boxShadow:
                         "0 0 0 1px color-mix(in oklab, var(--primary) 10%, transparent) inset, 0 16px 36px color-mix(in oklab, var(--stroke) 18%, transparent)",
                       width: "fit-content",
-                      minWidth: "clamp(150px, 20vw, 220px)",
+                      minWidth: "clamp(170px, 22vw, 250px)",
                       maxWidth: "100%",
                     }}
                   >
                     <div
-                      className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em]"
+                      className="text-center text-[11px] sm:text-xs font-semibold uppercase tracking-[0.18em]"
                       style={{ color: "var(--muted)" }}
                     >
                       Record
                     </div>
 
                     <div
-                      className="mt-2 text-3xl sm:text-4xl lg:text-5xl font-extrabold leading-none"
+                      className="mt-3 text-center text-5xl sm:text-6xl lg:text-7xl font-extrabold leading-none tracking-tight"
                       style={{ color: "var(--foreground)" }}
                     >
                       {meta.record.wins}-{meta.record.losses}
-                      {typeof meta.record.ties === "number"
-                        ? `-${meta.record.ties}`
-                        : ""}
                     </div>
                   </div>
                 )}
@@ -386,120 +535,48 @@ export function Roster() {
                     </div>
 
                     <div className="mt-3 sm:mt-4">
-                      <div className="sm:hidden grid gap-2">
-                        <div className="grid grid-cols-4 gap-2">
-                          <Stat
-                            label="AVG"
-                            value={fmt3(ba)}
-                            leader={leaders.avg.includes(p.id)}
-                            tone="primary"
-                            compact
-                          />
-                          <Stat
-                            label="OBP"
-                            value={fmt3(obp)}
-                            leader={leaders.obp.includes(p.id)}
-                            tone="accent"
-                            compact
-                          />
-                          <Stat
-                            label="SLG"
-                            value={fmt3(slg)}
-                            leader={leaders.slg.includes(p.id)}
-                            tone="secondary"
-                            compact
-                          />
-                          <Stat
-                            label="OPS"
-                            value={fmt3(OPS)}
-                            leader={leaders.ops.includes(p.id)}
-                            tone="accent2"
-                            compact
-                          />
-                        </div>
+                      {(() => {
+                        const statItems = rosterStatsForPlayer({
+                          playerId: p.id,
+                          stats: p.stats,
+                          avg: fmt3(ba),
+                          obp: fmt3(obp),
+                          slg: fmt3(slg),
+                          opsValue: fmt3(OPS),
+                          leaders,
+                        });
 
-                        <div className="grid grid-cols-4 gap-2">
-                          <Stat
-                            label="H"
-                            value={String(p.stats.hits)}
-                            leader={leaders.hits.includes(p.id)}
-                            tone="primary"
-                            compact
-                          />
-                          <Stat
-                            label="AB"
-                            value={String(p.stats.atBats)}
-                            leader={leaders.atBats.includes(p.id)}
-                            tone="secondary"
-                            compact
-                          />
-                          <Stat
-                            label="RBI"
-                            value={String(p.stats.rbi)}
-                            leader={leaders.rbi.includes(p.id)}
-                            tone="accent"
-                            compact
-                          />
-                          <Stat
-                            label="R"
-                            value={String(p.stats.runs)}
-                            leader={leaders.runs.includes(p.id)}
-                            tone="accent2"
-                            compact
-                          />
-                        </div>
-                      </div>
+                        return (
+                          <>
+                            <div className="sm:hidden -mx-1 overflow-x-auto px-1 pb-2">
+                              <div className="flex min-w-max gap-2">
+                                {statItems.map((item) => (
+                                  <Stat
+                                    key={item.label}
+                                    label={item.label}
+                                    value={item.value}
+                                    leader={item.leader}
+                                    tone={item.tone}
+                                    compact
+                                  />
+                                ))}
+                              </div>
+                            </div>
 
-                      <div className="hidden sm:grid grid-cols-8 gap-2">
-                        <Stat
-                          label="AVG"
-                          value={fmt3(ba)}
-                          leader={leaders.avg.includes(p.id)}
-                          tone="primary"
-                        />
-                        <Stat
-                          label="OBP"
-                          value={fmt3(obp)}
-                          leader={leaders.obp.includes(p.id)}
-                          tone="accent"
-                        />
-                        <Stat
-                          label="SLG"
-                          value={fmt3(slg)}
-                          leader={leaders.slg.includes(p.id)}
-                          tone="secondary"
-                        />
-                        <Stat
-                          label="OPS"
-                          value={fmt3(OPS)}
-                          leader={leaders.ops.includes(p.id)}
-                          tone="accent2"
-                        />
-                        <Stat
-                          label="H"
-                          value={String(p.stats.hits)}
-                          leader={leaders.hits.includes(p.id)}
-                          tone="primary"
-                        />
-                        <Stat
-                          label="AB"
-                          value={String(p.stats.atBats)}
-                          leader={leaders.atBats.includes(p.id)}
-                          tone="secondary"
-                        />
-                        <Stat
-                          label="RBI"
-                          value={String(p.stats.rbi)}
-                          leader={leaders.rbi.includes(p.id)}
-                          tone="accent"
-                        />
-                        <Stat
-                          label="R"
-                          value={String(p.stats.runs)}
-                          leader={leaders.runs.includes(p.id)}
-                          tone="accent2"
-                        />
-                      </div>
+                            <div className="hidden sm:grid grid-cols-6 gap-2 lg:grid-cols-9 2xl:grid-cols-17">
+                              {statItems.map((item) => (
+                                <Stat
+                                  key={item.label}
+                                  label={item.label}
+                                  value={item.value}
+                                  leader={item.leader}
+                                  tone={item.tone}
+                                />
+                              ))}
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
                   </div>
                 </Link>
