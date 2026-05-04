@@ -104,7 +104,11 @@ export function LineupDisplay({ seasonId, players }: LineupDisplayProps) {
     String(i + 1),
   );
 
-  const rows = sortLineupRows(lineup.rows);
+  const rows = sortLineupRows(
+    lineup.rows.filter(
+      (row) => !(row as { hiddenFromLineup?: boolean }).hiddenFromLineup,
+    ),
+  );
   const playerList = players ?? [];
 
   return (

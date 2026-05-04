@@ -39,12 +39,45 @@ type LineupBuilderTabProps = {
   seasonLabel: string;
 };
 
+type LineupPlayerRowWithVisibility = LineupPlayerRow & {
+  hiddenFromLineup?: boolean;
+};
+
+type SavedLineupWithVisibility = Omit<SavedLineup, "rows"> & {
+  rows: LineupPlayerRowWithVisibility[];
+};
+
 type DropPlacement = "before" | "after";
 
 type DropTarget = {
   playerId: string;
   placement: DropPlacement;
 };
+
+function isHiddenFromLineup(row: LineupPlayerRow): boolean {
+  return Boolean((row as LineupPlayerRowWithVisibility).hiddenFromLineup);
+}
+
+function visibleLineupRows(rows: LineupPlayerRow[]): LineupPlayerRow[] {
+  return sortLineupRows(rows).filter((row) => !isHiddenFromLineup(row));
+}
+
+function hiddenLineupRows(rows: LineupPlayerRow[]): LineupPlayerRow[] {
+  return sortLineupRows(rows).filter((row) => isHiddenFromLineup(row));
+}
+
+function lineupForVisibleRows(
+  lineup: SavedLineup,
+  rows: LineupPlayerRow[],
+): SavedLineup {
+  return {
+    ...lineup,
+    rows: visibleLineupRows(rows).map((row, index) => ({
+      ...row,
+      battingOrder: index + 1,
+    })),
+  };
+}
 
 function availablePositionsForCell(args: {
   rows: LineupPlayerRow[];
@@ -91,12 +124,13 @@ function buildDraft(args: {
         const existingRow = existingRowsById.get(player.id);
 
         if (existingRow) {
-          return existingRow;
+          return existingRow as LineupPlayerRowWithVisibility;
         }
 
         return {
           playerId: player.id,
           battingOrder: index + 1,
+          hiddenFromLineup: false,
           innings: Object.fromEntries(
             Array.from({ length: args.existing?.inningCount ?? 6 }, (_, i) => [
               String(i + 1),
@@ -115,7 +149,7 @@ function buildDraft(args: {
         battingOrder: index + 1,
       })),
       updatedAtISO: now,
-    };
+    } as SavedLineupWithVisibility;
   }
 
   return {
@@ -125,8 +159,11 @@ function buildDraft(args: {
     createdAtISO: now,
     updatedAtISO: now,
     inningCount: 6,
-    rows: createEmptyLineupRows(args.players, 6),
-  };
+    rows: createEmptyLineupRows(args.players, 6).map((row) => ({
+      ...row,
+      hiddenFromLineup: false,
+    })),
+  } as SavedLineupWithVisibility;
 }
 
 function reorderRows(
@@ -137,15 +174,19 @@ function reorderRows(
 ): LineupPlayerRow[] {
   if (draggedPlayerId === targetPlayerId) return rows;
 
-  const next = sortLineupRows(rows);
-  const fromIndex = next.findIndex((row) => row.playerId === draggedPlayerId);
+  const visibleRows = visibleLineupRows(rows);
+  const hiddenRows = hiddenLineupRows(rows);
+
+  const fromIndex = visibleRows.findIndex(
+    (row) => row.playerId === draggedPlayerId,
+  );
 
   if (fromIndex < 0) return rows;
 
-  const [removed] = next.splice(fromIndex, 1);
+  const [removed] = visibleRows.splice(fromIndex, 1);
   if (!removed) return rows;
 
-  const adjustedTargetIndex = next.findIndex(
+  const adjustedTargetIndex = visibleRows.findIndex(
     (row) => row.playerId === targetPlayerId,
   );
 
@@ -154,9 +195,9 @@ function reorderRows(
   const insertIndex =
     placement === "before" ? adjustedTargetIndex : adjustedTargetIndex + 1;
 
-  next.splice(insertIndex, 0, removed);
+  visibleRows.splice(insertIndex, 0, removed);
 
-  return next.map((row, index) => ({
+  return [...visibleRows, ...hiddenRows].map((row, index) => ({
     ...row,
     battingOrder: index + 1,
   }));
@@ -219,9 +260,19 @@ export function LineupBuilderTab({
     };
   }, [db, seasonId, activePlayers]);
 
-  const issues = React.useMemo(
-    () => validateLineup(draft?.rows ?? []),
+  const visibleRows = React.useMemo(
+    () => visibleLineupRows(draft?.rows ?? []),
     [draft],
+  );
+
+  const hiddenRows = React.useMemo(
+    () => hiddenLineupRows(draft?.rows ?? []),
+    [draft],
+  );
+
+  const issues = React.useMemo(
+    () => validateLineup(visibleRows),
+    [visibleRows],
   );
 
   const issueKeys = React.useMemo(() => {
@@ -265,6 +316,30 @@ export function LineupBuilderTab({
     },
     [],
   );
+
+  const toggleHiddenFromLineup = React.useCallback((playerId: string) => {
+    setDraft((current) => {
+      if (!current) return current;
+
+      return {
+        ...current,
+        rows: current.rows.map((row) =>
+          row.playerId === playerId
+            ? {
+                ...row,
+                hiddenFromLineup: !isHiddenFromLineup(row),
+              }
+            : row,
+        ),
+        updatedAtISO: new Date().toISOString(),
+      } as SavedLineupWithVisibility;
+    });
+
+    setMsg("");
+    setErr("");
+    setDraggingPlayerId(null);
+    setDropTarget(null);
+  }, []);
 
   const reorderPlayer = React.useCallback(
     (targetPlayerId: string, placement: DropPlacement) => {
@@ -349,6 +424,8 @@ export function LineupBuilderTab({
     );
   }
 
+  const printableLineup = lineupForVisibleRows(draft, draft.rows);
+
   return (
     <Card>
       <CardHeader>
@@ -364,7 +441,8 @@ export function LineupBuilderTab({
             <div className="text-sm font-semibold">Current Lineup</div>
             <div className="text-xs" style={{ color: "var(--muted)" }}>
               Drag a player over the top or bottom half of another row to place
-              the insertion line. BENCH is allowed for multiple players.
+              the insertion line. BENCH is allowed for multiple players. Hide a
+              player to remove them from the lineup and roster page.
             </div>
           </div>
 
@@ -402,12 +480,10 @@ export function LineupBuilderTab({
             <button
               type="button"
               onClick={() => {
-                if (!draft) return;
-
                 exportLineupPdf({
                   teamName,
                   seasonLabel,
-                  lineup: draft,
+                  lineup: printableLineup,
                   players: activePlayers,
                 });
               }}
@@ -425,12 +501,10 @@ export function LineupBuilderTab({
             <button
               type="button"
               onClick={() => {
-                if (!draft) return;
-
                 exportLineupPdf({
                   teamName,
                   seasonLabel,
-                  lineup: draft,
+                  lineup: printableLineup,
                   players: activePlayers,
                   includeStats: false,
                 });
@@ -498,7 +572,7 @@ export function LineupBuilderTab({
         ) : null}
 
         <div className="-mx-2 overflow-x-auto px-2 pb-2">
-          <table className="w-full min-w-240 border-separate border-spacing-y-2 text-sm">
+          <table className="w-full min-w-260 border-separate border-spacing-y-2 text-sm">
             <thead>
               <tr>
                 <th
@@ -528,11 +602,17 @@ export function LineupBuilderTab({
                 >
                   Bench
                 </th>
+                <th
+                  className="px-2 py-1 text-center text-xs uppercase tracking-wide"
+                  style={{ color: "var(--muted)" }}
+                >
+                  Show
+                </th>
               </tr>
             </thead>
 
             <tbody>
-              {sortLineupRows(draft.rows).map((row, index) => {
+              {visibleRows.map((row, index) => {
                 const name = playerNameById(activePlayers, row.playerId);
                 const isDragging = draggingPlayerId === row.playerId;
                 const showBeforeLine =
@@ -711,7 +791,7 @@ export function LineupBuilderTab({
                             }}
                           >
                             {availablePositionsForCell({
-                              rows: draft.rows,
+                              rows: visibleRows,
                               playerId: row.playerId,
                               inning,
                             }).map((pos) => (
@@ -732,7 +812,7 @@ export function LineupBuilderTab({
                     })}
 
                     <td
-                      className="rounded-r-2xl border-y border-r px-2 py-2 text-center align-middle font-bold"
+                      className="border-y px-2 py-2 text-center align-middle font-bold"
                       style={{
                         borderColor:
                           "color-mix(in oklab, var(--stroke) 82%, transparent)",
@@ -743,11 +823,85 @@ export function LineupBuilderTab({
                     >
                       {benchCount(row)}
                     </td>
+
+                    <td
+                      className="rounded-r-2xl border-y border-r px-2 py-2 text-center align-middle"
+                      style={{
+                        borderColor:
+                          "color-mix(in oklab, var(--stroke) 82%, transparent)",
+                        background: rowBackground,
+                        boxShadow: dropShadow,
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleHiddenFromLineup(row.playerId)}
+                        disabled={!canEdit || saving}
+                        className="rounded-lg border px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide disabled:opacity-50"
+                        style={{
+                          borderColor:
+                            "color-mix(in oklab, var(--accent-2) 70%, transparent)",
+                          color: "var(--accent-2)",
+                        }}
+                      >
+                        Hide
+                      </button>
+                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+
+          {hiddenRows.length > 0 ? (
+            <div
+              className="rounded-xl border px-3 py-3 text-xs"
+              style={{
+                borderColor:
+                  "color-mix(in oklab, var(--accent-2) 42%, transparent)",
+                background:
+                  "color-mix(in oklab, var(--accent-2) 8%, var(--card))",
+                color: "var(--foreground)",
+              }}
+            >
+              <div className="mb-2 font-bold">
+                Hidden from lineup and roster page
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {hiddenRows.map((row) => (
+                  <div
+                    key={row.playerId}
+                    className="flex items-center gap-2 rounded-xl border px-3 py-2"
+                    style={{
+                      borderColor:
+                        "color-mix(in oklab, var(--stroke) 82%, transparent)",
+                      background:
+                        "color-mix(in oklab, var(--bg-base) 55%, transparent)",
+                    }}
+                  >
+                    <span className="font-semibold">
+                      {playerNameById(activePlayers, row.playerId)}
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => toggleHiddenFromLineup(row.playerId)}
+                      disabled={!canEdit || saving}
+                      className="rounded-lg border px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide disabled:opacity-50"
+                      style={{
+                        borderColor:
+                          "color-mix(in oklab, var(--secondary) 70%, transparent)",
+                        color: "var(--secondary)",
+                      }}
+                    >
+                      Restore
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </CardContent>
     </Card>
