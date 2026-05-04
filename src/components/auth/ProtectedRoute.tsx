@@ -2,34 +2,71 @@
 
 import * as React from "react";
 import type { AppSession } from "@/lib/session";
-import { readSession, onSessionChanged } from "@/lib/session";
+import { onSessionChanged, readSession } from "@/lib/session";
 
 type Role = AppSession["role"];
 
+function CheckingAccess() {
+  return (
+    <div className="grid min-h-[240px] place-items-center rounded-3xl border p-6">
+      <div className="text-sm font-semibold" style={{ color: "var(--muted)" }}>
+        Checking access…
+      </div>
+    </div>
+  );
+}
+
 export function ProtectedRoute(props: {
   children: React.ReactNode;
-  allow?: Role[]; // omit => any signed-in user
-  fallback?: React.ReactNode; // omit => null
+  allow?: Role[];
+  fallback?: React.ReactNode;
+  loadingFallback?: React.ReactNode;
 }) {
-  const { allow, fallback = null, children } = props;
+  const {
+    allow,
+    fallback = null,
+    loadingFallback = <CheckingAccess />,
+    children,
+  } = props;
 
-  const [session, setSession] = React.useState<AppSession | null>(null);
+  const [session, setSession] = React.useState<AppSession | null>(() =>
+    readSession(),
+  );
   const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
-    setSession(readSession());
-    setReady(true);
+    let alive = true;
 
-    const unsub = onSessionChanged(() => {
+    queueMicrotask(() => {
+      if (!alive) return;
       setSession(readSession());
+      setReady(true);
     });
 
+    const unsub = onSessionChanged(() => {
+      if (!alive) return;
+      setSession(readSession());
+      setReady(true);
+    });
+
+    const onFocus = () => {
+      if (!alive) return;
+      setSession(readSession());
+      setReady(true);
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+
     return () => {
+      alive = false;
       unsub();
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
     };
   }, []);
 
-  if (!ready) return null;
+  if (!ready) return <>{loadingFallback}</>;
 
   if (!session) return <>{fallback}</>;
 

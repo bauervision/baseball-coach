@@ -10,6 +10,9 @@ import {
   slugging,
   ops,
   fmt3,
+  computeLeaders,
+  type LeadersMap,
+  type StatKey as LeaderStatKey,
 } from "@/lib/roster";
 import { useRosterPlayers } from "@/lib/rosterStore";
 import { ArrowLeft, Trophy } from "lucide-react";
@@ -75,6 +78,16 @@ export default function PlayerPageClient() {
     return list.find((p) => p.id === id) ?? null;
   }, [players, id]);
 
+  const leaders = React.useMemo(() => computeLeaders(players ?? []), [players]);
+
+  const isLeader = React.useCallback(
+    (key: LeaderStatKey): boolean => {
+      if (!player) return false;
+      return leaders[key].includes(player.id);
+    },
+    [leaders, player],
+  );
+
   const allTrophyAwards = React.useMemo(
     () => computeTrophies(players ?? []),
     [players],
@@ -132,7 +145,6 @@ export default function PlayerPageClient() {
           <div className="text-sm" style={{ color: "var(--muted)" }}>
             {error}
           </div>
-
           <Link
             href="/"
             className="text-sm underline"
@@ -177,7 +189,6 @@ export default function PlayerPageClient() {
             No player matches id:{" "}
             <span style={{ color: "var(--foreground)" }}>{id}</span>
           </div>
-
           <Link
             href="/"
             className="text-sm underline"
@@ -227,6 +238,7 @@ export default function PlayerPageClient() {
                   seasonLabel: meta.seasonLabel,
                   player,
                   awards: playerTrophyAwards,
+                  leaders,
                 })
               }
               className="rounded-xl border px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-90"
@@ -279,6 +291,7 @@ export default function PlayerPageClient() {
                 label="Batting Average"
                 value={fmt3(ba)}
                 tone="primary"
+                leader={isLeader("avg")}
                 onExplainAction={() => openStat("AVG")}
                 icon={<IconBat />}
               />
@@ -286,6 +299,7 @@ export default function PlayerPageClient() {
                 label="On-Base Percentage"
                 value={fmt3(obp)}
                 tone="accent"
+                leader={isLeader("obp")}
                 onExplainAction={() => openStat("OBP")}
                 icon={<IconDiamond />}
               />
@@ -293,6 +307,7 @@ export default function PlayerPageClient() {
                 label="Slugging"
                 value={fmt3(slgV)}
                 tone="secondary"
+                leader={isLeader("slg")}
                 onExplainAction={() => openStat("SLG")}
                 icon={<IconBall />}
               />
@@ -300,6 +315,7 @@ export default function PlayerPageClient() {
                 label="OPS"
                 value={fmt3(opsV)}
                 tone="accent2"
+                leader={isLeader("ops")}
                 onExplainAction={() => openStat("OPS")}
                 icon={<IconScoreboard />}
               />
@@ -314,30 +330,55 @@ export default function PlayerPageClient() {
                 label="Plate Appearances"
                 value={String(player.stats.plateAppearances)}
               />
-              <SmallStat label="At Bats" value={String(player.stats.atBats)} />
-              <SmallStat label="Hits" value={String(player.stats.hits)} />
-              <SmallStat label="Doubles" value={String(player.stats.doubles)} />
-              <SmallStat label="Triples" value={String(player.stats.triples)} />
+              <SmallStat
+                label="At Bats"
+                value={String(player.stats.atBats)}
+                leader={isLeader("atBats")}
+              />
+              <SmallStat
+                label="Hits"
+                value={String(player.stats.hits)}
+                leader={isLeader("hits")}
+              />
+              <SmallStat
+                label="Doubles"
+                value={String(player.stats.doubles)}
+                leader={isLeader("doubles")}
+              />
+              <SmallStat
+                label="Triples"
+                value={String(player.stats.triples)}
+                leader={isLeader("triples")}
+              />
               <SmallStat
                 label="Home Runs"
                 value={String(player.stats.homeRuns)}
+                leader={isLeader("homeRuns")}
               />
               <SmallStat
                 label="RBIs: Runs Batted In"
                 value={String(player.stats.rbi)}
+                leader={isLeader("rbi")}
               />
-              <SmallStat label="Runs" value={String(player.stats.runs)} />
+              <SmallStat
+                label="Runs"
+                value={String(player.stats.runs)}
+                leader={isLeader("runs")}
+              />
               <SmallStat
                 label="Base on Balls (Walk)"
                 value={String(player.stats.walks)}
+                leader={isLeader("walks")}
               />
               <SmallStat
                 label="Hit By Pitch"
                 value={String(player.stats.hitByPitch)}
+                leader={isLeader("hitByPitch")}
               />
               <SmallStat
                 label="Stolen Bases"
                 value={String(player.stats.stolenBases)}
+                leader={isLeader("stolenBases")}
               />
             </div>
 
@@ -353,6 +394,7 @@ export default function PlayerPageClient() {
                   <SmallStat
                     label="Pitching Strike Outs"
                     value={String(player.stats.pitchingStrikeouts)}
+                    leader={isLeader("pitchingStrikeouts")}
                   />
                   <SmallStat
                     label="Pitching Saves"
@@ -365,10 +407,12 @@ export default function PlayerPageClient() {
                   <SmallStat
                     label="Put Outs (PO)"
                     value={String(player.stats.putOuts)}
+                    leader={isLeader("putOuts")}
                   />
                   <SmallStat
                     label="Assists (A)"
                     value={String(player.stats.assists)}
+                    leader={isLeader("assists")}
                   />
                 </div>
 
@@ -560,8 +604,6 @@ function PlayerTrophyHero(props: {
             style={{
               color:
                 "color-mix(in oklab, var(--secondary) 82%, var(--foreground))",
-              filter:
-                "drop-shadow(0 10px 18px color-mix(in oklab, var(--stroke) 45%, transparent))",
             }}
           />
         </div>
@@ -621,12 +663,13 @@ function PlayerTrophyHero(props: {
 function BigStat(props: {
   label: string;
   value: string;
+  leader?: boolean;
   tone?: "primary" | "secondary" | "accent" | "accent2";
   icon?: React.ReactNode;
   onExplainAction?: () => void;
 }) {
   const toneVar =
-    props.tone === "secondary"
+    props.leader || props.tone === "secondary"
       ? "var(--secondary)"
       : props.tone === "accent"
         ? "var(--accent)"
@@ -646,12 +689,15 @@ function BigStat(props: {
         clickable ? "transition active:scale-[0.99] hover:opacity-95" : "",
       ].join(" ")}
       style={{
-        borderColor: `color-mix(in oklab, ${toneVar} 45%, transparent)`,
-        background: `linear-gradient(180deg,
-          color-mix(in oklab, ${toneVar} 18%, var(--card)),
-          color-mix(in oklab, var(--bg-base) 55%, transparent)
-        )`,
-        boxShadow: `0 0 0 1px color-mix(in oklab, ${toneVar} 14%, transparent) inset`,
+        borderColor: props.leader
+          ? "color-mix(in oklab, var(--secondary) 78%, transparent)"
+          : `color-mix(in oklab, ${toneVar} 45%, transparent)`,
+        background: props.leader
+          ? "linear-gradient(135deg, color-mix(in oklab, var(--secondary) 24%, var(--card)), color-mix(in oklab, var(--bg-base) 58%, transparent))"
+          : `linear-gradient(180deg, color-mix(in oklab, ${toneVar} 18%, var(--card)), color-mix(in oklab, var(--bg-base) 55%, transparent))`,
+        boxShadow: props.leader
+          ? "0 0 0 1px color-mix(in oklab, var(--secondary) 32%, transparent) inset, 0 0 28px color-mix(in oklab, var(--secondary) 22%, transparent)"
+          : `0 0 0 1px color-mix(in oklab, ${toneVar} 14%, transparent) inset`,
         cursor: clickable ? "pointer" : "default",
       }}
       aria-label={clickable ? `What is ${props.label}?` : undefined}
@@ -664,21 +710,25 @@ function BigStat(props: {
           {props.label}
         </div>
 
-        {props.icon ? (
+        {props.leader ? (
+          <div
+            className="rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide"
+            style={{ background: "var(--secondary)", color: "rgba(0,0,0,0.9)" }}
+          >
+            Leader
+          </div>
+        ) : props.icon ? (
           <div
             className="shrink-0 grid h-9 w-9 place-items-center rounded-xl"
             style={{
               background: `color-mix(in oklab, ${toneVar} 14%, var(--card))`,
               border: `1px solid color-mix(in oklab, ${toneVar} 32%, transparent)`,
-              boxShadow: `0 0 0 1px color-mix(in oklab, ${toneVar} 10%, transparent) inset,
-                          0 10px 24px color-mix(in oklab, ${toneVar} 18%, transparent)`,
-              transform: "rotate(-10deg)",
               color: `color-mix(in oklab, ${toneVar} 78%, var(--foreground))`,
               opacity: 0.9,
             }}
             aria-hidden="true"
           >
-            <div style={{ transform: "rotate(10deg)" }}>{props.icon}</div>
+            {props.icon}
           </div>
         ) : null}
       </div>
@@ -694,21 +744,40 @@ function BigStat(props: {
   );
 }
 
-function SmallStat(props: { label: string; value: string }) {
+function SmallStat(props: { label: string; value: string; leader?: boolean }) {
   return (
     <div
       className="rounded-xl border px-3 py-2"
       style={{
-        borderColor: "color-mix(in oklab, var(--stroke) 88%, transparent)",
-        background: "color-mix(in oklab, var(--bg-base) 65%, transparent)",
+        borderColor: props.leader
+          ? "color-mix(in oklab, var(--secondary) 72%, transparent)"
+          : "color-mix(in oklab, var(--stroke) 88%, transparent)",
+        background: props.leader
+          ? "linear-gradient(135deg, color-mix(in oklab, var(--secondary) 18%, var(--card)), color-mix(in oklab, var(--bg-base) 64%, transparent))"
+          : "color-mix(in oklab, var(--bg-base) 65%, transparent)",
+        boxShadow: props.leader
+          ? "0 0 0 1px color-mix(in oklab, var(--secondary) 24%, transparent) inset, 0 0 20px color-mix(in oklab, var(--secondary) 16%, transparent)"
+          : undefined,
       }}
     >
-      <div
-        className="text-[10px] font-semibold tracking-wide uppercase"
-        style={{ color: "var(--muted)" }}
-      >
-        {props.label}
+      <div className="flex items-center justify-between gap-2">
+        <div
+          className="text-[10px] font-semibold tracking-wide uppercase"
+          style={{ color: "var(--muted)" }}
+        >
+          {props.label}
+        </div>
+
+        {props.leader ? (
+          <div
+            className="rounded-full px-1.5 py-0.5 text-[9px] font-extrabold uppercase"
+            style={{ background: "var(--secondary)", color: "rgba(0,0,0,0.9)" }}
+          >
+            Lead
+          </div>
+        ) : null}
       </div>
+
       <div className="text-sm font-semibold">{props.value}</div>
     </div>
   );
@@ -717,10 +786,7 @@ function SmallStat(props: { label: string; value: string }) {
 function formatGameDate(dateISO: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateISO);
   if (!m) return dateISO;
-
-  const month = String(Number(m[2]));
-  const day = String(Number(m[3]));
-  return `${month}/${day}`;
+  return `${Number(m[2])}/${Number(m[3])}`;
 }
 
 function buildLineSummary(props: {
@@ -732,25 +798,12 @@ function buildLineSummary(props: {
   hitByPitch: number;
 }): string {
   const bits: string[] = [];
-
   bits.push(`${props.hits} for ${props.atBats}`);
-
-  if (props.runs > 0) {
+  if (props.runs > 0)
     bits.push(`${props.runs} ${props.runs === 1 ? "run" : "runs"}`);
-  }
-
-  if (props.rbi > 0) {
-    bits.push(`${props.rbi} RBI`);
-  }
-
-  if (props.walks > 0) {
-    bits.push(`${props.walks} BB`);
-  }
-
-  if (props.hitByPitch > 0) {
-    bits.push(`${props.hitByPitch} HBP`);
-  }
-
+  if (props.rbi > 0) bits.push(`${props.rbi} RBI`);
+  if (props.walks > 0) bits.push(`${props.walks} BB`);
+  if (props.hitByPitch > 0) bits.push(`${props.hitByPitch} HBP`);
   return bits.join(" • ");
 }
 
@@ -767,14 +820,7 @@ function GameLogRow(props: {
   walks: number;
   hitByPitch: number;
 }) {
-  const summary = buildLineSummary({
-    atBats: props.atBats,
-    hits: props.hits,
-    runs: props.runs,
-    rbi: props.rbi,
-    walks: props.walks,
-    hitByPitch: props.hitByPitch,
-  });
+  const summary = buildLineSummary(props);
 
   return (
     <div

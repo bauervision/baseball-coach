@@ -82,7 +82,7 @@ export function todayISO() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-export type AdminTab = "stats" | "players" | "season";
+export type AdminTab = "stats" | "players" | "season" | "lineup";
 
 export type DraftPlayer = {
   key: string;

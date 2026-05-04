@@ -103,6 +103,9 @@ export type StatKey =
   | "doubles"
   | "triples"
   | "homeRuns"
+  | "stolenBases"
+  | "putOuts"
+  | "assists"
   | "pitchingStrikeouts";
 
 export type LeadersMap = Record<StatKey, string[]>;
@@ -139,6 +142,12 @@ function statValue(p: Player, k: StatKey): number {
       return p.stats.triples;
     case "homeRuns":
       return p.stats.homeRuns;
+    case "stolenBases":
+      return p.stats.stolenBases;
+    case "putOuts":
+      return p.stats.putOuts;
+    case "assists":
+      return p.stats.assists;
     case "pitchingStrikeouts":
       return p.stats.pitchingStrikeouts;
   }
@@ -146,10 +155,6 @@ function statValue(p: Player, k: StatKey): number {
 
 function isRate(k: StatKey): boolean {
   return k === "avg" || k === "obp" || k === "slg" || k === "ops";
-}
-
-function isCounting(k: StatKey): boolean {
-  return !isRate(k);
 }
 
 function eligibleForRate(p: Player, k: StatKey): boolean {
@@ -176,6 +181,9 @@ export function computeLeaders(players: Player[]): LeadersMap {
     "doubles",
     "triples",
     "homeRuns",
+    "stolenBases",
+    "putOuts",
+    "assists",
     "pitchingStrikeouts",
   ];
 
@@ -184,7 +192,6 @@ export function computeLeaders(players: Player[]): LeadersMap {
 
   for (const k of keys) {
     const eps = isRate(k) ? 0.0005 : 0;
-
     let max = -Infinity;
 
     for (const p of eligiblePlayers) {
@@ -194,33 +201,19 @@ export function computeLeaders(players: Player[]): LeadersMap {
       if (v > max) max = v;
     }
 
-    if (!Number.isFinite(max)) {
+    if (!Number.isFinite(max) || max <= 0) {
       out[k] = [];
       continue;
     }
 
-    if (isCounting(k) && max <= 0) {
-      out[k] = [];
-      continue;
-    }
+    out[k] = eligiblePlayers
+      .filter((p) => {
+        if (isRate(k) && !eligibleForRate(p, k)) return false;
 
-    if (isRate(k) && max <= 0) {
-      out[k] = [];
-      continue;
-    }
-
-    const leaders: string[] = [];
-
-    for (const p of eligiblePlayers) {
-      if (isRate(k) && !eligibleForRate(p, k)) continue;
-
-      const v = statValue(p, k);
-      const isLeader = eps > 0 ? near(v, max, eps) : v === max;
-
-      if (isLeader) leaders.push(p.id);
-    }
-
-    out[k] = leaders;
+        const v = statValue(p, k);
+        return eps > 0 ? near(v, max, eps) : v === max;
+      })
+      .map((p) => p.id);
   }
 
   return out as LeadersMap;

@@ -1,4 +1,4 @@
-// app/admin/AdminClient.tsx
+// app/(protected)/admin/AdminClient.tsx
 "use client";
 
 import * as React from "react";
@@ -28,6 +28,7 @@ import { StatsTab } from "./_parts/StatsTab";
 import { PlayersTab } from "./_parts/PlayersTab";
 import { SeasonTab } from "./_parts/SeasonTab";
 import { RosterBuilderTab } from "./_parts/RosterBuilderTab";
+import { LineupBuilderTab } from "./_parts/LineupBuilderTab";
 
 export default function AdminClient() {
   const { seasonId, meta, players, error: rosterError } = useRosterPlayers();
@@ -102,6 +103,11 @@ export default function AdminClient() {
               label="Stat Update"
               active={tab === "stats"}
               onClickAction={() => setTab("stats")}
+            />
+            <TabButton
+              label="Lineup"
+              active={tab === "lineup"}
+              onClickAction={() => setTab("lineup")}
             />
             <TabButton
               label="Player Update"
@@ -234,6 +240,15 @@ export default function AdminClient() {
           playerMsg={playerEdits.playerMsg}
           playerErr={playerEdits.playerErr}
           onSavePlayerEditsAction={playerEdits.onSavePlayerEditsAction}
+        />
+      ) : tab === "lineup" ? (
+        <LineupBuilderTab
+          db={db}
+          seasonId={effectiveSeasonId}
+          players={players}
+          canEdit={canEdit}
+          teamName={meta.teamName}
+          seasonLabel={meta.seasonLabel}
         />
       ) : (
         <div className="grid gap-5">

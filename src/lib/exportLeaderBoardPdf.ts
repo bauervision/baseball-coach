@@ -109,9 +109,9 @@ export function exportLeaderboardPdf(opts: {
     "doubles",
     "triples",
     "homeRuns",
-    null,
-    null,
-    null,
+    "stolenBases",
+    "putOuts",
+    "assists",
     "pitchingStrikeouts",
   ];
 
