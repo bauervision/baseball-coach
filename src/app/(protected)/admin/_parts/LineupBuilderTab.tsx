@@ -19,7 +19,14 @@ import {
   type LineupPosition,
   type SavedLineup,
 } from "@/lib/lineup";
-import type { Player } from "@/lib/roster";
+import {
+  battingAverage,
+  fmt3,
+  onBasePercentage,
+  ops,
+  slugging,
+  type Player,
+} from "@/lib/roster";
 
 import {
   Card,
@@ -77,6 +84,95 @@ function lineupForVisibleRows(
       battingOrder: index + 1,
     })),
   };
+}
+
+function playerById(players: Player[], playerId: string): Player | undefined {
+  return players.find((player) => player.id === playerId);
+}
+
+function formatAvg(player?: Player): string {
+  if (!player) return ".000";
+  return fmt3(battingAverage(player));
+}
+
+function PlayerStatsHoverCard({
+  player,
+  openUp = false,
+}: {
+  player?: Player;
+  openUp?: boolean;
+}) {
+  if (!player) return null;
+
+  const s = player.stats;
+
+  const stats = [
+    ["AVG", fmt3(battingAverage(player))],
+    ["OBP", fmt3(onBasePercentage(player))],
+    ["SLG", fmt3(slugging(player))],
+    ["OPS", fmt3(ops(player))],
+    ["AB", String(s.atBats)],
+    ["H", String(s.hits)],
+    ["2B", String(s.doubles)],
+    ["3B", String(s.triples)],
+    ["HR", String(s.homeRuns)],
+    ["RBI", String(s.rbi)],
+    ["R", String(s.runs)],
+    ["BB", String(s.walks)],
+    ["HBP", String(s.hitByPitch)],
+    ["SB", String(s.stolenBases)],
+    ["PO", String(s.putOuts)],
+    ["A", String(s.assists)],
+    ["K", String(s.pitchingStrikeouts)],
+  ];
+
+  return (
+    <div
+      className={[
+        "pointer-events-none absolute left-0 z-30 hidden w-72 rounded-2xl border p-3 text-xs shadow-2xl group-hover:block group-focus-within:block",
+        openUp ? "bottom-full mb-2" : "top-full mt-2",
+      ].join(" ")}
+      style={{
+        borderColor: "color-mix(in oklab, var(--primary) 78%, transparent)",
+        background:
+          "linear-gradient(180deg, color-mix(in oklab, var(--card) 96%, #000 4%), color-mix(in oklab, var(--bg-base) 92%, #000 8%))",
+        color: "var(--foreground)",
+        boxShadow:
+          "0 24px 70px rgba(0, 0, 0, 0.72), 0 0 0 1px color-mix(in oklab, var(--primary) 28%, transparent), 0 0 28px color-mix(in oklab, var(--primary) 18%, transparent)",
+      }}
+    >
+      <div className="mb-2">
+        <div className="text-sm font-extrabold">{player.name}</div>
+        <div style={{ color: "var(--muted)" }}>
+          #{player.number}
+          {player.primaryPos ? ` · ${player.primaryPos}` : ""}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-4 gap-1.5">
+        {stats.map(([label, value]) => (
+          <div
+            key={label}
+            className="rounded-lg border px-2 py-1"
+            style={{
+              borderColor:
+                "color-mix(in oklab, var(--stroke) 70%, transparent)",
+              background:
+                "color-mix(in oklab, var(--bg-base) 58%, transparent)",
+            }}
+          >
+            <div
+              className="text-[10px] font-bold uppercase tracking-wide"
+              style={{ color: "var(--muted)" }}
+            >
+              {label}
+            </div>
+            <div className="font-extrabold">{value}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 function availablePositionsForCell(args: {
@@ -441,8 +537,8 @@ export function LineupBuilderTab({
             <div className="text-sm font-semibold">Current Lineup</div>
             <div className="text-xs" style={{ color: "var(--muted)" }}>
               Drag a player over the top or bottom half of another row to place
-              the insertion line. BENCH is allowed for multiple players. Hide a
-              player to remove them from the lineup and roster page.
+              the insertion line. BENCH is allowed for multiple players. Hover a
+              player name to review current stats.
             </div>
           </div>
 
@@ -572,7 +668,7 @@ export function LineupBuilderTab({
         ) : null}
 
         <div className="-mx-2 overflow-x-auto px-2 pb-2">
-          <table className="w-full min-w-260 border-separate border-spacing-y-2 text-sm">
+          <table className="w-full min-w-240 border-separate border-spacing-y-2 text-sm">
             <thead>
               <tr>
                 <th
@@ -586,6 +682,12 @@ export function LineupBuilderTab({
                   style={{ color: "var(--muted)" }}
                 >
                   Player
+                </th>
+                <th
+                  className="px-2 py-1 text-center text-xs uppercase tracking-wide"
+                  style={{ color: "var(--muted)" }}
+                >
+                  AVG
                 </th>
                 {inningKeys.map((inning) => (
                   <th
@@ -613,7 +715,11 @@ export function LineupBuilderTab({
 
             <tbody>
               {visibleRows.map((row, index) => {
-                const name = playerNameById(activePlayers, row.playerId);
+                const player = playerById(activePlayers, row.playerId);
+                const openTooltipUp =
+                  index >= Math.max(visibleRows.length - 4, 0);
+                const name =
+                  player?.name ?? playerNameById(activePlayers, row.playerId);
                 const isDragging = draggingPlayerId === row.playerId;
                 const showBeforeLine =
                   dropTarget?.playerId === row.playerId &&
@@ -751,7 +857,37 @@ export function LineupBuilderTab({
                         boxShadow: dropShadow,
                       }}
                     >
-                      {name}
+                      <div className="group relative inline-flex">
+                        <button
+                          type="button"
+                          className="rounded-lg px-1 text-left font-semibold outline-none focus-visible:ring-2"
+                          style={
+                            {
+                              color: "var(--foreground)",
+                              "--tw-ring-color": "var(--secondary)",
+                            } as React.CSSProperties
+                          }
+                        >
+                          {name}
+                        </button>
+                        <PlayerStatsHoverCard
+                          player={player}
+                          openUp={openTooltipUp}
+                        />
+                      </div>
+                    </td>
+
+                    <td
+                      className="border-y px-2 py-2 text-center align-middle font-extrabold"
+                      style={{
+                        borderColor:
+                          "color-mix(in oklab, var(--stroke) 82%, transparent)",
+                        background: rowBackground,
+                        boxShadow: dropShadow,
+                        color: "var(--secondary)",
+                      }}
+                    >
+                      {formatAvg(player)}
                     </td>
 
                     {inningKeys.map((inning) => {

@@ -8,6 +8,7 @@ export const LINEUP_POSITIONS = [
   "2B",
   "3B",
   "SS",
+  "CF",
   "LF",
   "LCF",
   "RCF",

@@ -10,7 +10,7 @@ import {
   type SavedLineup,
 } from "@/lib/lineup";
 import { loadCurrentLineup } from "@/lib/lineupStore";
-import type { Player } from "@/lib/roster";
+import { battingAverage, fmt3, type Player } from "@/lib/roster";
 
 import {
   Card,
@@ -27,6 +27,15 @@ type LineupDisplayProps = {
 
 function positionLabel(value: string | undefined): string {
   return value && value.trim() ? value : "—";
+}
+
+function playerById(players: Player[], playerId: string): Player | undefined {
+  return players.find((player) => player.id === playerId);
+}
+
+function formatAvg(player?: Player): string {
+  if (!player) return ".000";
+  return fmt3(battingAverage(player));
 }
 
 export function LineupDisplay({ seasonId, players }: LineupDisplayProps) {
@@ -80,6 +89,7 @@ export function LineupDisplay({ seasonId, players }: LineupDisplayProps) {
           <CardTitle>Batting Lineup</CardTitle>
           <CardSubtitle>Could not load lineup.</CardSubtitle>
         </CardHeader>
+
         <CardContent>
           <div className="text-sm" style={{ color: "var(--muted)" }}>
             {error}
@@ -109,6 +119,7 @@ export function LineupDisplay({ seasonId, players }: LineupDisplayProps) {
       (row) => !(row as { hiddenFromLineup?: boolean }).hiddenFromLineup,
     ),
   );
+
   const playerList = players ?? [];
 
   return (
@@ -116,120 +127,136 @@ export function LineupDisplay({ seasonId, players }: LineupDisplayProps) {
       <CardHeader>
         <CardTitle>Batting Lineup</CardTitle>
         <CardSubtitle>
-          Batting order and field assignments by inning.
+          Batting order, batting average, and field assignments by inning.
         </CardSubtitle>
       </CardHeader>
 
       <CardContent className="min-w-0 overflow-hidden">
         <div className="grid gap-3 sm:hidden">
-          {rows.map((row, index) => (
-            <div
-              key={row.playerId}
-              className="min-w-0 overflow-hidden rounded-2xl border p-3"
-              style={{
-                borderColor:
-                  "color-mix(in oklab, var(--stroke) 82%, transparent)",
-                background:
-                  "color-mix(in oklab, var(--bg-base) 62%, transparent)",
-              }}
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-sm font-extrabold"
-                  style={{
-                    background:
-                      "color-mix(in oklab, var(--primary) 14%, var(--card))",
-                    color: "var(--foreground)",
-                  }}
-                >
-                  {index + 1}
-                </div>
+          {rows.map((row, index) => {
+            const player = playerById(playerList, row.playerId);
+            const playerName =
+              player?.name ?? playerNameById(playerList, row.playerId);
 
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-extrabold">
-                    {playerNameById(playerList, row.playerId)}
-                  </div>
+            return (
+              <div
+                key={row.playerId}
+                className="min-w-0 overflow-hidden rounded-2xl border p-3"
+                style={{
+                  borderColor:
+                    "color-mix(in oklab, var(--stroke) 82%, transparent)",
+                  background:
+                    "color-mix(in oklab, var(--bg-base) 62%, transparent)",
+                }}
+              >
+                <div className="flex items-center gap-3">
                   <div
-                    className="mt-0.5 text-xs"
-                    style={{ color: "var(--muted)" }}
-                  >
-                    Bench count: {benchCount(row)}
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-3 w-full min-w-0 overflow-x-auto overscroll-x-contain pb-2">
-                <div className="flex min-w-max gap-2 pr-3">
-                  {inningKeys.map((inning) => {
-                    const position = positionLabel(row.innings[inning]);
-                    const isBench = position === "BENCH";
-                    const isBlank = position === "—";
-
-                    return (
-                      <div
-                        key={inning}
-                        className="w-22 shrink-0 rounded-xl border px-3 py-2 text-center"
-                        style={{
-                          borderColor:
-                            "color-mix(in oklab, var(--stroke) 82%, transparent)",
-                          background: isBlank
-                            ? "color-mix(in oklab, var(--bg-base) 72%, transparent)"
-                            : isBench
-                              ? "color-mix(in oklab, var(--stroke) 18%, var(--bg-base))"
-                              : "color-mix(in oklab, var(--secondary) 13%, var(--bg-base))",
-                        }}
-                      >
-                        <div
-                          className="text-[10px] font-semibold uppercase tracking-wide"
-                          style={{ color: "var(--muted)" }}
-                        >
-                          Inning {inning}
-                        </div>
-                        <div
-                          className="mt-1 text-sm font-extrabold"
-                          style={{
-                            color: isBlank
-                              ? "var(--muted)"
-                              : "var(--foreground)",
-                          }}
-                        >
-                          {position}
-                        </div>
-                      </div>
-                    );
-                  })}
-
-                  <div
-                    className="w-22 shrink-0 rounded-xl border px-3 py-2 text-center"
+                    className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-sm font-extrabold"
                     style={{
-                      borderColor:
-                        "color-mix(in oklab, var(--secondary) 42%, transparent)",
                       background:
-                        "color-mix(in oklab, var(--secondary) 10%, var(--bg-base))",
+                        "color-mix(in oklab, var(--primary) 14%, var(--card))",
+                      color: "var(--foreground)",
                     }}
                   >
+                    {index + 1}
+                  </div>
+
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-extrabold">
+                      {playerName}
+                    </div>
+
                     <div
-                      className="text-[10px] font-semibold uppercase tracking-wide"
+                      className="mt-0.5 text-xs"
                       style={{ color: "var(--muted)" }}
                     >
-                      Bench
+                      AVG:{" "}
+                      <span
+                        className="font-extrabold"
+                        style={{ color: "var(--secondary)" }}
+                      >
+                        {formatAvg(player)}
+                      </span>{" "}
+                      · Bench count: {benchCount(row)}
                     </div>
+                  </div>
+                </div>
+
+                <div className="mt-3 w-full min-w-0 overflow-x-auto overscroll-x-contain pb-2">
+                  <div className="flex min-w-max gap-2 pr-3">
+                    {inningKeys.map((inning) => {
+                      const position = positionLabel(row.innings[inning]);
+                      const isBench = position === "BENCH";
+                      const isBlank = position === "—";
+
+                      return (
+                        <div
+                          key={inning}
+                          className="w-22 shrink-0 rounded-xl border px-3 py-2 text-center"
+                          style={{
+                            borderColor:
+                              "color-mix(in oklab, var(--stroke) 82%, transparent)",
+                            background: isBlank
+                              ? "color-mix(in oklab, var(--bg-base) 72%, transparent)"
+                              : isBench
+                                ? "color-mix(in oklab, var(--stroke) 18%, var(--bg-base))"
+                                : "color-mix(in oklab, var(--secondary) 13%, var(--bg-base))",
+                          }}
+                        >
+                          <div
+                            className="text-[10px] font-semibold uppercase tracking-wide"
+                            style={{ color: "var(--muted)" }}
+                          >
+                            Inning {inning}
+                          </div>
+
+                          <div
+                            className="mt-1 text-sm font-extrabold"
+                            style={{
+                              color: isBlank
+                                ? "var(--muted)"
+                                : "var(--foreground)",
+                            }}
+                          >
+                            {position}
+                          </div>
+                        </div>
+                      );
+                    })}
+
                     <div
-                      className="mt-1 text-sm font-extrabold"
-                      style={{ color: "var(--secondary)" }}
+                      className="w-22 shrink-0 rounded-xl border px-3 py-2 text-center"
+                      style={{
+                        borderColor:
+                          "color-mix(in oklab, var(--secondary) 42%, transparent)",
+                        background:
+                          "color-mix(in oklab, var(--secondary) 10%, var(--bg-base))",
+                      }}
                     >
-                      {benchCount(row)}
+                      <div
+                        className="text-[10px] font-semibold uppercase tracking-wide"
+                        style={{ color: "var(--muted)" }}
+                      >
+                        Bench
+                      </div>
+
+                      <div
+                        className="mt-1 text-sm font-extrabold"
+                        style={{ color: "var(--secondary)" }}
+                      >
+                        {benchCount(row)}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="hidden min-w-0 max-w-full overflow-hidden sm:block">
           <div className="max-w-full overflow-x-auto pb-2">
-            <table className="w-full min-w-175 border-separate border-spacing-y-2 text-sm">
+            <table className="w-full min-w-190 border-separate border-spacing-y-2 text-sm">
               <thead>
                 <tr>
                   <th
@@ -238,12 +265,21 @@ export function LineupDisplay({ seasonId, players }: LineupDisplayProps) {
                   >
                     #
                   </th>
+
                   <th
                     className="px-2 py-1 text-left text-xs uppercase tracking-wide"
                     style={{ color: "var(--muted)" }}
                   >
                     Player
                   </th>
+
+                  <th
+                    className="px-2 py-1 text-center text-xs uppercase tracking-wide"
+                    style={{ color: "var(--muted)" }}
+                  >
+                    AVG
+                  </th>
+
                   {inningKeys.map((inning) => (
                     <th
                       key={inning}
@@ -253,6 +289,7 @@ export function LineupDisplay({ seasonId, players }: LineupDisplayProps) {
                       {inning}
                     </th>
                   ))}
+
                   <th
                     className="px-2 py-1 text-center text-xs uppercase tracking-wide"
                     style={{ color: "var(--muted)" }}
@@ -263,74 +300,93 @@ export function LineupDisplay({ seasonId, players }: LineupDisplayProps) {
               </thead>
 
               <tbody>
-                {rows.map((row, index) => (
-                  <tr key={row.playerId}>
-                    <td
-                      className="rounded-l-2xl border-y border-l px-3 py-2 font-bold"
-                      style={{
-                        borderColor:
-                          "color-mix(in oklab, var(--stroke) 82%, transparent)",
-                        background:
-                          "color-mix(in oklab, var(--bg-base) 62%, transparent)",
-                      }}
-                    >
-                      {index + 1}
-                    </td>
+                {rows.map((row, index) => {
+                  const player = playerById(playerList, row.playerId);
+                  const playerName =
+                    player?.name ?? playerNameById(playerList, row.playerId);
 
-                    <td
-                      className="border-y px-3 py-2 font-semibold"
-                      style={{
-                        borderColor:
-                          "color-mix(in oklab, var(--stroke) 82%, transparent)",
-                        background:
-                          "color-mix(in oklab, var(--bg-base) 62%, transparent)",
-                      }}
-                    >
-                      {playerNameById(playerList, row.playerId)}
-                    </td>
+                  return (
+                    <tr key={row.playerId}>
+                      <td
+                        className="rounded-l-2xl border-y border-l px-3 py-2 font-bold"
+                        style={{
+                          borderColor:
+                            "color-mix(in oklab, var(--stroke) 82%, transparent)",
+                          background:
+                            "color-mix(in oklab, var(--bg-base) 62%, transparent)",
+                        }}
+                      >
+                        {index + 1}
+                      </td>
 
-                    {inningKeys.map((inning) => {
-                      const position = positionLabel(row.innings[inning]);
-                      const isBench = position === "BENCH";
-                      const isBlank = position === "—";
+                      <td
+                        className="border-y px-3 py-2 font-semibold"
+                        style={{
+                          borderColor:
+                            "color-mix(in oklab, var(--stroke) 82%, transparent)",
+                          background:
+                            "color-mix(in oklab, var(--bg-base) 62%, transparent)",
+                        }}
+                      >
+                        {playerName}
+                      </td>
 
-                      return (
-                        <td
-                          key={inning}
-                          className="border-y px-2 py-2 text-center text-xs font-extrabold"
-                          style={{
-                            borderColor:
-                              "color-mix(in oklab, var(--stroke) 82%, transparent)",
-                            background: isBlank
-                              ? "color-mix(in oklab, var(--bg-base) 72%, transparent)"
-                              : isBench
-                                ? "color-mix(in oklab, var(--stroke) 18%, var(--bg-base))"
-                                : "color-mix(in oklab, var(--secondary) 12%, var(--bg-base))",
-                            color:
-                              isBlank || isBench
-                                ? "var(--muted)"
-                                : "var(--foreground)",
-                          }}
-                        >
-                          {position}
-                        </td>
-                      );
-                    })}
+                      <td
+                        className="border-y px-3 py-2 text-center font-extrabold"
+                        style={{
+                          borderColor:
+                            "color-mix(in oklab, var(--stroke) 82%, transparent)",
+                          background:
+                            "color-mix(in oklab, var(--bg-base) 62%, transparent)",
+                          color: "var(--secondary)",
+                        }}
+                      >
+                        {formatAvg(player)}
+                      </td>
 
-                    <td
-                      className="rounded-r-2xl border-y border-r px-3 py-2 text-center font-bold"
-                      style={{
-                        borderColor:
-                          "color-mix(in oklab, var(--stroke) 82%, transparent)",
-                        background:
-                          "color-mix(in oklab, var(--bg-base) 62%, transparent)",
-                        color: "var(--secondary)",
-                      }}
-                    >
-                      {benchCount(row)}
-                    </td>
-                  </tr>
-                ))}
+                      {inningKeys.map((inning) => {
+                        const position = positionLabel(row.innings[inning]);
+                        const isBench = position === "BENCH";
+                        const isBlank = position === "—";
+
+                        return (
+                          <td
+                            key={inning}
+                            className="border-y px-2 py-2 text-center text-xs font-extrabold"
+                            style={{
+                              borderColor:
+                                "color-mix(in oklab, var(--stroke) 82%, transparent)",
+                              background: isBlank
+                                ? "color-mix(in oklab, var(--bg-base) 72%, transparent)"
+                                : isBench
+                                  ? "color-mix(in oklab, var(--stroke) 18%, var(--bg-base))"
+                                  : "color-mix(in oklab, var(--secondary) 12%, var(--bg-base))",
+                              color:
+                                isBlank || isBench
+                                  ? "var(--muted)"
+                                  : "var(--foreground)",
+                            }}
+                          >
+                            {position}
+                          </td>
+                        );
+                      })}
+
+                      <td
+                        className="rounded-r-2xl border-y border-r px-3 py-2 text-center font-bold"
+                        style={{
+                          borderColor:
+                            "color-mix(in oklab, var(--stroke) 82%, transparent)",
+                          background:
+                            "color-mix(in oklab, var(--bg-base) 62%, transparent)",
+                          color: "var(--secondary)",
+                        }}
+                      >
+                        {benchCount(row)}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
