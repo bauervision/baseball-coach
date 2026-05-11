@@ -1,11 +1,13 @@
 "use client";
 
+// Add orderBy to the firestore import
 import {
   collection,
   doc,
   getDoc,
   getDocs,
   query,
+  orderBy,
   setDoc,
   writeBatch,
   serverTimestamp,
@@ -263,19 +265,6 @@ export async function saveGameAndApplyDeltas(opts: {
     };
   }
 
-  const coachAwardCountsByPlayer = new Map<string, Record<string, number>>();
-
-  for (const [key, playerId] of Object.entries(coachPicks) as Array<
-    [CoachPickKey, string]
-  >) {
-    if (!playerId) continue;
-
-    const statField = COACH_PICK_STAT_FIELD[key];
-    const cur = coachAwardCountsByPlayer.get(playerId) ?? {};
-    cur[statField] = (cur[statField] ?? 0) + 1;
-    coachAwardCountsByPlayer.set(playerId, cur);
-  }
-
   let wroteLines = 0;
   let coachPickCount = 0;
 
@@ -283,7 +272,7 @@ export async function saveGameAndApplyDeltas(opts: {
     if (value) coachPickCount++;
   }
 
-  if ((players?.length ?? 0) === 0) {
+  if (players.length === 0) {
     throw new Error("No players in roster.");
   }
 
@@ -319,8 +308,6 @@ export async function saveGameAndApplyDeltas(opts: {
     throw new Error("No player stats or coach picks were entered.");
   }
 
-  // If editing an existing game, delete old line docs first so removed stats
-  // do not linger under games/{gid}/lines.
   const existingLinesSnap = await getDocs(
     collection(db, "seasons", seasonId, "games", gid, "lines"),
   );
@@ -368,9 +355,10 @@ export async function saveGameAndApplyDeltas(opts: {
 
   await batch.commit();
 
-  // Rebuild record from all saved games.
-  const gamesSnap = await getDocs(collection(db, "seasons", seasonId, "games"));
-
+  const gamesSnap = await getDocs(
+    query(collection(db, "seasons", seasonId, "games"), orderBy("date", "asc")),
+  );
+  
   let wins = 0;
   let losses = 0;
   let ties = 0;
@@ -526,6 +514,20 @@ export async function saveGameAndApplyDeltas(opts: {
 
       if (hasAnyStat) {
         totals.games += 1;
+      }
+
+      const hadHit = hits > 0;
+
+      if (hasAnyStat) {
+        if (hadHit) {
+          totals.currentHitStreak += 1;
+          totals.longestHitStreak = Math.max(
+            totals.longestHitStreak,
+            totals.currentHitStreak,
+          );
+        } else {
+          totals.currentHitStreak = 0;
+        }
       }
 
       totals.atBats += atBats;

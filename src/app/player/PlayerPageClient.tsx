@@ -30,6 +30,7 @@ import { Dialog, DialogContent, DialogClose } from "@/components/ui/Dialog";
 import { usePlayerGameLog } from "@/components/roster/usePlayerGameLog";
 import { AnimatedBackgroundSkin } from "@/components/shell/AnimatedBackgroundSkin";
 import { exportPlayerStatsPdf } from "@/lib/exportPlayerStatsPdf";
+import { TROPHY_ART } from "@/lib/trophyArtwork";
 
 type StatKey = "AVG" | "OBP" | "SLG" | "OPS";
 
@@ -341,6 +342,12 @@ export default function PlayerPageClient() {
                 leader={isLeader("hits")}
               />
               <SmallStat
+                label="Longest Hit Streak"
+                value={String(player.stats.longestHitStreak ?? 0)}
+                leader={isLeader("longestHitStreak")}
+              />
+
+              <SmallStat
                 label="Doubles"
                 value={String(player.stats.doubles)}
                 leader={isLeader("doubles")}
@@ -446,22 +453,36 @@ export default function PlayerPageClient() {
                   </div>
                 ) : (
                   <div className="grid gap-2">
-                    {gameLog.map((item) => (
-                      <GameLogRow
-                        key={item.gameId}
-                        date={item.date}
-                        opponent={item.opponent}
-                        result={item.result}
-                        scoreUs={item.scoreUs}
-                        scoreThem={item.scoreThem}
-                        atBats={item.delta.atBats}
-                        hits={item.delta.hits}
-                        runs={item.delta.runs}
-                        rbi={item.delta.rbi}
-                        walks={item.delta.walks}
-                        hitByPitch={item.delta.hitByPitch}
-                      />
-                    ))}
+                    {(() => {
+                      const streakByGameId = new Map<string, number>();
+                      let streak = 0;
+
+                      [...gameLog]
+                        .sort((a, b) => a.date.localeCompare(b.date))
+                        .forEach((item) => {
+                          const hadHit = item.delta.hits > 0;
+                          streak = hadHit ? streak + 1 : 0;
+                          streakByGameId.set(item.gameId, streak);
+                        });
+
+                      return gameLog.map((item) => (
+                        <GameLogRow
+                          key={item.gameId}
+                          date={item.date}
+                          opponent={item.opponent}
+                          result={item.result}
+                          scoreUs={item.scoreUs}
+                          scoreThem={item.scoreThem}
+                          atBats={item.delta.atBats}
+                          hits={item.delta.hits}
+                          runs={item.delta.runs}
+                          rbi={item.delta.rbi}
+                          walks={item.delta.walks}
+                          hitByPitch={item.delta.hitByPitch}
+                          hitStreak={streakByGameId.get(item.gameId) ?? 0}
+                        />
+                      ));
+                    })()}
                   </div>
                 )}
               </CardContent>
@@ -569,7 +590,7 @@ function PlayerTrophyHero(props: {
           </div>
 
           <div
-            className="mt-2 text-xl sm:text-2xl font-extrabold leading-tight"
+            className="mt-2 text-xl font-extrabold leading-tight sm:text-2xl"
             style={{ color: "var(--foreground)" }}
           >
             {awards.length > 0
@@ -586,63 +607,76 @@ function PlayerTrophyHero(props: {
               : "No active trophy lead yet. Keep recording games and strengths will start to separate."}
           </div>
         </div>
-
-        <div
-          className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl border"
-          style={{
-            borderColor:
-              "color-mix(in oklab, var(--secondary) 40%, transparent)",
-            background:
-              "color-mix(in oklab, var(--secondary) 14%, var(--card))",
-            boxShadow:
-              "0 12px 28px color-mix(in oklab, var(--secondary) 18%, transparent)",
-          }}
-          aria-hidden="true"
-        >
-          <Trophy
-            className="h-8 w-8"
-            style={{
-              color:
-                "color-mix(in oklab, var(--secondary) 82%, var(--foreground))",
-            }}
-          />
-        </div>
       </div>
 
       {awards.length > 0 ? (
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          {awards.map((award) => (
-            <div
-              key={award.trophy.key}
-              className="rounded-2xl border px-4 py-3"
-              style={{
-                borderColor:
-                  "color-mix(in oklab, var(--stroke) 88%, transparent)",
-                background:
-                  "color-mix(in oklab, var(--bg-base) 58%, transparent)",
-              }}
-            >
-              <div
-                className="text-sm font-extrabold leading-tight"
-                style={{ color: "var(--foreground)" }}
-              >
-                {award.trophy.title}
-              </div>
+          {awards.map((award) => {
+            const artworkSrc =
+              TROPHY_ART[award.trophy.key] ?? "/trophies/trophy.png";
 
+            return (
               <div
-                className="mt-1 text-xs font-semibold"
-                style={{ color: "var(--secondary)" }}
+                key={award.trophy.key}
+                className="flex min-h-36 items-center justify-between gap-5 rounded-2xl border px-5 py-5"
+                style={{
+                  borderColor:
+                    "color-mix(in oklab, var(--stroke) 88%, transparent)",
+                  background:
+                    "color-mix(in oklab, var(--bg-base) 58%, transparent)",
+                }}
               >
-                {award.valueLabel}
-              </div>
+                <div className="min-w-0">
+                  <div
+                    className="text-2xl font-extrabold leading-tight"
+                    style={{ color: "var(--foreground)" }}
+                  >
+                    {award.trophy.title}
+                  </div>
 
-              {award.valueSub ? (
-                <div className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
-                  {award.valueSub}
+                  <div
+                    className="mt-2 text-4xl font-extrabold leading-none"
+                    style={{
+                      color: "var(--secondary)",
+                      textShadow:
+                        "0 0 18px color-mix(in oklab, var(--secondary) 45%, transparent)",
+                    }}
+                  >
+                    {award.valueLabel}
+                  </div>
+
+                  {award.valueSub ? (
+                    <div
+                      className="mt-2 text-lg font-semibold"
+                      style={{ color: "var(--muted)" }}
+                    >
+                      {award.valueSub}
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
-          ))}
+
+                <div
+                  className="grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-2xl border sm:h-28 sm:w-28"
+                  style={{
+                    borderColor:
+                      "color-mix(in oklab, var(--secondary) 34%, transparent)",
+                    background:
+                      "color-mix(in oklab, var(--secondary) 10%, var(--card))",
+                    boxShadow:
+                      "0 10px 24px color-mix(in oklab, var(--secondary) 16%, transparent)",
+                  }}
+                  aria-hidden="true"
+                >
+                  <img
+                    src={artworkSrc}
+                    alt=""
+                    className="h-full w-full object-cover"
+                    draggable={false}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div
@@ -815,6 +849,7 @@ function GameLogRow(props: {
   scoreThem: number;
   atBats: number;
   hits: number;
+  hitStreak: number;
   runs: number;
   rbi: number;
   walks: number;
@@ -838,6 +873,27 @@ function GameLogRow(props: {
           <div className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
             {summary}
           </div>
+          {props.hitStreak > 0 ? (
+            <div
+              className={[
+                "mt-1 text-xs font-semibold transition",
+                props.hitStreak >= 5 ? "animate-pulse" : "",
+              ].join(" ")}
+              style={{
+                color:
+                  props.hitStreak >= 3
+                    ? "color-mix(in oklab, var(--secondary) 88%, #ff7a18)"
+                    : "var(--secondary)",
+                textShadow:
+                  props.hitStreak >= 3
+                    ? "0 0 12px color-mix(in oklab, var(--secondary) 70%, transparent)"
+                    : undefined,
+              }}
+            >
+              {props.hitStreak >= 5 ? "Fire streak: " : "Hit streak: "}
+              {props.hitStreak} {props.hitStreak === 1 ? "game" : "games"}
+            </div>
+          ) : null}
         </div>
 
         <div className="shrink-0 text-right">

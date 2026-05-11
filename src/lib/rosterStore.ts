@@ -93,6 +93,8 @@ function normalizeStats(v: unknown): PlayerBattingStats {
     plateAppearances: asInt(d.plateAppearances),
     atBats: asInt(d.atBats),
     hits: asInt(d.hits),
+    currentHitStreak: asInt(d.currentHitStreak),
+    longestHitStreak: asInt(d.longestHitStreak),
     doubles: asInt(d.doubles),
     triples: asInt(d.triples),
     homeRuns: asInt(d.homeRuns),

@@ -26,6 +26,7 @@ export type TrophyKey =
   | "home_run_king"
   | "gold_glove"
   | "cannon_arm"
+  | "hot_streak_hitter"
   | "flyball_trapper"
   | "charlie_hustle"
   | "most_improved"
@@ -71,7 +72,7 @@ type ExtraStatsShape = {
   stolenBases?: number;
   pitchingSaves?: number;
   flyBallCatches?: number;
-
+  longestHitStreak?: number;
   charlieHustleAwards?: number;
   mostImprovedAwards?: number;
   bestPitcherAwards?: number;
@@ -218,6 +219,12 @@ const TROPHIES: TrophyDef[] = [
     title: "Hit Leader",
     subtitle: "Most hits",
     tone: "accent",
+  },
+  {
+    key: "hot_streak_hitter",
+    title: "Hot Streak Hitter",
+    subtitle: "Longest hit streak",
+    tone: "secondary",
   },
   {
     key: "singles_specialist",
@@ -510,6 +517,23 @@ export function computeTrophies(players: Player[]): TrophyAward[] {
             formatValue: (p) => ({
               valueLabel: String(p.stats.hits),
               valueSub: "Total hits",
+            }),
+          });
+
+        case "hot_streak_hitter":
+          return pickWinner({
+            trophy: t,
+            players: list,
+            buildCandidates: (p) => ({
+              p,
+              score: extraStat(p, "longestHitStreak"),
+              t1: p.stats.hits,
+              t2: p.stats.atBats,
+              t3: p.stats.games,
+            }),
+            formatValue: (p) => ({
+              valueLabel: String(extraStat(p, "longestHitStreak")),
+              valueSub: "Game hit streak",
             }),
           });
 

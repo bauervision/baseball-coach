@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Trophy } from "lucide-react";
 
 import { useRosterPlayers } from "@/lib/rosterStore";
+import { TROPHY_ART } from "@/lib/trophyArtwork";
 import {
   getTrophyDefinitions,
   computeTrophies,
@@ -151,7 +152,7 @@ export default function TrophiesClient() {
             page shows the full set of awards that can come into play.
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid items-stretch gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {trophies.map((t) => (
               <TrophyTile
                 key={t.key}
@@ -255,10 +256,11 @@ export default function TrophiesClient() {
 function TrophyTile(props: { trophy: TrophyDef; award: TrophyAward | null }) {
   const { trophy, award } = props;
   const tone = toneVar(trophy.tone);
+  const artworkSrc = TROPHY_ART[trophy.key];
 
   return (
     <div
-      className="rounded-2xl border p-5"
+      className="flex h-full min-h-72 flex-col rounded-2xl border p-5"
       style={{
         borderColor: `color-mix(in oklab, ${tone} 45%, transparent)`,
         background: `linear-gradient(180deg,
@@ -268,7 +270,7 @@ function TrophyTile(props: { trophy: TrophyDef; award: TrophyAward | null }) {
         boxShadow: `0 0 0 1px color-mix(in oklab, ${tone} 12%, transparent) inset`,
       }}
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
           <div className="text-sm font-extrabold leading-tight">
             {trophy.title}
@@ -279,91 +281,107 @@ function TrophyTile(props: { trophy: TrophyDef; award: TrophyAward | null }) {
         </div>
 
         <div
-          className="grid h-14 w-14 place-items-center rounded-2xl border"
+          className="grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-2xl border transition-all"
           style={{
             borderColor: `color-mix(in oklab, ${tone} 40%, transparent)`,
-            background: `color-mix(in oklab, ${tone} 14%, var(--card))`,
+            background: `color-mix(in oklab, ${tone} 10%, var(--card))`,
             boxShadow: `0 10px 28px color-mix(in oklab, ${tone} 18%, transparent)`,
           }}
           aria-hidden="true"
         >
-          <Trophy
-            className="h-8 w-8"
-            style={{
-              color: `color-mix(in oklab, ${tone} 82%, var(--foreground))`,
-              filter:
-                "drop-shadow(0 10px 18px color-mix(in oklab, var(--stroke) 45%, transparent))",
-              opacity: 0.95,
-            }}
-          />
+          {artworkSrc ? (
+            <img
+              src={artworkSrc}
+              alt=""
+              className="h-full w-full object-cover"
+              draggable={false}
+            />
+          ) : (
+            <Trophy
+              className="h-14 w-14"
+              style={{
+                color: `color-mix(in oklab, ${tone} 82%, var(--foreground))`,
+                filter:
+                  "drop-shadow(0 10px 18px color-mix(in oklab, var(--stroke) 45%, transparent))",
+                opacity: 0.95,
+              }}
+            />
+          )}
         </div>
       </div>
 
-      {award ? (
-        <div
-          className="mt-4 rounded-xl border px-3 py-3"
-          style={{
-            borderColor: `color-mix(in oklab, ${tone} 28%, transparent)`,
-            background: `color-mix(in oklab, ${tone} 10%, var(--bg-base))`,
-          }}
-        >
-          <div className="text-xs font-semibold" style={{ color: tone }}>
-            Current leader{award.leaders.length > 1 ? "s" : ""}
-          </div>
-
+      <div className="mt-auto pt-4">
+        {award ? (
           <div
-            className="mt-1 text-sm font-extrabold leading-tight"
-            style={{ color: "var(--foreground)" }}
+            className="rounded-xl border px-3 py-3"
+            style={{
+              borderColor: `color-mix(in oklab, ${tone} 28%, transparent)`,
+              background: `color-mix(in oklab, ${tone} 10%, var(--bg-base))`,
+            }}
           >
-            {award.leaders.map((p) => p.name).join(", ")}
-          </div>
-
-          <div className="mt-1 text-xs font-semibold" style={{ color: tone }}>
-            {award.valueLabel}
-          </div>
-
-          {award.valueSub ? (
-            <div className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
-              {award.valueSub}
+            <div className="text-xs font-semibold" style={{ color: tone }}>
+              Current leader{award.leaders.length > 1 ? "s" : ""}
             </div>
-          ) : null}
 
-          {award.runnerUp ? (
             <div
-              className="mt-3 rounded-lg border px-2 py-2 text-xs"
-              style={{
-                borderColor:
-                  "color-mix(in oklab, var(--stroke) 88%, transparent)",
-                background:
-                  "color-mix(in oklab, var(--bg-base) 65%, transparent)",
-                color: "var(--muted)",
-              }}
+              className="mt-1 text-sm font-extrabold leading-tight"
+              style={{ color: "var(--foreground)" }}
             >
-              <span style={{ color: "var(--foreground)", fontWeight: 800 }}>
-                Runner-up:
-              </span>{" "}
-              {award.runnerUp.name}
+              {award.leaders.map((p) => p.name).join(", ")}
             </div>
-          ) : null}
 
-          {award.leaders.length > 1 ? (
-            <div className="mt-2 text-[11px]" style={{ color: "var(--muted)" }}>
-              Tied leaders
+            <div className="mt-1 text-xs font-semibold" style={{ color: tone }}>
+              {award.valueLabel}
             </div>
-          ) : null}
-        </div>
-      ) : (
-        <div
-          className="mt-4 rounded-xl border px-3 py-2 text-xs font-semibold"
-          style={{
-            borderColor: "color-mix(in oklab, var(--stroke) 88%, transparent)",
-            background: "color-mix(in oklab, var(--bg-base) 65%, transparent)",
-            color: "var(--muted)",
-          }}
-        >
-          Available this season
-        </div>
-      )}
+
+            {award.valueSub ? (
+              <div className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
+                {award.valueSub}
+              </div>
+            ) : null}
+
+            {award.runnerUp ? (
+              <div
+                className="mt-3 rounded-lg border px-2 py-2 text-xs"
+                style={{
+                  borderColor:
+                    "color-mix(in oklab, var(--stroke) 88%, transparent)",
+                  background:
+                    "color-mix(in oklab, var(--bg-base) 65%, transparent)",
+                  color: "var(--muted)",
+                }}
+              >
+                <span style={{ color: "var(--foreground)", fontWeight: 800 }}>
+                  Runner-up:
+                </span>{" "}
+                {award.runnerUp.name}
+              </div>
+            ) : null}
+
+            {award.leaders.length > 1 ? (
+              <div
+                className="mt-2 text-[11px]"
+                style={{ color: "var(--muted)" }}
+              >
+                Tied leaders
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div
+            className="rounded-xl border px-3 py-2 text-xs font-semibold"
+            style={{
+              borderColor:
+                "color-mix(in oklab, var(--stroke) 88%, transparent)",
+              background:
+                "color-mix(in oklab, var(--bg-base) 65%, transparent)",
+              color: "var(--muted)",
+            }}
+          >
+            Available this season
+          </div>
+        )}
+      </div>
     </div>
   );
 }

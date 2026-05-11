@@ -1,3 +1,4 @@
+//src/app/(protected)/admin/adminHelpers.ts
 import { PlayerBattingStats } from "@/lib/roster";
 
 export type GameResult = "W" | "L" | "T";
@@ -13,7 +14,6 @@ export type LineDelta = {
   walks: number;
   hitByPitch: number;
   stolenBases: number;
-
   putOuts: number;
   assists: number;
 
@@ -96,6 +96,8 @@ export const EMPTY_STATS: PlayerBattingStats = {
   plateAppearances: 0,
   atBats: 0,
   hits: 0,
+  currentHitStreak: 0,
+  longestHitStreak: 0,
   doubles: 0,
   triples: 0,
   homeRuns: 0,

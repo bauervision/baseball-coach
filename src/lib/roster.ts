@@ -1,8 +1,11 @@
+//src/lib/roster.ts
 export type PlayerBattingStats = {
   games: number;
   plateAppearances: number;
   atBats: number;
   hits: number;
+  currentHitStreak: number;
+  longestHitStreak: number;
   doubles: number;
   triples: number;
   homeRuns: number;
@@ -95,6 +98,7 @@ export type StatKey =
   | "slg"
   | "ops"
   | "hits"
+  | "longestHitStreak"
   | "atBats"
   | "rbi"
   | "runs"
@@ -126,6 +130,8 @@ function statValue(p: Player, k: StatKey): number {
       return ops(p);
     case "hits":
       return p.stats.hits;
+    case "longestHitStreak":
+      return p.stats.longestHitStreak ?? 0;
     case "atBats":
       return p.stats.atBats;
     case "rbi":
@@ -173,6 +179,7 @@ export function computeLeaders(players: Player[]): LeadersMap {
     "slg",
     "ops",
     "hits",
+    "longestHitStreak",
     "atBats",
     "rbi",
     "runs",

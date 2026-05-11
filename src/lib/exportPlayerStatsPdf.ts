@@ -105,14 +105,15 @@ export function exportPlayerStatsPdf(opts: {
   const battingLeaderMap: LeaderCellMap = {
     [cellKey(1, 1)]: "atBats",
     [cellKey(1, 3)]: "hits",
-    [cellKey(2, 1)]: "doubles",
-    [cellKey(2, 3)]: "triples",
-    [cellKey(3, 1)]: "homeRuns",
-    [cellKey(3, 3)]: "rbi",
-    [cellKey(4, 1)]: "runs",
-    [cellKey(4, 3)]: "walks",
-    [cellKey(5, 1)]: "hitByPitch",
-    [cellKey(5, 3)]: "stolenBases",
+    [cellKey(2, 1)]: "longestHitStreak",
+    [cellKey(3, 1)]: "doubles",
+    [cellKey(3, 3)]: "triples",
+    [cellKey(4, 1)]: "homeRuns",
+    [cellKey(4, 3)]: "rbi",
+    [cellKey(5, 1)]: "runs",
+    [cellKey(5, 3)]: "walks",
+    [cellKey(6, 1)]: "hitByPitch",
+    [cellKey(6, 3)]: "stolenBases",
   };
 
   autoTable(doc, {
@@ -126,6 +127,12 @@ export function exportPlayerStatsPdf(opts: {
         player.stats.plateAppearances,
       ],
       ["At Bats", player.stats.atBats, "Hits", player.stats.hits],
+      [
+        "Longest Hit Streak",
+        player.stats.longestHitStreak ?? 0,
+        "Current Hit Streak",
+        player.stats.currentHitStreak ?? 0,
+      ],
       ["Doubles", player.stats.doubles, "Triples", player.stats.triples],
       ["Home Runs", player.stats.homeRuns, "RBIs", player.stats.rbi],
       ["Runs", player.stats.runs, "Walks", player.stats.walks],

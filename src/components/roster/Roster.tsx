@@ -144,6 +144,7 @@ function rosterStatsForPlayer(args: {
   playerId: string;
   stats: {
     hits: number;
+    longestHitStreak?: number;
     atBats: number;
     rbi: number;
     runs: number;
@@ -195,6 +196,12 @@ function rosterStatsForPlayer(args: {
       value: String(stats.hits),
       leader: leaders.hits.includes(playerId),
       tone: "primary",
+    },
+    {
+      label: "HS",
+      value: String(stats.longestHitStreak ?? 0),
+      leader: leaders.longestHitStreak.includes(playerId),
+      tone: "accent2",
     },
     {
       label: "AB",
