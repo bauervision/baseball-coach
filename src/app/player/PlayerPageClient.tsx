@@ -11,12 +11,23 @@ import {
   ops,
   fmt3,
   computeLeaders,
-  type LeadersMap,
   type StatKey as LeaderStatKey,
 } from "@/lib/roster";
 import { useRosterPlayers } from "@/lib/rosterStore";
-import { ArrowLeft, Trophy } from "lucide-react";
-import { computeTrophies, type TrophyAward } from "@/lib/trophies";
+import { ArrowLeft } from "lucide-react";
+import { computeTrophies, computeRunnerUpAwards } from "@/lib/trophies";
+
+import { PlayerSeasonPlaque } from "@/components/player/PlayerSeasonPlaque";
+import { pickPlayerBestGame } from "@/components/player/playerBestGame";
+import { PlayerTrophyHero } from "@/components/player/PlayerTrophyHero";
+import { BigStat, SmallStat } from "@/components/player/PlayerStatsCards";
+import { GameLogRow } from "@/components/player/PlayerGameLog";
+import {
+  IconBat,
+  IconDiamond,
+  IconBall,
+  IconScoreboard,
+} from "@/components/player/helpers";
 
 import {
   Card,
@@ -30,7 +41,6 @@ import { Dialog, DialogContent, DialogClose } from "@/components/ui/Dialog";
 import { usePlayerGameLog } from "@/components/roster/usePlayerGameLog";
 import { AnimatedBackgroundSkin } from "@/components/shell/AnimatedBackgroundSkin";
 import { exportPlayerStatsPdf } from "@/lib/exportPlayerStatsPdf";
-import { TROPHY_ART } from "@/lib/trophyArtwork";
 
 type StatKey = "AVG" | "OBP" | "SLG" | "OPS";
 
@@ -50,18 +60,18 @@ const STAT_HELP: Record<
     description:
       "How often a player reaches base (hit, walk, or hit by pitch).",
     formula: "(H + BB + HBP) ÷ Plate Appearances",
-    tip: "Often a better “getting on base” metric than AVG.",
+    tip: "Often a better getting on base metric than AVG.",
   },
   SLG: {
     title: "Slugging",
     description: "Measures power: extra-base hits count more than singles.",
     formula: "Total Bases ÷ At-Bats",
-    tip: "Singles=1, Doubles=2, Triples=3, HR=4 (in total bases).",
+    tip: "Singles=1, Doubles=2, Triples=3, HR=4 in total bases.",
   },
   OPS: {
     title: "OPS",
     description:
-      "Quick overall hitting number: getting on base + hitting for power.",
+      "Quick overall hitting number: getting on base plus hitting for power.",
     formula: "OBP + SLG",
     tip: "Easy comparison metric. Higher is better.",
   },
@@ -72,6 +82,15 @@ export default function PlayerPageClient() {
   const id = (sp.get("id") ?? "").trim();
 
   const { seasonId, meta, players, error } = useRosterPlayers();
+
+  const [activeStat, setActiveStat] = React.useState<StatKey | null>(null);
+  const [viewMode, setViewMode] = React.useState<"plaque" | "season">("season");
+
+  React.useEffect(() => {
+    queueMicrotask(() => {
+      setViewMode(meta.endSeasonMode ? "plaque" : "season");
+    });
+  }, [meta.endSeasonMode]);
 
   const player = React.useMemo(() => {
     const list = players ?? [];
@@ -90,8 +109,12 @@ export default function PlayerPageClient() {
   );
 
   const allTrophyAwards = React.useMemo(
-    () => computeTrophies(players ?? []),
-    [players],
+    () =>
+      computeTrophies(players ?? [], {
+        endSeasonMode: meta.endSeasonMode,
+        finalAwards: meta.finalAwards,
+      }),
+    [players, meta.endSeasonMode, meta.finalAwards],
   );
 
   const playerTrophyAwards = React.useMemo(() => {
@@ -101,7 +124,11 @@ export default function PlayerPageClient() {
     );
   }, [allTrophyAwards, player]);
 
-  const [activeStat, setActiveStat] = React.useState<StatKey | null>(null);
+  const playerRunnerUpAwards = React.useMemo(() => {
+    if (!player) return [];
+
+    return computeRunnerUpAwards(allTrophyAwards, player.id);
+  }, [allTrophyAwards, player]);
 
   const {
     items: gameLog,
@@ -111,6 +138,8 @@ export default function PlayerPageClient() {
     seasonId,
     playerId: player?.id ?? "",
   });
+
+  const bestGame = React.useMemo(() => pickPlayerBestGame(gameLog), [gameLog]);
 
   const openStat = React.useCallback((k: StatKey) => setActiveStat(k), []);
   const closeStat = React.useCallback(() => setActiveStat(null), []);
@@ -207,11 +236,13 @@ export default function PlayerPageClient() {
   const slgV = slugging(player);
   const opsV = ops(player);
 
+  const showingPlaque = meta.endSeasonMode && viewMode === "plaque";
+
   return (
     <>
       <AnimatedBackgroundSkin />
       <div className="relative z-10 grid gap-5">
-        <div className="flex items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <Link
             href="/"
             className="inline-flex items-center gap-2 text-sm font-semibold"
@@ -230,7 +261,67 @@ export default function PlayerPageClient() {
             <span>Back</span>
           </Link>
 
-          <div className="flex items-center gap-2">
+          {meta.endSeasonMode ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setViewMode("plaque")}
+                className="rounded-xl border px-3 py-2 text-sm font-semibold"
+                style={{
+                  borderColor:
+                    viewMode === "plaque"
+                      ? "color-mix(in oklab, var(--secondary) 70%, transparent)"
+                      : "color-mix(in oklab, var(--stroke) 92%, transparent)",
+                  background:
+                    viewMode === "plaque"
+                      ? "linear-gradient(90deg, var(--primary), var(--secondary))"
+                      : "color-mix(in oklab, var(--bg-base) 65%, transparent)",
+                  color:
+                    viewMode === "plaque" ? "rgba(0,0,0,0.92)" : "var(--muted)",
+                }}
+              >
+                Plaque View
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode("season")}
+                className="rounded-xl border px-3 py-2 text-sm font-semibold"
+                style={{
+                  borderColor:
+                    viewMode === "season"
+                      ? "color-mix(in oklab, var(--secondary) 70%, transparent)"
+                      : "color-mix(in oklab, var(--stroke) 92%, transparent)",
+                  background:
+                    viewMode === "season"
+                      ? "linear-gradient(90deg, var(--primary), var(--secondary))"
+                      : "color-mix(in oklab, var(--bg-base) 65%, transparent)",
+                  color:
+                    viewMode === "season" ? "rgba(0,0,0,0.92)" : "var(--muted)",
+                }}
+              >
+                Season Stats
+              </button>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {showingPlaque ? (
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="rounded-xl border px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-90 print:hidden"
+                style={{
+                  borderColor:
+                    "color-mix(in oklab, var(--stroke) 92%, transparent)",
+                  background:
+                    "linear-gradient(90deg, var(--secondary), var(--primary))",
+                  color: "rgba(0,0,0,0.92)",
+                }}
+              >
+                Print Plaque
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() =>
@@ -262,238 +353,255 @@ export default function PlayerPageClient() {
           </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between gap-3">
-              <div className="min-w-0">
-                <div
-                  className="text-3xl font-extrabold leading-none"
-                  style={{ color: "var(--secondary)" }}
-                >
-                  {player.name}
-                </div>
-              </div>
-
-              <div className="shrink-0 text-right">
-                <div
-                  className="text-5xl font-extrabold leading-none translate-y-0.5"
-                  style={{ color: "var(--primary)" }}
-                  aria-label={`Player number ${player.number}`}
-                >
-                  {player.number}
-                </div>
-              </div>
-            </div>
-          </CardHeader>
-
-          <CardContent className="grid gap-4">
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <BigStat
-                label="Batting Average"
-                value={fmt3(ba)}
-                tone="primary"
-                leader={isLeader("avg")}
-                onExplainAction={() => openStat("AVG")}
-                icon={<IconBat />}
-              />
-              <BigStat
-                label="On-Base Percentage"
-                value={fmt3(obp)}
-                tone="accent"
-                leader={isLeader("obp")}
-                onExplainAction={() => openStat("OBP")}
-                icon={<IconDiamond />}
-              />
-              <BigStat
-                label="Slugging"
-                value={fmt3(slgV)}
-                tone="secondary"
-                leader={isLeader("slg")}
-                onExplainAction={() => openStat("SLG")}
-                icon={<IconBall />}
-              />
-              <BigStat
-                label="OPS"
-                value={fmt3(opsV)}
-                tone="accent2"
-                leader={isLeader("ops")}
-                onExplainAction={() => openStat("OPS")}
-                icon={<IconScoreboard />}
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <SmallStat
-                label="Games Played"
-                value={String(player.stats.games)}
-              />
-              <SmallStat
-                label="Plate Appearances"
-                value={String(player.stats.plateAppearances)}
-              />
-              <SmallStat
-                label="At Bats"
-                value={String(player.stats.atBats)}
-                leader={isLeader("atBats")}
-              />
-              <SmallStat
-                label="Hits"
-                value={String(player.stats.hits)}
-                leader={isLeader("hits")}
-              />
-              <SmallStat
-                label="Longest Hit Streak"
-                value={String(player.stats.longestHitStreak ?? 0)}
-                leader={isLeader("longestHitStreak")}
-              />
-
-              <SmallStat
-                label="Doubles"
-                value={String(player.stats.doubles)}
-                leader={isLeader("doubles")}
-              />
-              <SmallStat
-                label="Triples"
-                value={String(player.stats.triples)}
-                leader={isLeader("triples")}
-              />
-              <SmallStat
-                label="Home Runs"
-                value={String(player.stats.homeRuns)}
-                leader={isLeader("homeRuns")}
-              />
-              <SmallStat
-                label="RBIs: Runs Batted In"
-                value={String(player.stats.rbi)}
-                leader={isLeader("rbi")}
-              />
-              <SmallStat
-                label="Runs"
-                value={String(player.stats.runs)}
-                leader={isLeader("runs")}
-              />
-              <SmallStat
-                label="Base on Balls (Walk)"
-                value={String(player.stats.walks)}
-                leader={isLeader("walks")}
-              />
-              <SmallStat
-                label="Hit By Pitch"
-                value={String(player.stats.hitByPitch)}
-                leader={isLeader("hitByPitch")}
-              />
-              <SmallStat
-                label="Stolen Bases"
-                value={String(player.stats.stolenBases)}
-                leader={isLeader("stolenBases")}
-              />
-            </div>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Defensive</CardTitle>
-                <CardSubtitle>
-                  Fielding contributions (official scoring)
-                </CardSubtitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                  <SmallStat
-                    label="Pitching Strike Outs"
-                    value={String(player.stats.pitchingStrikeouts)}
-                    leader={isLeader("pitchingStrikeouts")}
-                  />
-                  <SmallStat
-                    label="Pitching Saves"
-                    value={String(player.stats.pitchingSaves)}
-                  />
-                  <SmallStat
-                    label="Fly Balls Caught"
-                    value={String(player.stats.flyBallCatches)}
-                  />
-                  <SmallStat
-                    label="Put Outs (PO)"
-                    value={String(player.stats.putOuts)}
-                    leader={isLeader("putOuts")}
-                  />
-                  <SmallStat
-                    label="Assists (A)"
-                    value={String(player.stats.assists)}
-                    leader={isLeader("assists")}
-                  />
-                </div>
-
-                <div className="mt-3 text-xs" style={{ color: "var(--muted)" }}>
-                  Example: SS → 1B groundout is an Assist for SS and Put Out for
-                  1B.
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Game Log</CardTitle>
-                <CardSubtitle>
-                  Per-game batting lines for this season
-                </CardSubtitle>
-              </CardHeader>
-
-              <CardContent>
-                {gameLogLoading ? (
-                  <div className="text-sm" style={{ color: "var(--muted)" }}>
-                    Loading game log…
-                  </div>
-                ) : gameLogError ? (
-                  <div className="text-sm" style={{ color: "var(--muted)" }}>
-                    {gameLogError}
-                  </div>
-                ) : !gameLog || gameLog.length === 0 ? (
-                  <div className="text-sm" style={{ color: "var(--muted)" }}>
-                    No games recorded yet.
-                  </div>
-                ) : (
-                  <div className="grid gap-2">
-                    {(() => {
-                      const streakByGameId = new Map<string, number>();
-                      let streak = 0;
-
-                      [...gameLog]
-                        .sort((a, b) => a.date.localeCompare(b.date))
-                        .forEach((item) => {
-                          const hadHit = item.delta.hits > 0;
-                          streak = hadHit ? streak + 1 : 0;
-                          streakByGameId.set(item.gameId, streak);
-                        });
-
-                      return gameLog.map((item) => (
-                        <GameLogRow
-                          key={item.gameId}
-                          date={item.date}
-                          opponent={item.opponent}
-                          result={item.result}
-                          scoreUs={item.scoreUs}
-                          scoreThem={item.scoreThem}
-                          atBats={item.delta.atBats}
-                          hits={item.delta.hits}
-                          runs={item.delta.runs}
-                          rbi={item.delta.rbi}
-                          walks={item.delta.walks}
-                          hitByPitch={item.delta.hitByPitch}
-                          hitStreak={streakByGameId.get(item.gameId) ?? 0}
-                        />
-                      ));
-                    })()}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <PlayerTrophyHero
-              playerName={player.name}
+        {showingPlaque ? (
+          <div className="mx-auto w-full max-w-[calc(100dvw-48px)]">
+            <PlayerSeasonPlaque
+              player={player}
+              teamName={meta.teamName}
+              seasonLabel={meta.seasonLabel}
               awards={playerTrophyAwards}
+              runnerUpAwards={playerRunnerUpAwards}
+              bestGame={bestGame}
+              leaders={leaders}
             />
-          </CardContent>
-        </Card>
+          </div>
+        ) : (
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div
+                    className="text-3xl font-extrabold leading-none"
+                    style={{ color: "var(--secondary)" }}
+                  >
+                    {player.name}
+                  </div>
+                </div>
+
+                <div className="shrink-0 text-right">
+                  <div
+                    className="translate-y-0.5 text-5xl font-extrabold leading-none"
+                    style={{ color: "var(--primary)" }}
+                    aria-label={`Player number ${player.number}`}
+                  >
+                    {player.number}
+                  </div>
+                </div>
+              </div>
+            </CardHeader>
+
+            <CardContent className="grid gap-4">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <BigStat
+                  label="Batting Average"
+                  value={fmt3(ba)}
+                  tone="primary"
+                  leader={isLeader("avg")}
+                  onExplainAction={() => openStat("AVG")}
+                  icon={<IconBat />}
+                />
+                <BigStat
+                  label="On-Base Percentage"
+                  value={fmt3(obp)}
+                  tone="accent"
+                  leader={isLeader("obp")}
+                  onExplainAction={() => openStat("OBP")}
+                  icon={<IconDiamond />}
+                />
+                <BigStat
+                  label="Slugging"
+                  value={fmt3(slgV)}
+                  tone="secondary"
+                  leader={isLeader("slg")}
+                  onExplainAction={() => openStat("SLG")}
+                  icon={<IconBall />}
+                />
+                <BigStat
+                  label="OPS"
+                  value={fmt3(opsV)}
+                  tone="accent2"
+                  leader={isLeader("ops")}
+                  onExplainAction={() => openStat("OPS")}
+                  icon={<IconScoreboard />}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <SmallStat
+                  label="Games Played"
+                  value={String(player.stats.games)}
+                />
+                <SmallStat
+                  label="Plate Appearances"
+                  value={String(player.stats.plateAppearances)}
+                />
+                <SmallStat
+                  label="At Bats"
+                  value={String(player.stats.atBats)}
+                  leader={isLeader("atBats")}
+                />
+                <SmallStat
+                  label="Hits"
+                  value={String(player.stats.hits)}
+                  leader={isLeader("hits")}
+                />
+                <SmallStat
+                  label="Longest Hit Streak"
+                  value={String(player.stats.longestHitStreak ?? 0)}
+                  leader={isLeader("longestHitStreak")}
+                />
+                <SmallStat
+                  label="Doubles"
+                  value={String(player.stats.doubles)}
+                  leader={isLeader("doubles")}
+                />
+                <SmallStat
+                  label="Triples"
+                  value={String(player.stats.triples)}
+                  leader={isLeader("triples")}
+                />
+                <SmallStat
+                  label="Home Runs"
+                  value={String(player.stats.homeRuns)}
+                  leader={isLeader("homeRuns")}
+                />
+                <SmallStat
+                  label="RBIs: Runs Batted In"
+                  value={String(player.stats.rbi)}
+                  leader={isLeader("rbi")}
+                />
+                <SmallStat
+                  label="Runs"
+                  value={String(player.stats.runs)}
+                  leader={isLeader("runs")}
+                />
+                <SmallStat
+                  label="Base on Balls (Walk)"
+                  value={String(player.stats.walks)}
+                  leader={isLeader("walks")}
+                />
+                <SmallStat
+                  label="Hit By Pitch"
+                  value={String(player.stats.hitByPitch)}
+                  leader={isLeader("hitByPitch")}
+                />
+                <SmallStat
+                  label="Stolen Bases"
+                  value={String(player.stats.stolenBases)}
+                  leader={isLeader("stolenBases")}
+                />
+              </div>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Defensive</CardTitle>
+                  <CardSubtitle>
+                    Fielding contributions (official scoring)
+                  </CardSubtitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    <SmallStat
+                      label="Pitching Strike Outs"
+                      value={String(player.stats.pitchingStrikeouts)}
+                      leader={isLeader("pitchingStrikeouts")}
+                    />
+                    <SmallStat
+                      label="Pitching Saves"
+                      value={String(player.stats.pitchingSaves)}
+                    />
+                    <SmallStat
+                      label="Fly Balls Caught"
+                      value={String(player.stats.flyBallCatches)}
+                    />
+                    <SmallStat
+                      label="Put Outs (PO)"
+                      value={String(player.stats.putOuts)}
+                      leader={isLeader("putOuts")}
+                    />
+                    <SmallStat
+                      label="Assists (A)"
+                      value={String(player.stats.assists)}
+                      leader={isLeader("assists")}
+                    />
+                  </div>
+
+                  <div
+                    className="mt-3 text-xs"
+                    style={{ color: "var(--muted)" }}
+                  >
+                    Example: SS → 1B groundout is an Assist for SS and Put Out
+                    for 1B.
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Game Log</CardTitle>
+                  <CardSubtitle>
+                    Per-game batting lines for this season
+                  </CardSubtitle>
+                </CardHeader>
+
+                <CardContent>
+                  {gameLogLoading ? (
+                    <div className="text-sm" style={{ color: "var(--muted)" }}>
+                      Loading game log…
+                    </div>
+                  ) : gameLogError ? (
+                    <div className="text-sm" style={{ color: "var(--muted)" }}>
+                      {gameLogError}
+                    </div>
+                  ) : !gameLog || gameLog.length === 0 ? (
+                    <div className="text-sm" style={{ color: "var(--muted)" }}>
+                      No games recorded yet.
+                    </div>
+                  ) : (
+                    <div className="grid gap-2">
+                      {(() => {
+                        const streakByGameId = new Map<string, number>();
+                        let streak = 0;
+
+                        [...gameLog]
+                          .sort((a, b) => a.date.localeCompare(b.date))
+                          .forEach((item) => {
+                            const hadHit = item.delta.hits > 0;
+                            streak = hadHit ? streak + 1 : 0;
+                            streakByGameId.set(item.gameId, streak);
+                          });
+
+                        return gameLog.map((item) => (
+                          <GameLogRow
+                            key={item.gameId}
+                            date={item.date}
+                            opponent={item.opponent}
+                            result={item.result}
+                            scoreUs={item.scoreUs}
+                            scoreThem={item.scoreThem}
+                            atBats={item.delta.atBats}
+                            hits={item.delta.hits}
+                            runs={item.delta.runs}
+                            rbi={item.delta.rbi}
+                            walks={item.delta.walks}
+                            hitByPitch={item.delta.hitByPitch}
+                            hitStreak={streakByGameId.get(item.gameId) ?? 0}
+                          />
+                        ));
+                      })()}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <PlayerTrophyHero
+                playerName={player.name}
+                awards={playerTrophyAwards}
+                endSeasonMode={meta.endSeasonMode}
+              />
+            </CardContent>
+          </Card>
+        )}
 
         <Dialog
           open={activeStat !== null}
@@ -520,7 +628,7 @@ export default function PlayerPageClient() {
                   }}
                 >
                   <div
-                    className="text-[10px] font-semibold tracking-wide uppercase"
+                    className="text-[10px] font-semibold uppercase tracking-wide"
                     style={{ color: "var(--muted)" }}
                   >
                     Formula
@@ -560,435 +668,5 @@ export default function PlayerPageClient() {
         </Dialog>
       </div>
     </>
-  );
-}
-
-function PlayerTrophyHero(props: {
-  playerName: string;
-  awards: TrophyAward[];
-}) {
-  const { playerName, awards } = props;
-
-  return (
-    <div
-      className="rounded-3xl border p-5 sm:p-6"
-      style={{
-        borderColor: "color-mix(in oklab, var(--secondary) 42%, transparent)",
-        background:
-          "linear-gradient(135deg, color-mix(in oklab, var(--secondary) 18%, var(--card)), color-mix(in oklab, var(--primary) 12%, var(--card)) 48%, color-mix(in oklab, var(--bg-base) 72%, transparent))",
-        boxShadow:
-          "0 0 0 1px color-mix(in oklab, var(--secondary) 12%, transparent) inset, 0 18px 40px color-mix(in oklab, var(--stroke) 20%, transparent)",
-      }}
-    >
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div
-            className="text-[11px] font-semibold uppercase tracking-[0.18em]"
-            style={{ color: "var(--muted)" }}
-          >
-            Trophy Outlook
-          </div>
-
-          <div
-            className="mt-2 text-xl font-extrabold leading-tight sm:text-2xl"
-            style={{ color: "var(--foreground)" }}
-          >
-            {awards.length > 0
-              ? `${playerName} currently has the edge`
-              : `${playerName} is still chasing a trophy`}
-          </div>
-
-          <div
-            className="mt-2 text-sm sm:text-base"
-            style={{ color: "var(--muted)" }}
-          >
-            {awards.length > 0
-              ? "A player will ultimately receive one trophy, but these are the categories where they currently lead or are tied for the lead."
-              : "No active trophy lead yet. Keep recording games and strengths will start to separate."}
-          </div>
-        </div>
-      </div>
-
-      {awards.length > 0 ? (
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          {awards.map((award) => {
-            const artworkSrc =
-              TROPHY_ART[award.trophy.key] ?? "/trophies/trophy.png";
-
-            return (
-              <div
-                key={award.trophy.key}
-                className="flex min-h-36 items-center justify-between gap-5 rounded-2xl border px-5 py-5"
-                style={{
-                  borderColor:
-                    "color-mix(in oklab, var(--stroke) 88%, transparent)",
-                  background:
-                    "color-mix(in oklab, var(--bg-base) 58%, transparent)",
-                }}
-              >
-                <div className="min-w-0">
-                  <div
-                    className="text-2xl font-extrabold leading-tight"
-                    style={{ color: "var(--foreground)" }}
-                  >
-                    {award.trophy.title}
-                  </div>
-
-                  <div
-                    className="mt-2 text-4xl font-extrabold leading-none"
-                    style={{
-                      color: "var(--secondary)",
-                      textShadow:
-                        "0 0 18px color-mix(in oklab, var(--secondary) 45%, transparent)",
-                    }}
-                  >
-                    {award.valueLabel}
-                  </div>
-
-                  {award.valueSub ? (
-                    <div
-                      className="mt-2 text-lg font-semibold"
-                      style={{ color: "var(--muted)" }}
-                    >
-                      {award.valueSub}
-                    </div>
-                  ) : null}
-                </div>
-
-                <div
-                  className="grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-2xl border sm:h-28 sm:w-28"
-                  style={{
-                    borderColor:
-                      "color-mix(in oklab, var(--secondary) 34%, transparent)",
-                    background:
-                      "color-mix(in oklab, var(--secondary) 10%, var(--card))",
-                    boxShadow:
-                      "0 10px 24px color-mix(in oklab, var(--secondary) 16%, transparent)",
-                  }}
-                  aria-hidden="true"
-                >
-                  <img
-                    src={artworkSrc}
-                    alt=""
-                    className="h-full w-full object-cover"
-                    draggable={false}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div
-          className="mt-5 rounded-2xl border px-4 py-3 text-sm"
-          style={{
-            borderColor: "color-mix(in oklab, var(--stroke) 88%, transparent)",
-            background: "color-mix(in oklab, var(--bg-base) 58%, transparent)",
-            color: "var(--muted)",
-          }}
-        >
-          No current trophy lead yet.
-        </div>
-      )}
-    </div>
-  );
-}
-
-function BigStat(props: {
-  label: string;
-  value: string;
-  leader?: boolean;
-  tone?: "primary" | "secondary" | "accent" | "accent2";
-  icon?: React.ReactNode;
-  onExplainAction?: () => void;
-}) {
-  const toneVar =
-    props.leader || props.tone === "secondary"
-      ? "var(--secondary)"
-      : props.tone === "accent"
-        ? "var(--accent)"
-        : props.tone === "accent2"
-          ? "var(--accent-2)"
-          : "var(--primary)";
-
-  const clickable = typeof props.onExplainAction === "function";
-  const Wrapper: "button" | "div" = clickable ? "button" : "div";
-
-  return (
-    <Wrapper
-      type={clickable ? "button" : undefined}
-      onClick={props.onExplainAction}
-      className={[
-        "rounded-2xl border p-4 text-left",
-        clickable ? "transition active:scale-[0.99] hover:opacity-95" : "",
-      ].join(" ")}
-      style={{
-        borderColor: props.leader
-          ? "color-mix(in oklab, var(--secondary) 78%, transparent)"
-          : `color-mix(in oklab, ${toneVar} 45%, transparent)`,
-        background: props.leader
-          ? "linear-gradient(135deg, color-mix(in oklab, var(--secondary) 24%, var(--card)), color-mix(in oklab, var(--bg-base) 58%, transparent))"
-          : `linear-gradient(180deg, color-mix(in oklab, ${toneVar} 18%, var(--card)), color-mix(in oklab, var(--bg-base) 55%, transparent))`,
-        boxShadow: props.leader
-          ? "0 0 0 1px color-mix(in oklab, var(--secondary) 32%, transparent) inset, 0 0 28px color-mix(in oklab, var(--secondary) 22%, transparent)"
-          : `0 0 0 1px color-mix(in oklab, ${toneVar} 14%, transparent) inset`,
-        cursor: clickable ? "pointer" : "default",
-      }}
-      aria-label={clickable ? `What is ${props.label}?` : undefined}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div
-          className="text-[11px] font-semibold tracking-wide uppercase"
-          style={{ color: "var(--muted)" }}
-        >
-          {props.label}
-        </div>
-
-        {props.leader ? (
-          <div
-            className="rounded-full px-2 py-1 text-[10px] font-extrabold uppercase tracking-wide"
-            style={{ background: "var(--secondary)", color: "rgba(0,0,0,0.9)" }}
-          >
-            Leader
-          </div>
-        ) : props.icon ? (
-          <div
-            className="shrink-0 grid h-9 w-9 place-items-center rounded-xl"
-            style={{
-              background: `color-mix(in oklab, ${toneVar} 14%, var(--card))`,
-              border: `1px solid color-mix(in oklab, ${toneVar} 32%, transparent)`,
-              color: `color-mix(in oklab, ${toneVar} 78%, var(--foreground))`,
-              opacity: 0.9,
-            }}
-            aria-hidden="true"
-          >
-            {props.icon}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="mt-1 text-2xl font-semibold">{props.value}</div>
-
-      {clickable ? (
-        <div className="mt-1 text-[11px]" style={{ color: "var(--muted)" }}>
-          Tap to learn
-        </div>
-      ) : null}
-    </Wrapper>
-  );
-}
-
-function SmallStat(props: { label: string; value: string; leader?: boolean }) {
-  return (
-    <div
-      className="rounded-xl border px-3 py-2"
-      style={{
-        borderColor: props.leader
-          ? "color-mix(in oklab, var(--secondary) 72%, transparent)"
-          : "color-mix(in oklab, var(--stroke) 88%, transparent)",
-        background: props.leader
-          ? "linear-gradient(135deg, color-mix(in oklab, var(--secondary) 18%, var(--card)), color-mix(in oklab, var(--bg-base) 64%, transparent))"
-          : "color-mix(in oklab, var(--bg-base) 65%, transparent)",
-        boxShadow: props.leader
-          ? "0 0 0 1px color-mix(in oklab, var(--secondary) 24%, transparent) inset, 0 0 20px color-mix(in oklab, var(--secondary) 16%, transparent)"
-          : undefined,
-      }}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <div
-          className="text-[10px] font-semibold tracking-wide uppercase"
-          style={{ color: "var(--muted)" }}
-        >
-          {props.label}
-        </div>
-
-        {props.leader ? (
-          <div
-            className="rounded-full px-1.5 py-0.5 text-[9px] font-extrabold uppercase"
-            style={{ background: "var(--secondary)", color: "rgba(0,0,0,0.9)" }}
-          >
-            Lead
-          </div>
-        ) : null}
-      </div>
-
-      <div className="text-sm font-semibold">{props.value}</div>
-    </div>
-  );
-}
-
-function formatGameDate(dateISO: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateISO);
-  if (!m) return dateISO;
-  return `${Number(m[2])}/${Number(m[3])}`;
-}
-
-function buildLineSummary(props: {
-  atBats: number;
-  hits: number;
-  runs: number;
-  rbi: number;
-  walks: number;
-  hitByPitch: number;
-}): string {
-  const bits: string[] = [];
-  bits.push(`${props.hits} for ${props.atBats}`);
-  if (props.runs > 0)
-    bits.push(`${props.runs} ${props.runs === 1 ? "run" : "runs"}`);
-  if (props.rbi > 0) bits.push(`${props.rbi} RBI`);
-  if (props.walks > 0) bits.push(`${props.walks} BB`);
-  if (props.hitByPitch > 0) bits.push(`${props.hitByPitch} HBP`);
-  return bits.join(" • ");
-}
-
-function GameLogRow(props: {
-  date: string;
-  opponent: string;
-  result: "W" | "L" | "T";
-  scoreUs: number;
-  scoreThem: number;
-  atBats: number;
-  hits: number;
-  hitStreak: number;
-  runs: number;
-  rbi: number;
-  walks: number;
-  hitByPitch: number;
-}) {
-  const summary = buildLineSummary(props);
-
-  return (
-    <div
-      className="rounded-xl border px-3 py-3"
-      style={{
-        borderColor: "color-mix(in oklab, var(--stroke) 88%, transparent)",
-        background: "color-mix(in oklab, var(--bg-base) 65%, transparent)",
-      }}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-sm font-semibold">
-            {formatGameDate(props.date)} vs {props.opponent}
-          </div>
-          <div className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
-            {summary}
-          </div>
-          {props.hitStreak > 0 ? (
-            <div
-              className={[
-                "mt-1 text-xs font-semibold transition",
-                props.hitStreak >= 5 ? "animate-pulse" : "",
-              ].join(" ")}
-              style={{
-                color:
-                  props.hitStreak >= 3
-                    ? "color-mix(in oklab, var(--secondary) 88%, #ff7a18)"
-                    : "var(--secondary)",
-                textShadow:
-                  props.hitStreak >= 3
-                    ? "0 0 12px color-mix(in oklab, var(--secondary) 70%, transparent)"
-                    : undefined,
-              }}
-            >
-              {props.hitStreak >= 5 ? "Fire streak: " : "Hit streak: "}
-              {props.hitStreak} {props.hitStreak === 1 ? "game" : "games"}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="shrink-0 text-right">
-          <div
-            className="text-xs font-semibold"
-            style={{ color: "var(--muted)" }}
-          >
-            {props.result} {props.scoreUs}-{props.scoreThem}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SvgIcon(props: { children: React.ReactNode }) {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-      {props.children}
-    </svg>
-  );
-}
-
-export function IconBat() {
-  return (
-    <SvgIcon>
-      <path
-        d="M6.5 17.5l11-11"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-      <path
-        d="M16.5 6.5l1.8-1.8c.7-.7 1.8-.7 2.5 0 .7.7.7 1.8 0 2.5L19 9"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-      <path
-        d="M5 19l2-2"
-        stroke="currentColor"
-        strokeWidth="2.4"
-        strokeLinecap="round"
-      />
-    </SvgIcon>
-  );
-}
-
-export function IconDiamond() {
-  return (
-    <SvgIcon>
-      <path d="M12 3l8 9-8 9-8-9 8-9z" stroke="currentColor" strokeWidth="2" />
-      <circle cx="12" cy="12" r="1.6" fill="currentColor" />
-    </SvgIcon>
-  );
-}
-
-export function IconBall() {
-  return (
-    <SvgIcon>
-      <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="2" />
-      <path
-        d="M8.3 6.8c1.2 1 2 2.8 2 5.2s-.8 4.2-2 5.2"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-      <path
-        d="M15.7 6.8c-1.2 1-2 2.8-2 5.2s.8 4.2 2 5.2"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </SvgIcon>
-  );
-}
-
-export function IconScoreboard() {
-  return (
-    <SvgIcon>
-      <rect
-        x="5"
-        y="6"
-        width="14"
-        height="12"
-        rx="2"
-        stroke="currentColor"
-        strokeWidth="2"
-      />
-      <path
-        d="M8 10h3M8 14h3M13 10h3M13 14h3"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </SvgIcon>
   );
 }

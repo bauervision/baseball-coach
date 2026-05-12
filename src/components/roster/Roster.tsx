@@ -572,9 +572,11 @@ export function Roster() {
         </CardContent>
       </Card>
 
-      <div className="min-w-0 max-w-full overflow-hidden">
-        <LineupDisplay seasonId={seasonId} players={players} />
-      </div>
+      {!meta.endSeasonMode ? (
+        <div className="min-w-0 max-w-full overflow-hidden">
+          <LineupDisplay seasonId={seasonId} players={players} />
+        </div>
+      ) : null}
     </div>
   );
 }

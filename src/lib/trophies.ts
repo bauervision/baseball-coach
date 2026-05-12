@@ -1,3 +1,4 @@
+//src/lib/trophies.ts
 import type { Player } from "@/lib/roster";
 import {
   battingAverage,
@@ -8,6 +9,10 @@ import {
 } from "@/lib/roster";
 
 export type TrophyKey =
+  | "mvp"
+  | "dominator"
+  | "honorable_mention"
+  | "best_all_around"
   | "batting_champ"
   | "on_base_king"
   | "slugger"
@@ -41,6 +46,19 @@ export type TrophyKey =
   | "best_center_fielder"
   | "best_right_fielder";
 
+export type FinalAwardKey =
+  | "mvp"
+  | "dominator"
+  | "honorableMention"
+  | "bestAllAround";
+
+export type FinalAwards = Partial<Record<FinalAwardKey, string>>;
+
+export type ComputeTrophiesOptions = {
+  endSeasonMode?: boolean;
+  finalAwards?: FinalAwards;
+};
+
 export type TrophyTone = "primary" | "secondary" | "accent" | "accent2";
 
 export type TrophyDef = {
@@ -55,6 +73,14 @@ export type TrophyAward = {
   leaders: Player[];
   winner: Player;
   runnerUp: Player | null;
+  valueLabel: string;
+  valueSub?: string;
+};
+
+export type RunnerUpAward = {
+  trophy: TrophyDef;
+  winner: Player;
+  runnerUp: Player;
   valueLabel: string;
   valueSub?: string;
 };
@@ -178,6 +204,30 @@ function pickWinner(opts: {
 }
 
 const TROPHIES: TrophyDef[] = [
+  {
+    key: "mvp",
+    title: "MVP",
+    subtitle: "Final coach-selected season MVP",
+    tone: "primary",
+  },
+  {
+    key: "dominator",
+    title: "Dominator",
+    subtitle: "Final coach-selected impact award",
+    tone: "secondary",
+  },
+  {
+    key: "honorable_mention",
+    title: "Honorable Mention",
+    subtitle: "Final coach-selected recognition",
+    tone: "accent",
+  },
+  {
+    key: "best_all_around",
+    title: "Best All-Around",
+    subtitle: "Final coach-selected complete player award",
+    tone: "accent2",
+  },
   {
     key: "batting_champ",
     title: "Batting Champ",
@@ -376,11 +426,76 @@ export function getTrophyDefinitions(): TrophyDef[] {
   return TROPHIES.slice();
 }
 
-export function computeTrophies(players: Player[]): TrophyAward[] {
+const FINAL_AWARD_TROPHY_KEYS: Record<FinalAwardKey, TrophyKey> = {
+  mvp: "mvp",
+  dominator: "dominator",
+  honorableMention: "honorable_mention",
+  bestAllAround: "best_all_around",
+};
+
+function finalAwardForPlayer(opts: {
+  trophy: TrophyDef;
+  player: Player;
+}): TrophyAward {
+  const { trophy, player } = opts;
+
+  return {
+    trophy,
+    leaders: [player],
+    winner: player,
+    runnerUp: null,
+    valueLabel: "Awarded",
+    valueSub: "Final coach pick",
+  };
+}
+
+function computeFinalTrophies(
+  players: Player[],
+  finalAwards: FinalAwards | undefined,
+): TrophyAward[] {
+  if (!finalAwards) return [];
+
+  const byId = new Map(players.map((p) => [p.id, p]));
+  const usedPlayerIds = new Set<string>();
+  const out: TrophyAward[] = [];
+
+  const orderedKeys: FinalAwardKey[] = [
+    "mvp",
+    "dominator",
+    "honorableMention",
+    "bestAllAround",
+  ];
+
+  for (const finalKey of orderedKeys) {
+    const playerId = finalAwards[finalKey];
+    if (!playerId || usedPlayerIds.has(playerId)) continue;
+
+    const player = byId.get(playerId);
+    if (!player) continue;
+
+    const trophyKey = FINAL_AWARD_TROPHY_KEYS[finalKey];
+    const trophy = TROPHIES.find((t) => t.key === trophyKey);
+    if (!trophy) continue;
+
+    usedPlayerIds.add(playerId);
+    out.push(finalAwardForPlayer({ trophy, player }));
+  }
+
+  return out;
+}
+
+export function computeTrophies(
+  players: Player[],
+  options: ComputeTrophiesOptions = {},
+): TrophyAward[] {
   const list = players.slice().sort((a, b) => a.name.localeCompare(b.name));
   if (list.length === 0) return [];
 
   const awards: TrophyAward[] = [];
+
+  if (options.endSeasonMode) {
+    awards.push(...computeFinalTrophies(list, options.finalAwards));
+  }
 
   for (const t of TROPHIES) {
     const award = (() => {
@@ -954,4 +1069,32 @@ export function computeTrophies(players: Player[]): TrophyAward[] {
   }
 
   return awards;
+}
+
+const FINAL_COACH_AWARD_KEYS = new Set<TrophyKey>([
+  "mvp",
+  "dominator",
+  "honorable_mention",
+  "best_all_around",
+]);
+
+export function computeRunnerUpAwards(
+  allAwards: TrophyAward[],
+  playerId: string,
+): RunnerUpAward[] {
+  return allAwards
+    .filter((award) => {
+      if (FINAL_COACH_AWARD_KEYS.has(award.trophy.key)) {
+        return false;
+      }
+
+      return award.runnerUp?.id === playerId;
+    })
+    .map((award) => ({
+      trophy: award.trophy,
+      winner: award.winner,
+      runnerUp: award.runnerUp!,
+      valueLabel: award.valueLabel,
+      valueSub: award.valueSub,
+    }));
 }

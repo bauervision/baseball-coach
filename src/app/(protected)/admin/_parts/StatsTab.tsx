@@ -1,3 +1,4 @@
+//src/app/(protected)/admin/_parts/StatsTab.tsx
 "use client";
 
 import * as React from "react";

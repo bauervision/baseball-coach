@@ -1,3 +1,4 @@
+//src/app/(protected)/admin/_parts/useGameEntry.ts
 "use client";
 
 import * as React from "react";

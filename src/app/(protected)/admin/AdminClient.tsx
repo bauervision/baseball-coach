@@ -14,6 +14,11 @@ import {
   CardSubtitle,
 } from "@/components/ui/Card";
 
+import {
+  FinalSeasonAwardsPanel,
+  normalizeSeasonFinalState,
+} from "./_parts/FinalSeasonAwardsPanel";
+
 import type { AdminTab } from "./adminHelpers";
 import { toastStyle } from "./adminHelpers";
 import { Field, TabButton } from "./adminUiHelpers";
@@ -33,7 +38,7 @@ import { LineupBuilderTab } from "./_parts/LineupBuilderTab";
 export default function AdminClient() {
   const { seasonId, meta, players, error: rosterError } = useRosterPlayers();
   const effectiveSeasonId = seasonId || DEFAULT_SEASON_ID;
-
+  const seasonFinalState = normalizeSeasonFinalState(meta);
   const [tab, setTab] = React.useState<AdminTab>("stats");
 
   const [email, setEmail] = React.useState("");
@@ -266,7 +271,14 @@ export default function AdminClient() {
             seasonErr={seasonSwitch.seasonErr}
             onSwitchSeasonAction={seasonSwitch.onSwitchSeasonAction}
           />
-
+          <FinalSeasonAwardsPanel
+            db={db}
+            seasonId={effectiveSeasonId}
+            canEdit={canEdit}
+            players={players}
+            endSeasonMode={seasonFinalState.endSeasonMode}
+            finalAwards={seasonFinalState.finalAwards}
+          />
           <RosterBuilderTab
             canEdit={canEdit}
             seasonId={effectiveSeasonId}

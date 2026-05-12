@@ -23,11 +23,20 @@ import type { Player, PlayerBattingStats } from "@/lib/roster";
  */
 export const DEFAULT_SEASON_ID = "tigers-2026";
 
+export type RosterFinalAwards = {
+  mvp?: string;
+  dominator?: string;
+  honorableMention?: string;
+  bestAllAround?: string;
+};
+
 export type RosterMeta = {
   teamName: string;
   seasonLabel: string;
-  league: string; // Pinto, Mustang, Bronco, Pony, Colt
+  league: string;
   record: { wins: number; losses: number; ties?: number };
+  endSeasonMode: boolean;
+  finalAwards: RosterFinalAwards;
 };
 
 const DEFAULT_META: RosterMeta = {
@@ -35,6 +44,8 @@ const DEFAULT_META: RosterMeta = {
   seasonLabel: "Spring 2026",
   league: "Mustang",
   record: { wins: 0, losses: 0 },
+  endSeasonMode: false,
+  finalAwards: {},
 };
 
 function asNum(v: unknown): number {
@@ -48,6 +59,17 @@ function asInt(v: unknown): number {
 
 function asNonEmptyString(v: unknown): string | undefined {
   return typeof v === "string" && v.trim().length ? v.trim() : undefined;
+}
+
+function normalizeFinalAwards(v: unknown): RosterFinalAwards {
+  const d = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+
+  return {
+    mvp: asNonEmptyString(d.mvp),
+    dominator: asNonEmptyString(d.dominator),
+    honorableMention: asNonEmptyString(d.honorableMention),
+    bestAllAround: asNonEmptyString(d.bestAllAround),
+  };
 }
 
 function normalizeRecord(v: unknown): RosterMeta["record"] {
@@ -79,6 +101,8 @@ function normalizeMeta(v: unknown): RosterMeta {
     seasonLabel: asNonEmptyString(d.seasonLabel) ?? DEFAULT_META.seasonLabel,
     league: asNonEmptyString(d.league) ?? DEFAULT_META.league,
     record: normalizeRecord(d.record),
+    endSeasonMode: d.endSeasonMode === true,
+    finalAwards: normalizeFinalAwards(d.finalAwards),
   };
 }
 

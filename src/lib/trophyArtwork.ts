@@ -1,4 +1,9 @@
 export const TROPHY_ART: Record<string, string> = {
+  mvp: "/trophies/mvp.png",
+  dominator: "/trophies/dominator.png",
+  honorable_mention: "/trophies/honorable-mention.png",
+  best_all_around: "/trophies/best-all-around.png",
+
   batting_champ: "/trophies/batting-champ.png",
   on_base_king: "/trophies/on-base-king.png",
   slugger: "/trophies/slugger.png",

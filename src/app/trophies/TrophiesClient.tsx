@@ -43,9 +43,16 @@ function toneVar(tone?: TrophyDef["tone"]) {
 export default function TrophiesClient() {
   const { meta, players, error } = useRosterPlayers();
   const [openHow, setOpenHow] = React.useState(false);
-
+  const isEndSeason = meta.endSeasonMode === true;
   const trophies = React.useMemo(() => getTrophyDefinitions(), []);
-  const awards = React.useMemo(() => computeTrophies(players ?? []), [players]);
+  const awards = React.useMemo(
+    () =>
+      computeTrophies(players ?? [], {
+        endSeasonMode: meta.endSeasonMode === true,
+        finalAwards: meta.finalAwards,
+      }),
+    [players, meta.endSeasonMode, meta.finalAwards],
+  );
 
   const awardByKey = React.useMemo(() => {
     const map = new Map<string, TrophyAward>();
@@ -124,7 +131,9 @@ export default function TrophiesClient() {
                 Trophy Case
               </CardTitle>
               <CardSubtitle>
-                Reveal strengths across the whole season
+                {isEndSeason
+                  ? "Celebrating the completed season and final awards"
+                  : "Reveal strengths across the whole season"}
               </CardSubtitle>
             </div>
 
@@ -147,19 +156,33 @@ export default function TrophiesClient() {
               color: "var(--muted)",
             }}
           >
-            Every Tiger should be recognized for a real strength. Some trophies
-            will not have an active leader yet early in the season, but this
-            page shows the full set of awards that can come into play.
+            {isEndSeason ? (
+              <>
+                The season is now complete. These awards celebrate the unique
+                strengths, growth, effort, and impact each player brought to the
+                Tigers this year.
+              </>
+            ) : (
+              <>
+                Every player should be recognized for a real strength. Some
+                trophies will not have an active leader yet early in the season,
+                but this page shows the full set of awards that can come into
+                play.
+              </>
+            )}
           </div>
 
           <div className="grid items-stretch gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {trophies.map((t) => (
-              <TrophyTile
-                key={t.key}
-                trophy={t}
-                award={awardByKey.get(t.key) ?? null}
-              />
-            ))}
+            {trophies
+              .filter((t) => !isEndSeason || awardByKey.has(t.key))
+              .map((t) => (
+                <TrophyTile
+                  key={t.key}
+                  trophy={t}
+                  award={awardByKey.get(t.key) ?? null}
+                  isEndSeason={isEndSeason}
+                />
+              ))}
           </div>
         </CardContent>
       </Card>
@@ -253,10 +276,21 @@ export default function TrophiesClient() {
   );
 }
 
-function TrophyTile(props: { trophy: TrophyDef; award: TrophyAward | null }) {
-  const { trophy, award } = props;
+function TrophyTile(props: {
+  trophy: TrophyDef;
+  award: TrophyAward | null;
+  isEndSeason: boolean;
+}) {
+  const { trophy, award, isEndSeason } = props;
+
   const tone = toneVar(trophy.tone);
   const artworkSrc = TROPHY_ART[trophy.key];
+
+  const isFinalAward =
+    trophy.key === "mvp" ||
+    trophy.key === "dominator" ||
+    trophy.key === "honorable_mention" ||
+    trophy.key === "best_all_around";
 
   return (
     <div
@@ -320,9 +354,10 @@ function TrophyTile(props: { trophy: TrophyDef; award: TrophyAward | null }) {
             }}
           >
             <div className="text-xs font-semibold" style={{ color: tone }}>
-              Current leader{award.leaders.length > 1 ? "s" : ""}
+              {isFinalAward
+                ? "Season Award Recipient"
+                : `Current leader${award.leaders.length > 1 ? "s" : ""}`}
             </div>
-
             <div
               className="mt-1 text-sm font-extrabold leading-tight"
               style={{ color: "var(--foreground)" }}
@@ -352,7 +387,7 @@ function TrophyTile(props: { trophy: TrophyDef; award: TrophyAward | null }) {
                 }}
               >
                 <span style={{ color: "var(--foreground)", fontWeight: 800 }}>
-                  Runner-up:
+                  {isEndSeason ? "Also recognized:" : "Runner-up:"}
                 </span>{" "}
                 {award.runnerUp.name}
               </div>
