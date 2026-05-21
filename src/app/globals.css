@@ -577,3 +577,66 @@ body {
   filter: drop-shadow(0 0 18px rgba(255, 77, 0, 0.34))
     drop-shadow(0 0 28px rgba(239, 162, 67, 0.18));
 }
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 0;
+  }
+
+  html,
+  body {
+    width: 100%;
+    height: 100%;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    overflow: hidden !important;
+  }
+
+  body * {
+    visibility: hidden !important;
+  }
+
+  #player-season-plaque-print,
+  #player-season-plaque-print * {
+    visibility: visible !important;
+  }
+
+  #player-season-plaque-print {
+    position: fixed !important;
+    inset: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    max-width: none !important;
+    max-height: none !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  #player-season-plaque-print > div {
+    padding: 0.18in !important;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+}
+
+.tigersLogoMarkOrange {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(180deg, var(--primary), var(--secondary));
+  mask-image: url("/TigersLogo.png");
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-image: url("/TigersLogo.png");
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+}

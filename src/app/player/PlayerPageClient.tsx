@@ -1,3 +1,4 @@
+//src/app/player/PlayerPageClient.tsx
 "use client";
 
 import * as React from "react";
@@ -354,7 +355,10 @@ export default function PlayerPageClient() {
         </div>
 
         {showingPlaque ? (
-          <div className="mx-auto w-full max-w-[calc(100dvw-48px)]">
+          <div
+            data-player-plaque="true"
+            className="mx-auto aspect-video h-[calc(100dvh-150px)] max-h-[1000px] min-h-[920px] w-full max-w-[1600px] overflow-hidden rounded-[32px] border print:h-auto print:max-h-none print:rounded-none"
+          >
             <PlayerSeasonPlaque
               player={player}
               teamName={meta.teamName}
