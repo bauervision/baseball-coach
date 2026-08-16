@@ -37,19 +37,22 @@ export function ProtectedRoute(props: {
   React.useEffect(() => {
     let alive = true;
 
-    setSession(readSession());
-    setReady(true);
+    const refreshSession = () => {
+      const current = readSession();
+      setSession(current);
+      setReady(true);
+    };
+
+    refreshSession();
 
     const unsub = onSessionChanged(() => {
       if (!alive) return;
-      setSession(readSession());
-      setReady(true);
+      refreshSession();
     });
 
     const onFocus = () => {
       if (!alive) return;
-      setSession(readSession());
-      setReady(true);
+      refreshSession();
     };
 
     window.addEventListener("focus", onFocus);

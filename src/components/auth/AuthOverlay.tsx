@@ -18,6 +18,7 @@ import {
   type Auth,
 } from "@/lib/firebase.client";
 import { useRosterPlayers } from "@/lib/rosterStore";
+import { getConfiguredAdminEmails } from "@/lib/session";
 
 type PendingKind = "enter" | null;
 
@@ -173,6 +174,18 @@ export function AuthOverlay(props: { children: React.ReactNode }) {
       return;
     }
 
+    const allowlist = getConfiguredAdminEmails();
+    if (allowlist.length === 0) {
+      setAdminError("Admin access is not configured for this deployment.");
+      return;
+    }
+
+    const lowerEmail = email.toLowerCase();
+    if (!allowlist.includes(lowerEmail)) {
+      setAdminError("This account is not authorized for admin access.");
+      return;
+    }
+
     setAdminBusy(true);
     setPending("enter");
     startEnterOverlay();
@@ -191,11 +204,17 @@ export function AuthOverlay(props: { children: React.ReactNode }) {
       );
 
       const [cred] = await Promise.all([credPromise, minDelay]);
+      const signedInEmail = (cred.user.email ?? email).trim().toLowerCase();
+
+      if (!allowlist.includes(signedInEmail)) {
+        await currentAuth.signOut();
+        throw new Error("not-authorized");
+      }
 
       writeSession({
         role: "admin",
         name: cred.user.displayName ?? "Admin",
-        email: cred.user.email ?? email,
+        email: signedInEmail,
         uid: cred.user.uid,
       });
 
@@ -208,7 +227,12 @@ export function AuthOverlay(props: { children: React.ReactNode }) {
     } catch (e) {
       await minDelay;
 
-      setAdminError(friendlyAuthError(e));
+      const errMessage =
+        e instanceof Error && e.message === "not-authorized"
+          ? "This account is not authorized for admin access."
+          : friendlyAuthError(e);
+
+      setAdminError(errMessage);
 
       startErrorOverlay();
       const t = window.setTimeout(() => {

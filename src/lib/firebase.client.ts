@@ -18,13 +18,31 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID ?? "",
 };
 
+function getMissingConfig(): string[] {
+  const entries = [
+    ["NEXT_PUBLIC_FIREBASE_API_KEY", firebaseConfig.apiKey],
+    ["NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN", firebaseConfig.authDomain],
+    ["NEXT_PUBLIC_FIREBASE_PROJECT_ID", firebaseConfig.projectId],
+    ["NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET", firebaseConfig.storageBucket],
+    ["NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID", firebaseConfig.messagingSenderId],
+    ["NEXT_PUBLIC_FIREBASE_APP_ID", firebaseConfig.appId],
+  ] as const;
+
+  return entries
+    .filter(([, value]) => !value)
+    .map(([key]) => key);
+}
+
+export function hasFirebaseClientConfig(): boolean {
+  return getMissingConfig().length === 0;
+}
+
 function assertClientConfig() {
-  // Fail fast instead of half-initializing with empty strings.
-  if (!firebaseConfig.projectId) {
-    throw new Error("Missing NEXT_PUBLIC_FIREBASE_PROJECT_ID");
-  }
-  if (!firebaseConfig.apiKey) {
-    throw new Error("Missing NEXT_PUBLIC_FIREBASE_API_KEY");
+  const missing = getMissingConfig();
+  if (missing.length > 0) {
+    throw new Error(
+      `Missing Firebase client config: ${missing.join(", ")}`,
+    );
   }
 }
 
