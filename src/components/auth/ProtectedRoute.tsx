@@ -8,7 +8,7 @@ type Role = AppSession["role"];
 
 function CheckingAccess() {
   return (
-    <div className="grid min-h-[240px] place-items-center rounded-3xl border p-6">
+    <div className="grid min-h-60 place-items-center rounded-3xl border p-6">
       <div className="text-sm font-semibold" style={{ color: "var(--muted)" }}>
         Checking access…
       </div>
@@ -32,16 +32,13 @@ export function ProtectedRoute(props: {
   const [session, setSession] = React.useState<AppSession | null>(() =>
     readSession(),
   );
-  const [ready, setReady] = React.useState(false);
+  const [ready, setReady] = React.useState(() => readSession() !== null);
 
   React.useEffect(() => {
     let alive = true;
 
-    queueMicrotask(() => {
-      if (!alive) return;
-      setSession(readSession());
-      setReady(true);
-    });
+    setSession(readSession());
+    setReady(true);
 
     const unsub = onSessionChanged(() => {
       if (!alive) return;

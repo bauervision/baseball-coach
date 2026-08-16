@@ -182,10 +182,13 @@ export function AuthOverlay(props: { children: React.ReactNode }) {
       timersRef.current.push(t);
     });
 
-    if (!auth) return;
-
     try {
-      const credPromise = signInWithEmailAndPassword(auth, email, password);
+      const currentAuth = auth ?? getFirebaseAuth();
+      const credPromise = signInWithEmailAndPassword(
+        currentAuth,
+        email,
+        password,
+      );
 
       const [cred] = await Promise.all([credPromise, minDelay]);
 
@@ -201,7 +204,7 @@ export function AuthOverlay(props: { children: React.ReactNode }) {
       setAdminBusy(false);
       setAdminOpen(false);
 
-      router.replace("/admin");
+      router.replace("/");
     } catch (e) {
       await minDelay;
 
