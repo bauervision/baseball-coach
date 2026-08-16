@@ -7,17 +7,14 @@ import { Roster } from "@/components/roster/Roster";
 
 export default function HomeClient() {
   React.useEffect(() => {
-  applyThemeMode(readThemeMode());
-}, []);
+    applyThemeMode(readThemeMode());
+  }, []);
 
   return (
     <>
       <AnimatedBackgroundSkin />
-      <div
-        className="relative z-10 min-h-dvh"
-         style={{ color: "var(--foreground)" }}
-      >
-        <MobileResponsive >
+      <div className="relative z-10" style={{ color: "var(--foreground)" }}>
+        <MobileResponsive>
           <Roster />
         </MobileResponsive>
       </div>
