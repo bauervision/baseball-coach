@@ -64,7 +64,11 @@ export function ShellLayout(props: { children: React.ReactNode }) {
           paddingBottom: "env(safe-area-inset-bottom, 0px)",
         }}
       >
-        <Footer />
+        <Footer
+          teamName={meta.teamName}
+          league={meta.league}
+          seasonLabel={meta.seasonLabel}
+        />
         <BackToTop />
       </div>
     </div>

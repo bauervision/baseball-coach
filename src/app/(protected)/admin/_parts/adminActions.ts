@@ -8,7 +8,6 @@ import {
   getDocs,
   query,
   orderBy,
-  setDoc,
   writeBatch,
   serverTimestamp,
   type Firestore,
@@ -66,8 +65,10 @@ export async function switchSeason(opts: {
   if (!nextId) throw new Error("Season id is required.");
 
   const seasonRef = doc(db, "seasons", nextId);
+  const cfgRef = doc(db, "app", "config");
+  const batch = writeBatch(db);
 
-  await setDoc(
+  batch.set(
     seasonRef,
     {
       teamName: teamName.trim() || fallbackTeamName || "Team",
@@ -79,12 +80,13 @@ export async function switchSeason(opts: {
     { merge: true },
   );
 
-  const cfgRef = doc(db, "app", "config");
-  await setDoc(
+  batch.set(
     cfgRef,
     { currentSeasonId: nextId, updatedAt: serverTimestamp() },
     { merge: true },
   );
+
+  await batch.commit();
 }
 
 export async function savePlayerEdits(opts: {
@@ -358,7 +360,7 @@ export async function saveGameAndApplyDeltas(opts: {
   const gamesSnap = await getDocs(
     query(collection(db, "seasons", seasonId, "games"), orderBy("date", "asc")),
   );
-  
+
   let wins = 0;
   let losses = 0;
   let ties = 0;

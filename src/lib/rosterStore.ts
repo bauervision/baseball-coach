@@ -238,6 +238,7 @@ class RosterWatchManager {
   private error: string | null = null;
 
   private started = false;
+  private configUnsub: Unsubscribe | null = null;
   private seasonUnsub: Unsubscribe | null = null;
   private playersUnsub: Unsubscribe | null = null;
 
@@ -256,7 +257,13 @@ class RosterWatchManager {
 
     // Start watchers lazily (first subscriber).
     if (!this.started) {
-      this.start();
+      void this.start().catch((e: unknown) => {
+        this.error =
+          e instanceof Error ? e.message : "Failed to start roster watcher.";
+        this.meta = DEFAULT_META;
+        this.players = [];
+        this.emit();
+      });
     }
 
     // Push current snapshot immediately.
@@ -307,6 +314,10 @@ class RosterWatchManager {
   private stop(): void {
     this.started = false;
 
+    if (this.configUnsub) {
+      this.configUnsub();
+      this.configUnsub = null;
+    }
     if (this.seasonUnsub) {
       this.seasonUnsub();
       this.seasonUnsub = null;
@@ -322,21 +333,24 @@ class RosterWatchManager {
 
     const db = this.ensureDb();
 
-    // Fetch season id once on start (no realtime config listener).
-    try {
-      const cfgSnap = await getDoc(configDoc(db));
-      const sid =
-        (cfgSnap.exists()
-          ? readCurrentSeasonIdFromConfigData(cfgSnap.data())
-          : null) ?? DEFAULT_SEASON_ID;
+    this.configUnsub = onSnapshot(
+      configDoc(db),
+      (cfgSnap) => {
+        const sid =
+          (cfgSnap.exists()
+            ? readCurrentSeasonIdFromConfigData(cfgSnap.data())
+            : null) ?? DEFAULT_SEASON_ID;
 
-      this.wireSeason(db, sid);
-    } catch (e) {
-      this.error = (e as Error)?.message ?? "Failed to load app config.";
-      this.meta = DEFAULT_META;
-      this.emit();
-      this.wireSeason(db, DEFAULT_SEASON_ID);
-    }
+        this.wireSeason(db, sid);
+      },
+      (e) => {
+        this.error = e?.message ?? "Failed to load app config.";
+        this.meta = DEFAULT_META;
+        this.players = [];
+        this.emit();
+        this.wireSeason(db, DEFAULT_SEASON_ID);
+      },
+    );
   }
 
   private wireSeason(db: Firestore, nextSeasonId: string): void {
@@ -354,6 +368,8 @@ class RosterWatchManager {
     }
 
     this.seasonId = sid;
+    this.meta = DEFAULT_META;
+    this.players = null;
     this.error = null;
     this.emit();
 

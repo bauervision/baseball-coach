@@ -17,6 +17,7 @@ import {
   signInWithEmailAndPassword,
   type Auth,
 } from "@/lib/firebase.client";
+import { useRosterPlayers } from "@/lib/rosterStore";
 
 type PendingKind = "enter" | null;
 
@@ -24,13 +25,13 @@ const OVERLAY_MS = 2000;
 
 export function AuthOverlay(props: { children: React.ReactNode }) {
   const router = useRouter();
+  const { meta } = useRosterPlayers();
   const [auth, setAuth] = React.useState<Auth | null>(null);
 
   React.useEffect(() => {
     // client-only
     setAuth(getFirebaseAuth());
   }, []);
-
 
   const [ready, setReady] = React.useState(false);
   const [session, setSession] = React.useState<AppSession | null>(null);
@@ -280,7 +281,7 @@ export function AuthOverlay(props: { children: React.ReactNode }) {
                     className="mt-1 text-xl"
                     style={{ color: "var(--muted)" }}
                   >
-                    Spring 2026
+                    {meta.seasonLabel}
                   </div>
                 </motion.div>
 

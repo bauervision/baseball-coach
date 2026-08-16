@@ -16,6 +16,12 @@ service cloud.firestore {
   allow write: if false; // manage manually in console
 }
 
+    // Public app configuration reads; only allowlisted admins may update it.
+    match /app/config {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // Public season reads
     match /seasons/{seasonId} {
       allow read: if true;
