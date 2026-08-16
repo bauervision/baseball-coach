@@ -11,7 +11,9 @@ export type PlayerEdit = {
   number: string;
   shirtSize: string;
   leaderboardHidden: boolean;
+  returningPlayer: boolean;
   dirty: boolean;
+  careerPlayerId?: string;
 };
 
 type PlayerEditPatch = Partial<{
@@ -19,6 +21,7 @@ type PlayerEditPatch = Partial<{
   number: string;
   shirtSize: string;
   leaderboardHidden: boolean;
+  returningPlayer: boolean;
 }>;
 
 function editFromPlayer(p: Player): PlayerEdit {
@@ -27,7 +30,9 @@ function editFromPlayer(p: Player): PlayerEdit {
     number: String(p.number ?? 0),
     shirtSize: String(p.shirtSize ?? ""),
     leaderboardHidden: p.leaderboardHidden === true,
+    returningPlayer: p.returningPlayer === true,
     dirty: false,
+    careerPlayerId: p.careerPlayerId,
   };
 }
 
@@ -87,7 +92,9 @@ export function usePlayerEdits(opts: {
         number: "0",
         shirtSize: "",
         leaderboardHidden: false,
+        returningPlayer: false,
         dirty: false,
+        careerPlayerId: undefined,
       };
 
       return {
@@ -97,6 +104,7 @@ export function usePlayerEdits(opts: {
           number: patch.number ?? cur.number,
           shirtSize: patch.shirtSize ?? cur.shirtSize,
           leaderboardHidden: patch.leaderboardHidden ?? cur.leaderboardHidden,
+          returningPlayer: patch.returningPlayer ?? cur.returningPlayer,
           dirty: true,
         },
       };

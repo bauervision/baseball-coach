@@ -380,27 +380,29 @@ export function Roster() {
         </div>
       </div>
 
-      <button
-        onClick={() => {
-          exportLeaderboardPdf({
-            teamName: meta.teamName,
-            seasonLabel: meta.seasonLabel,
-            record: meta.record,
-            players: list,
-            leaders,
-            awards: computeTrophies(list),
-          });
-        }}
-        className="w-full max-w-full truncate rounded-xl border px-3 py-2 text-sm font-semibold"
-        style={{
-          borderColor: "color-mix(in oklab, var(--stroke) 92%, transparent)",
-          background:
-            "linear-gradient(90deg, var(--primary), var(--secondary))",
-          color: "rgba(0,0,0,0.92)",
-        }}
-      >
-        Download Leaderboard PDF
-      </button>
+      {anyStatsExist ? (
+        <button
+          onClick={() => {
+            exportLeaderboardPdf({
+              teamName: meta.teamName,
+              seasonLabel: meta.seasonLabel,
+              record: meta.record,
+              players: list,
+              leaders,
+              awards: computeTrophies(list),
+            });
+          }}
+          className="w-full max-w-full truncate rounded-xl border px-3 py-2 text-sm font-semibold"
+          style={{
+            borderColor: "color-mix(in oklab, var(--stroke) 92%, transparent)",
+            background:
+              "linear-gradient(90deg, var(--primary), var(--secondary))",
+            color: "rgba(0,0,0,0.92)",
+          }}
+        >
+          Download Leaderboard PDF
+        </button>
+      ) : null}
 
       <Link
         href="/trophies"

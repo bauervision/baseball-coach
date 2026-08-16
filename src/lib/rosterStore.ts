@@ -162,6 +162,7 @@ function normalizePlayer(data: unknown, fallbackId: string): Player | null {
   const d = data as Record<string, unknown>;
 
   const id = typeof d.id === "string" && d.id ? d.id : fallbackId;
+  const careerPlayerId = asNonEmptyString(d.careerPlayerId);
   const name = typeof d.name === "string" ? d.name.trim() : "";
   const number = asInt(d.number);
 
@@ -169,6 +170,7 @@ function normalizePlayer(data: unknown, fallbackId: string): Player | null {
 
   const primaryPos = asNonEmptyString(d.primaryPos);
   const leaderboardHidden = d.leaderboardHidden === true;
+  const returningPlayer = d.returningPlayer === true;
 
   const allowed = new Set([
     "YXS",
@@ -189,10 +191,12 @@ function normalizePlayer(data: unknown, fallbackId: string): Player | null {
 
   const p: Player = {
     id,
+    careerPlayerId,
     name,
     number,
     shirtSize,
     leaderboardHidden,
+    returningPlayer,
     stats: normalizeStats(d.stats),
   };
 

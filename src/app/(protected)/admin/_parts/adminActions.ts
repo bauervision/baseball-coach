@@ -27,6 +27,10 @@ import {
   playerDocIdFromDraft,
   EMPTY_STATS,
 } from "../adminHelpers";
+import {
+  findHistoricalCareerPlayerId,
+  newCareerPlayerId,
+} from "@/lib/playerIdentity";
 
 const COACH_PICK_STAT_FIELD: Record<CoachPickKey, string> = {
   charlieHustle: "stats.charlieHustleAwards",
@@ -113,6 +117,8 @@ export async function savePlayerEdits(opts: {
       number: string;
       shirtSize: string;
       leaderboardHidden: boolean;
+      returningPlayer: boolean;
+      careerPlayerId?: string;
       dirty: boolean;
     }
   >;
@@ -133,15 +139,26 @@ export async function savePlayerEdits(opts: {
 
     const n = parseOptionalInt(edit.number);
     const shirtSize = edit.shirtSize.trim();
+    const historicalCareerPlayerId = edit.returningPlayer
+      ? await findHistoricalCareerPlayerId({
+          db,
+          playerName: name,
+          currentSeasonId: seasonId,
+        })
+      : null;
+    const careerPlayerId =
+      historicalCareerPlayerId ?? edit.careerPlayerId ?? newCareerPlayerId();
     const playerRef = doc(db, "seasons", seasonId, "players", p.id);
 
     batch.set(
       playerRef,
       {
         name,
+        careerPlayerId,
         number: n,
         shirtSize: shirtSize ? shirtSize : null,
         leaderboardHidden: edit.leaderboardHidden === true,
+        returningPlayer: edit.returningPlayer === true,
         updatedAt: serverTimestamp(),
       },
       { merge: true },
@@ -184,11 +201,22 @@ export async function rebuildRoster(opts: {
   for (let i = 0; i < cleaned.length; i++) {
     const d = cleaned[i];
     const id = playerDocIdFromDraft(d, i);
+    const careerPlayerId = d.returningPlayer
+      ? ((await findHistoricalCareerPlayerId({
+          db,
+          playerName: d.name,
+          currentSeasonId: seasonId,
+        })) ??
+        d.careerPlayerId ??
+        newCareerPlayerId())
+      : (d.careerPlayerId ?? newCareerPlayerId());
 
     const player: Player = {
       id,
+      careerPlayerId,
       name: d.name,
       number: parseOptionalInt(d.number),
+      returningPlayer: d.returningPlayer === true,
       stats: { ...EMPTY_STATS },
     };
 

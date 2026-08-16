@@ -29,6 +29,7 @@ export function PlayersTab(props: {
       number: string;
       shirtSize: string;
       leaderboardHidden: boolean;
+      returningPlayer: boolean;
     }>,
   ) => void;
 
@@ -121,6 +122,7 @@ export function PlayersTab(props: {
                   number: String(p.number ?? 0),
                   shirtSize: String(p.shirtSize ?? ""),
                   leaderboardHidden: p.leaderboardHidden === true,
+                  returningPlayer: p.returningPlayer === true,
                   dirty: false,
                 };
 
@@ -138,7 +140,7 @@ export function PlayersTab(props: {
                     }}
                   >
                     <div className="grid gap-2 sm:grid-cols-12 sm:items-end">
-                      <div className="sm:col-span-6">
+                      <div className="sm:col-span-4">
                         <Field
                           label="Name"
                           value={edit.name}
@@ -159,6 +161,31 @@ export function PlayersTab(props: {
                           inputMode="numeric"
                           disabled={!canEdit || playerBusy}
                         />
+                      </div>
+
+                      <div className="sm:col-span-2">
+                        <label
+                          className="flex h-10 items-center gap-2 rounded-xl border px-3 text-xs"
+                          style={{
+                            borderColor:
+                              "color-mix(in oklab, var(--stroke) 92%, transparent)",
+                            background:
+                              "color-mix(in oklab, var(--card) 92%, var(--bg-base) 8%)",
+                            color: "var(--foreground)",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={edit.returningPlayer}
+                            onChange={(e) =>
+                              setPlayerEditValueAction(p.id, {
+                                returningPlayer: e.target.checked,
+                              })
+                            }
+                            disabled={!canEdit || playerBusy}
+                          />
+                          Returning player
+                        </label>
                       </div>
 
                       <div className="sm:col-span-2">

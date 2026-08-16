@@ -45,11 +45,13 @@ export type ShirtSize =
 
 export type Player = {
   id: string;
+  careerPlayerId?: string;
   name: string;
   number: number;
   shirtSize?: ShirtSize | null;
   primaryPos?: string;
   leaderboardHidden?: boolean;
+  returningPlayer?: boolean;
   stats: PlayerBattingStats;
 };
 

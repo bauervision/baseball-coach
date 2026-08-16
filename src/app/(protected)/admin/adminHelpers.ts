@@ -1,5 +1,6 @@
 //src/app/(protected)/admin/adminHelpers.ts
 import { PlayerBattingStats } from "@/lib/roster";
+import { newCareerPlayerId } from "@/lib/playerIdentity";
 
 export type GameResult = "W" | "L" | "T";
 
@@ -86,9 +87,11 @@ export type AdminTab = "stats" | "players" | "season" | "lineup";
 
 export type DraftPlayer = {
   key: string;
+  careerPlayerId?: string;
   name: string;
   number: string; // optional input
   primaryPos: string; // optional input
+  returningPlayer: boolean;
 };
 
 export const EMPTY_STATS: PlayerBattingStats = {
@@ -127,9 +130,11 @@ export const EMPTY_STATS: PlayerBattingStats = {
 export function newDraftPlayer(): DraftPlayer {
   return {
     key: `dp-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    careerPlayerId: newCareerPlayerId(),
     name: "",
     number: "",
     primaryPos: "",
+    returningPlayer: false,
   };
 }
 

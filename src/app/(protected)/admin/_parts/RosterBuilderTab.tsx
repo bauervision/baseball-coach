@@ -3,7 +3,13 @@
 
 import * as React from "react";
 
-import { Card, CardContent, CardHeader, CardTitle, CardSubtitle } from "@/components/ui/Card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardSubtitle,
+} from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 
 import type { DraftPlayer } from "../adminHelpers";
@@ -45,7 +51,8 @@ export function RosterBuilderTab(props: {
       <CardHeader>
         <CardTitle>Roster Builder</CardTitle>
         <CardSubtitle>
-          Add players one at a time. Rebuild overwrites the current season roster.
+          Add players one at a time. Rebuild overwrites the current season
+          roster.
         </CardSubtitle>
       </CardHeader>
 
@@ -57,13 +64,19 @@ export function RosterBuilderTab(props: {
         ) : null}
 
         {rosterErr ? (
-          <div className="rounded-xl border px-3 py-2 text-xs" style={toastStyle("err")}>
+          <div
+            className="rounded-xl border px-3 py-2 text-xs"
+            style={toastStyle("err")}
+          >
             {rosterErr}
           </div>
         ) : null}
 
         {rosterMsg ? (
-          <div className="rounded-xl border px-3 py-2 text-xs" style={toastStyle("ok")}>
+          <div
+            className="rounded-xl border px-3 py-2 text-xs"
+            style={toastStyle("ok")}
+          >
             {rosterMsg}
           </div>
         ) : null}
@@ -74,7 +87,8 @@ export function RosterBuilderTab(props: {
               key={d.key}
               className="rounded-2xl border p-3"
               style={{
-                borderColor: "color-mix(in oklab, var(--stroke) 92%, transparent)",
+                borderColor:
+                  "color-mix(in oklab, var(--stroke) 92%, transparent)",
                 background:
                   "linear-gradient(180deg, color-mix(in oklab, var(--card) 92%, var(--bg-base) 8%), var(--card))",
                 boxShadow:
@@ -86,7 +100,9 @@ export function RosterBuilderTab(props: {
                   <Field
                     label="Name"
                     value={d.name}
-                    onChangeAction={(v) => updateDraftRowAction(d.key, { name: v })}
+                    onChangeAction={(v) =>
+                      updateDraftRowAction(d.key, { name: v })
+                    }
                     placeholder="Player name"
                     disabled={!canEdit || rosterBusy}
                   />
@@ -96,7 +112,9 @@ export function RosterBuilderTab(props: {
                   <Field
                     label="Number"
                     value={d.number}
-                    onChangeAction={(v) => updateDraftRowAction(d.key, { number: v })}
+                    onChangeAction={(v) =>
+                      updateDraftRowAction(d.key, { number: v })
+                    }
                     inputMode="numeric"
                     placeholder="7"
                     disabled={!canEdit || rosterBusy}
@@ -107,10 +125,37 @@ export function RosterBuilderTab(props: {
                   <Field
                     label="Primary Pos"
                     value={d.primaryPos}
-                    onChangeAction={(v) => updateDraftRowAction(d.key, { primaryPos: v })}
+                    onChangeAction={(v) =>
+                      updateDraftRowAction(d.key, { primaryPos: v })
+                    }
                     placeholder="SS"
                     disabled={!canEdit || rosterBusy}
                   />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label
+                    className="flex h-10 items-center gap-2 rounded-xl border px-3 text-xs"
+                    style={{
+                      borderColor:
+                        "color-mix(in oklab, var(--stroke) 92%, transparent)",
+                      background:
+                        "color-mix(in oklab, var(--card) 92%, var(--bg-base) 8%)",
+                      color: "var(--foreground)",
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={d.returningPlayer === true}
+                      onChange={(e) =>
+                        updateDraftRowAction(d.key, {
+                          returningPlayer: e.target.checked,
+                        })
+                      }
+                      disabled={!canEdit || rosterBusy}
+                    />
+                    Returning player
+                  </label>
                 </div>
 
                 <div className="sm:col-span-2 flex gap-2">
@@ -145,7 +190,10 @@ export function RosterBuilderTab(props: {
             Add row
           </Button>
 
-          <Button onClick={onRebuildRosterAction} disabled={!canEdit || rosterBusy}>
+          <Button
+            onClick={onRebuildRosterAction}
+            disabled={!canEdit || rosterBusy}
+          >
             {rosterBusy ? "Rebuilding…" : "Rebuild roster (overwrite)"}
           </Button>
         </div>

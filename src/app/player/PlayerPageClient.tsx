@@ -12,9 +12,12 @@ import {
   ops,
   fmt3,
   computeLeaders,
+  type Player,
   type StatKey as LeaderStatKey,
 } from "@/lib/roster";
 import { useRosterPlayers } from "@/lib/rosterStore";
+import { getFirestoreDb } from "@/lib/firebase.client";
+import { loadCareerStats } from "@/lib/playerCareerStats";
 import { ArrowLeft } from "lucide-react";
 import { computeTrophies, computeRunnerUpAwards } from "@/lib/trophies";
 
@@ -86,6 +89,13 @@ export default function PlayerPageClient() {
 
   const [activeStat, setActiveStat] = React.useState<StatKey | null>(null);
   const [viewMode, setViewMode] = React.useState<"plaque" | "season">("season");
+  const [statsView, setStatsView] = React.useState<"season" | "career">(
+    "season",
+  );
+  const [careerStats, setCareerStats] = React.useState<Player["stats"] | null>(
+    null,
+  );
+  const [careerStatsLoading, setCareerStatsLoading] = React.useState(false);
 
   React.useEffect(() => {
     queueMicrotask(() => {
@@ -98,6 +108,40 @@ export default function PlayerPageClient() {
     if (!id) return null;
     return list.find((p) => p.id === id) ?? null;
   }, [players, id]);
+
+  React.useEffect(() => {
+    setStatsView("season");
+    setCareerStats(null);
+  }, [seasonId, player?.id]);
+
+  React.useEffect(() => {
+    if (!player?.returningPlayer || !seasonId) return;
+
+    let active = true;
+    setCareerStatsLoading(true);
+
+    void loadCareerStats({
+      db: getFirestoreDb(),
+      playerId: player.id,
+      careerPlayerId: player.careerPlayerId,
+      playerName: player.name,
+      currentSeasonId: seasonId,
+      currentStats: player.stats,
+    })
+      .then((stats) => {
+        if (active) setCareerStats(stats);
+      })
+      .catch(() => {
+        if (active) setCareerStats(null);
+      })
+      .finally(() => {
+        if (active) setCareerStatsLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [player, seasonId]);
 
   const leaders = React.useMemo(() => computeLeaders(players ?? []), [players]);
 
@@ -232,10 +276,14 @@ export default function PlayerPageClient() {
     );
   }
 
-  const ba = battingAverage(player);
-  const obp = onBasePercentage(player);
-  const slgV = slugging(player);
-  const opsV = ops(player);
+  const displayedPlayer =
+    statsView === "career" && careerStats
+      ? { ...player, stats: careerStats }
+      : player;
+  const ba = battingAverage(displayedPlayer);
+  const obp = onBasePercentage(displayedPlayer);
+  const slgV = slugging(displayedPlayer);
+  const opsV = ops(displayedPlayer);
 
   const showingPlaque = meta.endSeasonMode && viewMode === "plaque";
 
@@ -306,6 +354,55 @@ export default function PlayerPageClient() {
             </div>
           ) : null}
 
+          {player.returningPlayer ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setStatsView("season")}
+                className="rounded-xl border px-3 py-2 text-sm font-semibold"
+                style={{
+                  borderColor:
+                    statsView === "season"
+                      ? "color-mix(in oklab, var(--secondary) 70%, transparent)"
+                      : "color-mix(in oklab, var(--stroke) 92%, transparent)",
+                  background:
+                    statsView === "season"
+                      ? "linear-gradient(90deg, var(--primary), var(--secondary))"
+                      : "color-mix(in oklab, var(--bg-base) 65%, transparent)",
+                  color:
+                    statsView === "season"
+                      ? "rgba(0,0,0,0.92)"
+                      : "var(--muted)",
+                }}
+              >
+                Current Season
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setStatsView("career")}
+                disabled={careerStatsLoading}
+                className="rounded-xl border px-3 py-2 text-sm font-semibold disabled:opacity-60"
+                style={{
+                  borderColor:
+                    statsView === "career"
+                      ? "color-mix(in oklab, var(--secondary) 70%, transparent)"
+                      : "color-mix(in oklab, var(--stroke) 92%, transparent)",
+                  background:
+                    statsView === "career"
+                      ? "linear-gradient(90deg, var(--primary), var(--secondary))"
+                      : "color-mix(in oklab, var(--bg-base) 65%, transparent)",
+                  color:
+                    statsView === "career"
+                      ? "rgba(0,0,0,0.92)"
+                      : "var(--muted)",
+                }}
+              >
+                {careerStatsLoading ? "Loading Career Stats…" : "Career Stats"}
+              </button>
+            </div>
+          ) : null}
+
           <div className="flex flex-wrap items-center justify-end gap-2">
             {showingPlaque ? (
               <button
@@ -323,28 +420,30 @@ export default function PlayerPageClient() {
                 Print Plaque
               </button>
             ) : null}
-            <button
-              type="button"
-              onClick={() =>
-                exportPlayerStatsPdf({
-                  teamName: meta.teamName,
-                  seasonLabel: meta.seasonLabel,
-                  player,
-                  awards: playerTrophyAwards,
-                  leaders,
-                })
-              }
-              className="rounded-xl border px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-90"
-              style={{
-                borderColor:
-                  "color-mix(in oklab, var(--stroke) 92%, transparent)",
-                background:
-                  "linear-gradient(90deg, var(--primary), var(--secondary))",
-                color: "rgba(0,0,0,0.92)",
-              }}
-            >
-              Print PDF
-            </button>
+            {displayedPlayer.stats.games > 0 ? (
+              <button
+                type="button"
+                onClick={() =>
+                  exportPlayerStatsPdf({
+                    teamName: meta.teamName,
+                    seasonLabel: meta.seasonLabel,
+                    player: displayedPlayer,
+                    awards: playerTrophyAwards,
+                    leaders,
+                  })
+                }
+                className="rounded-xl border px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-90"
+                style={{
+                  borderColor:
+                    "color-mix(in oklab, var(--stroke) 92%, transparent)",
+                  background:
+                    "linear-gradient(90deg, var(--primary), var(--secondary))",
+                  color: "rgba(0,0,0,0.92)",
+                }}
+              >
+                Print PDF
+              </button>
+            ) : null}
 
             <div className="text-right">
               <div className="text-xs" style={{ color: "var(--muted)" }}>
@@ -433,65 +532,65 @@ export default function PlayerPageClient() {
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <SmallStat
                   label="Games Played"
-                  value={String(player.stats.games)}
+                  value={String(displayedPlayer.stats.games)}
                 />
                 <SmallStat
                   label="Plate Appearances"
-                  value={String(player.stats.plateAppearances)}
+                  value={String(displayedPlayer.stats.plateAppearances)}
                 />
                 <SmallStat
                   label="At Bats"
-                  value={String(player.stats.atBats)}
+                  value={String(displayedPlayer.stats.atBats)}
                   leader={isLeader("atBats")}
                 />
                 <SmallStat
                   label="Hits"
-                  value={String(player.stats.hits)}
+                  value={String(displayedPlayer.stats.hits)}
                   leader={isLeader("hits")}
                 />
                 <SmallStat
                   label="Longest Hit Streak"
-                  value={String(player.stats.longestHitStreak ?? 0)}
+                  value={String(displayedPlayer.stats.longestHitStreak ?? 0)}
                   leader={isLeader("longestHitStreak")}
                 />
                 <SmallStat
                   label="Doubles"
-                  value={String(player.stats.doubles)}
+                  value={String(displayedPlayer.stats.doubles)}
                   leader={isLeader("doubles")}
                 />
                 <SmallStat
                   label="Triples"
-                  value={String(player.stats.triples)}
+                  value={String(displayedPlayer.stats.triples)}
                   leader={isLeader("triples")}
                 />
                 <SmallStat
                   label="Home Runs"
-                  value={String(player.stats.homeRuns)}
+                  value={String(displayedPlayer.stats.homeRuns)}
                   leader={isLeader("homeRuns")}
                 />
                 <SmallStat
                   label="RBIs: Runs Batted In"
-                  value={String(player.stats.rbi)}
+                  value={String(displayedPlayer.stats.rbi)}
                   leader={isLeader("rbi")}
                 />
                 <SmallStat
                   label="Runs"
-                  value={String(player.stats.runs)}
+                  value={String(displayedPlayer.stats.runs)}
                   leader={isLeader("runs")}
                 />
                 <SmallStat
                   label="Base on Balls (Walk)"
-                  value={String(player.stats.walks)}
+                  value={String(displayedPlayer.stats.walks)}
                   leader={isLeader("walks")}
                 />
                 <SmallStat
                   label="Hit By Pitch"
-                  value={String(player.stats.hitByPitch)}
+                  value={String(displayedPlayer.stats.hitByPitch)}
                   leader={isLeader("hitByPitch")}
                 />
                 <SmallStat
                   label="Stolen Bases"
-                  value={String(player.stats.stolenBases)}
+                  value={String(displayedPlayer.stats.stolenBases)}
                   leader={isLeader("stolenBases")}
                 />
               </div>
@@ -507,25 +606,25 @@ export default function PlayerPageClient() {
                   <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                     <SmallStat
                       label="Pitching Strike Outs"
-                      value={String(player.stats.pitchingStrikeouts)}
+                      value={String(displayedPlayer.stats.pitchingStrikeouts)}
                       leader={isLeader("pitchingStrikeouts")}
                     />
                     <SmallStat
                       label="Pitching Saves"
-                      value={String(player.stats.pitchingSaves)}
+                      value={String(displayedPlayer.stats.pitchingSaves)}
                     />
                     <SmallStat
                       label="Fly Balls Caught"
-                      value={String(player.stats.flyBallCatches)}
+                      value={String(displayedPlayer.stats.flyBallCatches)}
                     />
                     <SmallStat
                       label="Put Outs (PO)"
-                      value={String(player.stats.putOuts)}
+                      value={String(displayedPlayer.stats.putOuts)}
                       leader={isLeader("putOuts")}
                     />
                     <SmallStat
                       label="Assists (A)"
-                      value={String(player.stats.assists)}
+                      value={String(displayedPlayer.stats.assists)}
                       leader={isLeader("assists")}
                     />
                   </div>
