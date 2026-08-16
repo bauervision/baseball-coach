@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { TrophyAward } from "@/lib/trophies";
 import { TROPHY_ART } from "@/lib/trophyArtwork";
 
@@ -116,11 +117,12 @@ export function PlayerTrophyHero(props: {
                   }}
                   aria-hidden="true"
                 >
-                  <img
+                  <Image
                     src={artworkSrc}
                     alt=""
+                    fill
+                    sizes="(min-width: 640px) 112px, 96px"
                     className="h-full w-full object-cover"
-                    draggable={false}
                   />
                 </div>
               </div>

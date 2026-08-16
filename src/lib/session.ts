@@ -42,7 +42,9 @@ function isValidAdminSession(session: Partial<AppSession> | null): boolean {
   return email.length > 0 && allowlist.includes(email);
 }
 
-export function sanitizeSession(session: Partial<AppSession> | null): AppSession | null {
+export function sanitizeSession(
+  session: Partial<AppSession> | null,
+): AppSession | null {
   if (!session || !session.role) return null;
 
   if (session.role === "public") {

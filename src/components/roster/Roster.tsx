@@ -93,7 +93,7 @@ function sortByLastNameThenFirst(aName: string, bName: string): number {
 
 type Movement = "star" | "up" | "down" | "none";
 
-function movementForPlayer(_playerId: string): Movement {
+function movementForPlayer(): Movement {
   return "none";
 }
 
@@ -495,7 +495,7 @@ export function Roster() {
               const obp = onBasePercentage(p);
               const slg = slugging(p);
               const OPS = ops(p);
-              const move = movementForPlayer(p.id);
+              const move = movementForPlayer();
 
               return (
                 <Link

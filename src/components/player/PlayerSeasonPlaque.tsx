@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import type { ReactNode } from "react";
 
 import type { Player, LeadersMap, StatKey } from "@/lib/roster";
@@ -132,11 +133,12 @@ function CoachRecognitionPanel(props: {
 
   return (
     <Panel className="relative flex min-h-0 flex-col overflow-hidden px-4 py-4">
-      <img
+      <Image
         src="/baseballBG.png"
         alt=""
+        fill
+        sizes="100vw"
         className="absolute inset-0 h-full w-full object-cover opacity-[0.22]"
-        draggable={false}
       />
 
       <div
@@ -165,16 +167,17 @@ function CoachRecognitionPanel(props: {
       </div>
 
       <div className="relative z-10 grid min-h-0 flex-1 grid-rows-[1fr_auto] gap-4 overflow-hidden pt-4 text-center">
-        <div className="min-h-0 overflow-hidden rounded-xl">
-          <img
+        <div className="relative min-h-0 overflow-hidden rounded-xl">
+          <Image
             src={
               featuredCoachAward
                 ? trophyArtForAward(featuredCoachAward)
                 : "/TigersLogo.png"
             }
             alt={featuredCoachAward?.trophy.title ?? "Tigers Baseball"}
+            fill
+            sizes="(min-width: 640px) 360px, 90vw"
             className="h-full w-full object-contain object-top"
-            draggable={false}
             style={
               featuredCoachAward ? undefined : { filter: TIGERS_ORANGE_FILTER }
             }
@@ -318,9 +321,11 @@ function HeroAwardCard(props: { card: PlaqueAwardCard }) {
       className="grid min-h-0 grid-cols-[0.92fr_1fr] items-center p-5"
     >
       <div className="relative h-full min-h-0 overflow-hidden rounded-2xl">
-        <img
+        <Image
           src={trophyArtFor(card)}
           alt={card.trophy.title}
+          fill
+          sizes="(min-width: 640px) 320px, 45vw"
           className="h-full w-full object-cover"
         />
       </div>
@@ -363,10 +368,12 @@ function SmallAwardCard(props: { card: PlaqueAwardCard }) {
       dark
       className="grid min-h-0 grid-cols-[0.92fr_1fr] items-center p-4"
     >
-      <div className="h-full min-h-0 overflow-hidden rounded-xl">
-        <img
+      <div className="relative h-full min-h-0 overflow-hidden rounded-xl">
+        <Image
           src={trophyArtFor(card)}
           alt={card.trophy.title}
+          fill
+          sizes="(min-width: 640px) 260px, 45vw"
           className="h-full w-full object-cover"
         />
       </div>
@@ -403,12 +410,15 @@ function HonorsSummaryCard(props: {
               key={award.key}
               className="grid min-w-0 grid-rows-[1fr_auto] text-center"
             >
-              <img
-                src={trophyArtFor(award)}
-                alt={award.trophy.title}
-                className="h-full min-h-0 w-full rounded-xl object-cover ring-1 ring-orange-400/45"
-                draggable={false}
-              />
+              <div className="relative min-h-0 overflow-hidden rounded-xl ring-1 ring-orange-400/45">
+                <Image
+                  src={trophyArtFor(award)}
+                  alt={award.trophy.title}
+                  fill
+                  sizes="(min-width: 1024px) 160px, 30vw"
+                  className="object-cover"
+                />
+              </div>
 
               <div className="mt-1.5 truncate text-[10px] font-black uppercase tracking-[0.08em] text-white">
                 {award.trophy.title}
@@ -446,12 +456,15 @@ function HonorsSummaryCard(props: {
       >
         {visibleExtras[0] ? (
           <div className="grid min-h-0 min-w-0 grid-rows-[1fr_auto] text-center">
-            <img
-              src={trophyArtFor(visibleExtras[0])}
-              alt={visibleExtras[0].trophy.title}
-              className="h-full max-h-36 min-h-0 w-full rounded-xl object-cover ring-1 ring-orange-400/45"
-              draggable={false}
-            />
+            <div className="relative min-h-0 overflow-hidden rounded-xl ring-1 ring-orange-400/45">
+              <Image
+                src={trophyArtFor(visibleExtras[0])}
+                alt={visibleExtras[0].trophy.title}
+                fill
+                sizes="(min-width: 640px) 160px, 30vw"
+                className="object-cover"
+              />
+            </div>
 
             <div className="mt-1.5 truncate text-[10px] font-black uppercase tracking-[0.08em] text-white">
               {visibleExtras[0].trophy.title}
@@ -483,12 +496,15 @@ function HonorsSummaryCard(props: {
 
         {visibleExtras[1] ? (
           <div className="grid min-h-0 min-w-0 grid-rows-[1fr_auto] text-center">
-            <img
-              src={trophyArtFor(visibleExtras[1])}
-              alt={visibleExtras[1].trophy.title}
-              className="h-full max-h-36 min-h-0 w-full rounded-xl object-cover ring-1 ring-orange-400/45"
-              draggable={false}
-            />
+            <div className="relative min-h-0 overflow-hidden rounded-xl ring-1 ring-orange-400/45">
+              <Image
+                src={trophyArtFor(visibleExtras[1])}
+                alt={visibleExtras[1].trophy.title}
+                fill
+                sizes="(min-width: 640px) 160px, 30vw"
+                className="object-cover"
+              />
+            </div>
 
             <div className="mt-1.5 truncate text-[10px] font-black uppercase tracking-[0.08em] text-white">
               {visibleExtras[1].trophy.title}

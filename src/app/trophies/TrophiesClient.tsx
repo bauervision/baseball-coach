@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Trophy } from "lucide-react";
 
 import { useRosterPlayers } from "@/lib/rosterStore";
@@ -315,7 +316,7 @@ function TrophyTile(props: {
         </div>
 
         <div
-          className="grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-2xl border transition-all"
+          className="relative grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-2xl border transition-all"
           style={{
             borderColor: `color-mix(in oklab, ${tone} 40%, transparent)`,
             background: `color-mix(in oklab, ${tone} 10%, var(--card))`,
@@ -324,11 +325,12 @@ function TrophyTile(props: {
           aria-hidden="true"
         >
           {artworkSrc ? (
-            <img
+            <Image
               src={artworkSrc}
               alt=""
+              fill
+              sizes="112px"
               className="h-full w-full object-cover"
-              draggable={false}
             />
           ) : (
             <Trophy

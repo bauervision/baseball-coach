@@ -4,7 +4,12 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import type { AppSession } from "@/lib/session";
-import { readSession, writeSession, onSessionChanged } from "@/lib/session";
+import {
+  getConfiguredAdminEmails,
+  onSessionChanged,
+  readSession,
+  writeSession,
+} from "@/lib/session";
 import {
   startErrorOverlay,
   finishErrorOverlay,
@@ -18,7 +23,6 @@ import {
   type Auth,
 } from "@/lib/firebase.client";
 import { useRosterPlayers } from "@/lib/rosterStore";
-import { getConfiguredAdminEmails } from "@/lib/session";
 
 type PendingKind = "enter" | null;
 
@@ -61,53 +65,6 @@ export function AuthOverlay(props: { children: React.ReactNode }) {
       timersRef.current = [];
     };
   }, []);
-
-  const onSignIn = React.useCallback(
-    async (next: AppSession) => {
-      if (pending) return;
-
-      setError(null);
-      setPending("enter");
-      startEnterOverlay();
-
-      const minDelay = new Promise<void>((resolve) => {
-        const t = window.setTimeout(() => resolve(), OVERLAY_MS);
-        timersRef.current.push(t);
-      });
-
-      try {
-        const result = await attemptSignIn(next);
-
-        await minDelay;
-
-        if (!result.ok) {
-          setError(result.message ?? "Sign-in failed.");
-
-          startErrorOverlay();
-
-          const t = window.setTimeout(() => {
-            finishErrorOverlay();
-            finishEnterOverlay();
-            setPending(null);
-          }, 700);
-
-          timersRef.current.push(t);
-          return;
-        }
-
-        writeSession(result.session);
-
-        finishEnterOverlay();
-        setPending(null);
-      } catch {
-        await minDelay;
-        setError("Sign-in failed.");
-        finishEnterOverlay();
-        setPending(null);
-      }
-    },
-    [pending],
-  );
 
   const onEnterPublic = React.useCallback(async () => {
     if (pending) return;
@@ -248,7 +205,6 @@ export function AuthOverlay(props: { children: React.ReactNode }) {
   if (!ready) return null;
 
   const showApp = session !== null && pending !== "enter";
-  const showAuth = !showApp;
 
   return (
     <>
@@ -635,20 +591,4 @@ export function AuthOverlay(props: { children: React.ReactNode }) {
       </AnimatePresence>
     </>
   );
-}
-
-type SignInResult =
-  | { ok: true; session: AppSession }
-  | { ok: false; message?: string };
-
-async function attemptSignIn(next: AppSession): Promise<SignInResult> {
-  const SHOULD_FAIL = false;
-
-  await new Promise((r) => setTimeout(r, 350));
-
-  if (SHOULD_FAIL) {
-    return { ok: false, message: "Invalid credentials (simulated)." };
-  }
-
-  return { ok: true, session: next };
 }

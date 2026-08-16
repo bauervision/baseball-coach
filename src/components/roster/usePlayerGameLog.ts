@@ -4,7 +4,6 @@ import * as React from "react";
 import {
   collection,
   doc,
-  getDoc,
   onSnapshot,
   query,
   type Firestore,
@@ -40,8 +39,7 @@ function asInt(v: unknown): number {
 }
 
 function normalizeDelta(v: unknown): GameLineDelta {
-  const d =
-    v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+  const d = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
 
   return {
     atBats: asInt(d.atBats),

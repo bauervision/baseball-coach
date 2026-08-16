@@ -23,13 +23,6 @@ export type FinalAwardKey =
 
 export type FinalAwards = Record<FinalAwardKey, string>;
 
-const EMPTY_FINAL_AWARDS: FinalAwards = {
-  mvp: "",
-  dominator: "",
-  honorableMention: "",
-  bestAllAround: "",
-};
-
 const FINAL_AWARD_FIELDS: Array<{ key: FinalAwardKey; label: string }> = [
   { key: "mvp", label: "MVP" },
   { key: "dominator", label: "Dominator" },

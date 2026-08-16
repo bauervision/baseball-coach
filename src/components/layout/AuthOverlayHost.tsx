@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import * as React from "react";
@@ -210,7 +209,10 @@ export default function AuthOverlayHost() {
                   >
                     TIGERS BASEBALL
                   </div>
-                  <div className="mt-1 text-xs" style={{ color: "var(--muted)" }}>
+                  <div
+                    className="mt-1 text-xs"
+                    style={{ color: "var(--muted)" }}
+                  >
                     Tigers 2026 • Parent Portal
                   </div>
                 </div>
@@ -270,7 +272,10 @@ export default function AuthOverlayHost() {
                 <PulseDot delay={0} tone={isError ? "error" : "ok"} />
                 <PulseDot delay={0.12} tone={isError ? "error" : "ok"} />
                 <PulseDot delay={0.24} tone={isError ? "error" : "ok"} />
-                <span className="ml-2 text-xs" style={{ color: "var(--muted)" }}>
+                <span
+                  className="ml-2 text-xs"
+                  style={{ color: "var(--muted)" }}
+                >
                   {isError ? "Try again…" : "Please wait…"}
                 </span>
               </div>
