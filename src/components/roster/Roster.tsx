@@ -356,14 +356,16 @@ export function Roster() {
                         className="text-center text-[11px] font-semibold uppercase tracking-[0.18em] sm:text-xs"
                         style={{ color: "var(--muted)" }}
                       >
-                        Record
+                        {meta.usesGamesPlayedRecord ? "Games Played" : "Record"}
                       </div>
 
                       <div
                         className="mt-3 text-center text-5xl font-extrabold leading-none tracking-tight sm:text-6xl lg:text-7xl"
                         style={{ color: "var(--foreground)" }}
                       >
-                        {meta.record.wins}-{meta.record.losses}
+                        {meta.usesGamesPlayedRecord
+                          ? `${meta.gamesPlayed}-${meta.scheduledGames}`
+                          : `${meta.record.wins}-${meta.record.losses}`}
                       </div>
                     </div>
                   )}

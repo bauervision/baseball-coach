@@ -47,6 +47,12 @@ export function usePlayerEdits(opts: {
   const [playerErr, setPlayerErr] = React.useState<string | null>(null);
 
   React.useEffect(() => {
+    setPlayerEdits({});
+    setPlayerMsg(null);
+    setPlayerErr(null);
+  }, [seasonId]);
+
+  React.useEffect(() => {
     const ps = players ?? null;
     if (ps === null) return;
 

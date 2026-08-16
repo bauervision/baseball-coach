@@ -15,6 +15,9 @@ export function useSeasonSwitch(opts: {
   const [seasonEditId, setSeasonEditId] = React.useState("");
   const [seasonTeamName, setSeasonTeamName] = React.useState("");
   const [seasonLabel, setSeasonLabel] = React.useState("");
+  const [usesGamesPlayedRecord, setUsesGamesPlayedRecord] =
+    React.useState(false);
+  const [scheduledGames, setScheduledGames] = React.useState("0");
   const [seasonBusy, setSeasonBusy] = React.useState(false);
   const [seasonMsg, setSeasonMsg] = React.useState<string | null>(null);
   const [seasonErr, setSeasonErr] = React.useState<string | null>(null);
@@ -32,6 +35,8 @@ export function useSeasonSwitch(opts: {
         nextSeasonId: seasonEditId,
         teamName: seasonTeamName,
         seasonLabel,
+        usesGamesPlayedRecord,
+        scheduledGames: Number.parseInt(scheduledGames, 10) || 0,
         fallbackTeamName,
       });
 
@@ -45,7 +50,17 @@ export function useSeasonSwitch(opts: {
     } finally {
       setSeasonBusy(false);
     }
-  }, [canEdit, seasonBusy, db, seasonEditId, seasonTeamName, seasonLabel, fallbackTeamName]);
+  }, [
+    canEdit,
+    seasonBusy,
+    db,
+    seasonEditId,
+    seasonTeamName,
+    seasonLabel,
+    usesGamesPlayedRecord,
+    scheduledGames,
+    fallbackTeamName,
+  ]);
 
   return {
     seasonEditId,
@@ -54,6 +69,10 @@ export function useSeasonSwitch(opts: {
     setSeasonTeamName,
     seasonLabel,
     setSeasonLabel,
+    usesGamesPlayedRecord,
+    setUsesGamesPlayedRecord,
+    scheduledGames,
+    setScheduledGames,
     seasonBusy,
     seasonMsg,
     seasonErr,

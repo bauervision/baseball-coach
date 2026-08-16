@@ -57,9 +57,19 @@ export async function switchSeason(opts: {
   nextSeasonId: string;
   teamName: string;
   seasonLabel: string;
+  usesGamesPlayedRecord: boolean;
+  scheduledGames: number;
   fallbackTeamName: string;
 }): Promise<void> {
-  const { db, nextSeasonId, teamName, seasonLabel, fallbackTeamName } = opts;
+  const {
+    db,
+    nextSeasonId,
+    teamName,
+    seasonLabel,
+    usesGamesPlayedRecord,
+    scheduledGames,
+    fallbackTeamName,
+  } = opts;
 
   const nextId = nextSeasonId.trim();
   if (!nextId) throw new Error("Season id is required.");
@@ -74,6 +84,9 @@ export async function switchSeason(opts: {
       teamName: teamName.trim() || fallbackTeamName || "Team",
       seasonLabel: seasonLabel.trim() || "Season",
       record: { wins: 0, losses: 0, ties: 0 },
+      usesGamesPlayedRecord: usesGamesPlayedRecord === true,
+      scheduledGames: Math.max(0, Math.floor(scheduledGames)),
+      gamesPlayed: 0,
       updatedAt: serverTimestamp(),
       createdAt: serverTimestamp(),
     },
@@ -557,6 +570,7 @@ export async function saveGameAndApplyDeltas(opts: {
     seasonRef,
     {
       record: { wins, losses, ties },
+      gamesPlayed: gamesSnap.size,
       updatedAt: serverTimestamp(),
     },
     { merge: true },

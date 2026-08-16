@@ -14,13 +14,23 @@ export function useRosterDraft(opts: {
 }) {
   const { db, seasonId, canEdit } = opts;
 
-  const [draft, setDraft] = React.useState<DraftPlayer[]>(() => [newDraftPlayer()]);
+  const [draft, setDraft] = React.useState<DraftPlayer[]>(() => [
+    newDraftPlayer(),
+  ]);
   const [rosterBusy, setRosterBusy] = React.useState(false);
   const [rosterMsg, setRosterMsg] = React.useState<string | null>(null);
   const [rosterErr, setRosterErr] = React.useState<string | null>(null);
 
+  React.useEffect(() => {
+    setDraft([newDraftPlayer()]);
+    setRosterMsg(null);
+    setRosterErr(null);
+  }, [seasonId]);
+
   function updateDraftRow(key: string, patch: Partial<DraftPlayer>) {
-    setDraft((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
+    setDraft((prev) =>
+      prev.map((r) => (r.key === key ? { ...r, ...patch } : r)),
+    );
   }
 
   function insertRowAfter(key: string) {
@@ -49,7 +59,9 @@ export function useRosterDraft(opts: {
 
     try {
       const res = await rebuildRoster({ db, seasonId, draft });
-      setRosterMsg(`Roster rebuilt for ${seasonId}. Players: ${res.playerCount}.`);
+      setRosterMsg(
+        `Roster rebuilt for ${seasonId}. Players: ${res.playerCount}.`,
+      );
       setDraft([newDraftPlayer()]);
     } catch (e: unknown) {
       const msg =

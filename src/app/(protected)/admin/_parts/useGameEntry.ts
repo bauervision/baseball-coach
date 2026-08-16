@@ -191,6 +191,11 @@ export function useGameEntry(opts: {
     setSavedMsg(null);
   }, []);
 
+  React.useEffect(() => {
+    resetAllAction();
+    setSavedGames([]);
+  }, [seasonId, resetAllAction]);
+
   const loadExistingGameAction = React.useCallback(
     async (gameId: string) => {
       const gid = gameId.trim();

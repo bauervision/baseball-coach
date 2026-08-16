@@ -265,6 +265,12 @@ export default function AdminClient() {
             setSeasonTeamNameAction={seasonSwitch.setSeasonTeamName}
             seasonLabel={seasonSwitch.seasonLabel}
             setSeasonLabelAction={seasonSwitch.setSeasonLabel}
+            usesGamesPlayedRecord={seasonSwitch.usesGamesPlayedRecord}
+            setUsesGamesPlayedRecordAction={
+              seasonSwitch.setUsesGamesPlayedRecord
+            }
+            scheduledGames={seasonSwitch.scheduledGames}
+            setScheduledGamesAction={seasonSwitch.setScheduledGames}
             teamNamePlaceholder={meta.teamName || "Team"}
             seasonBusy={seasonSwitch.seasonBusy}
             seasonMsg={seasonSwitch.seasonMsg}

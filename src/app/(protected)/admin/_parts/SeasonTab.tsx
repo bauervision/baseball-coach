@@ -2,7 +2,13 @@
 "use client";
 
 import * as React from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardSubtitle } from "@/components/ui/Card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardSubtitle,
+} from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 
 import { Field } from "../adminUiHelpers";
@@ -20,6 +26,12 @@ export function SeasonTab(props: {
   seasonLabel: string;
   setSeasonLabelAction: (v: string) => void;
 
+  usesGamesPlayedRecord: boolean;
+  setUsesGamesPlayedRecordAction: (v: boolean) => void;
+
+  scheduledGames: string;
+  setScheduledGamesAction: (v: string) => void;
+
   teamNamePlaceholder: string;
 
   seasonBusy: boolean;
@@ -35,6 +47,10 @@ export function SeasonTab(props: {
     setSeasonTeamNameAction,
     seasonLabel,
     setSeasonLabelAction,
+    usesGamesPlayedRecord,
+    setUsesGamesPlayedRecordAction,
+    scheduledGames,
+    setScheduledGamesAction,
     teamNamePlaceholder,
     seasonBusy,
     seasonMsg,
@@ -82,20 +98,53 @@ export function SeasonTab(props: {
           />
         </div>
 
+        <div className="grid gap-3 sm:grid-cols-[1fr_180px] sm:items-end">
+          <label className="flex min-h-10 items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={usesGamesPlayedRecord}
+              onChange={(event) =>
+                setUsesGamesPlayedRecordAction(event.target.checked)
+              }
+              disabled={!canEdit || seasonBusy}
+              className="h-4 w-4 accent-[var(--primary)]"
+            />
+            <span>Display games played instead of W-L record</span>
+          </label>
+          <Field
+            label="Scheduled games"
+            value={scheduledGames}
+            onChangeAction={setScheduledGamesAction}
+            type="number"
+            inputMode="numeric"
+            placeholder="10"
+            disabled={!canEdit || seasonBusy}
+          />
+        </div>
+
         {seasonErr ? (
-          <div className="rounded-xl border px-3 py-2 text-xs" style={toastStyle("err")}>
+          <div
+            className="rounded-xl border px-3 py-2 text-xs"
+            style={toastStyle("err")}
+          >
             {seasonErr}
           </div>
         ) : null}
 
         {seasonMsg ? (
-          <div className="rounded-xl border px-3 py-2 text-xs" style={toastStyle("ok")}>
+          <div
+            className="rounded-xl border px-3 py-2 text-xs"
+            style={toastStyle("ok")}
+          >
             {seasonMsg}
           </div>
         ) : null}
 
         <div className="flex items-center justify-end gap-2">
-          <Button onClick={onSwitchSeasonAction} disabled={!canEdit || seasonBusy}>
+          <Button
+            onClick={onSwitchSeasonAction}
+            disabled={!canEdit || seasonBusy}
+          >
             {seasonBusy ? "Updating…" : "Set current season"}
           </Button>
         </div>

@@ -35,6 +35,9 @@ export type RosterMeta = {
   seasonLabel: string;
   league: string;
   record: { wins: number; losses: number; ties?: number };
+  usesGamesPlayedRecord: boolean;
+  scheduledGames: number;
+  gamesPlayed: number;
   endSeasonMode: boolean;
   finalAwards: RosterFinalAwards;
 };
@@ -44,6 +47,9 @@ const DEFAULT_META: RosterMeta = {
   seasonLabel: "Spring 2026",
   league: "Mustang",
   record: { wins: 0, losses: 0 },
+  usesGamesPlayedRecord: false,
+  scheduledGames: 0,
+  gamesPlayed: 0,
   endSeasonMode: false,
   finalAwards: {},
 };
@@ -101,6 +107,9 @@ function normalizeMeta(v: unknown): RosterMeta {
     seasonLabel: asNonEmptyString(d.seasonLabel) ?? DEFAULT_META.seasonLabel,
     league: asNonEmptyString(d.league) ?? DEFAULT_META.league,
     record: normalizeRecord(d.record),
+    usesGamesPlayedRecord: d.usesGamesPlayedRecord === true,
+    scheduledGames: Math.max(0, asInt(d.scheduledGames)),
+    gamesPlayed: Math.max(0, asInt(d.gamesPlayed)),
     endSeasonMode: d.endSeasonMode === true,
     finalAwards: normalizeFinalAwards(d.finalAwards),
   };
