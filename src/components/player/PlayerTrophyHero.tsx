@@ -106,7 +106,7 @@ export function PlayerTrophyHero(props: {
                 </div>
 
                 <div
-                  className="grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-2xl border sm:h-28 sm:w-28"
+                  className="relative grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-2xl border sm:h-28 sm:w-28"
                   style={{
                     borderColor:
                       "color-mix(in oklab, var(--secondary) 34%, transparent)",
