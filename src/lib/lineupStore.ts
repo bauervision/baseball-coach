@@ -1,9 +1,11 @@
 import {
   doc,
   getDoc,
+  onSnapshot,
   serverTimestamp,
   setDoc,
   type Firestore,
+  type Unsubscribe,
 } from "firebase/firestore";
 
 import type { SavedLineup } from "@/lib/lineup";
@@ -24,16 +26,10 @@ function lineupDoc(db: Firestore, seasonId: string) {
   return doc(db, "seasons", seasonId, "lineups", CURRENT_LINEUP_ID);
 }
 
-export async function loadCurrentLineup(
-  db: Firestore,
+function parseSavedLineup(
   seasonId: string,
-): Promise<SavedLineup | null> {
-  const snap = await getDoc(lineupDoc(db, seasonId));
-
-  if (!snap.exists()) return null;
-
-  const data = snap.data() as FirestoreSavedLineup;
-
+  data: FirestoreSavedLineup,
+): SavedLineup {
   return {
     id: data.id || CURRENT_LINEUP_ID,
     title: data.title || "Current Lineup",
@@ -43,6 +39,34 @@ export async function loadCurrentLineup(
     createdAtISO: data.createdAtISO || new Date().toISOString(),
     updatedAtISO: data.updatedAtISO || new Date().toISOString(),
   };
+}
+
+// Live-subscribes to the current lineup so callers (e.g. Stat Update, while
+// entering a not-yet-saved game) reflect edits made on the Lineup tab
+// without a page reload. Single-document listener only — no per-player reads.
+export function subscribeCurrentLineup(
+  db: Firestore,
+  seasonId: string,
+  onChange: (lineup: SavedLineup | null) => void,
+): Unsubscribe {
+  return onSnapshot(lineupDoc(db, seasonId), (snap) => {
+    if (!snap.exists()) {
+      onChange(null);
+      return;
+    }
+    onChange(parseSavedLineup(seasonId, snap.data() as FirestoreSavedLineup));
+  });
+}
+
+export async function loadCurrentLineup(
+  db: Firestore,
+  seasonId: string,
+): Promise<SavedLineup | null> {
+  const snap = await getDoc(lineupDoc(db, seasonId));
+
+  if (!snap.exists()) return null;
+
+  return parseSavedLineup(seasonId, snap.data() as FirestoreSavedLineup);
 }
 
 export async function saveCurrentLineup(

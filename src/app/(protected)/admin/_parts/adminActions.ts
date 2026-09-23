@@ -31,6 +31,8 @@ import {
   findHistoricalCareerPlayerId,
   newCareerPlayerId,
 } from "@/lib/playerIdentity";
+import { loadCurrentLineup } from "@/lib/lineupStore";
+import type { GameLineupSnapshot } from "@/lib/lineup";
 
 const COACH_PICK_STAT_FIELD: Record<CoachPickKey, string> = {
   charlieHustle: "stats.charlieHustleAwards",
@@ -253,6 +255,7 @@ export async function saveGameAndApplyDeltas(opts: {
   players: Player[];
   lines: Record<string, LineState>;
   coachPicks: CoachPicks;
+  gameBallPlayerId: string;
   gameId?: string | null;
 }): Promise<{ wroteLines: number; opponent: string; gameId: string }> {
   const {
@@ -266,6 +269,7 @@ export async function saveGameAndApplyDeltas(opts: {
     players,
     lines,
     coachPicks,
+    gameBallPlayerId,
     gameId,
   } = opts;
 
@@ -347,8 +351,65 @@ export async function saveGameAndApplyDeltas(opts: {
     }
   }
 
-  if (wroteLines === 0 && coachPickCount === 0) {
+  if (wroteLines === 0 && coachPickCount === 0 && !gameBallPlayerId) {
     throw new Error("No player stats or coach picks were entered.");
+  }
+
+  let gameBall: { playerId: string; playerName: string; playerNumber: number } | null =
+    null;
+
+  if (gameBallPlayerId) {
+    const gameBallPlayer = players.find((p) => p.id === gameBallPlayerId);
+    if (!gameBallPlayer) {
+      throw new Error("Selected Game Ball player was not found in roster.");
+    }
+
+    // Domain-level invariant: a player may only hold one Game Ball across the
+    // season. Checked here (not just filtered out of the picker) so stale or
+    // concurrent admin sessions can't create a duplicate.
+    const allGamesSnap = await getDocs(
+      collection(db, "seasons", seasonId, "games"),
+    );
+
+    const conflict = allGamesSnap.docs.find((gameDoc) => {
+      if (gameDoc.id === gid) return false;
+
+      const data = gameDoc.data() as {
+        gameBall?: { playerId?: unknown } | null;
+      };
+
+      return data.gameBall?.playerId === gameBallPlayerId;
+    });
+
+    if (conflict) {
+      throw new Error(
+        `${gameBallPlayer.name} already has a Game Ball from another game. Change that game's Game Ball first if you want to reassign it.`,
+      );
+    }
+
+    gameBall = {
+      playerId: gameBallPlayer.id,
+      playerName: gameBallPlayer.name,
+      playerNumber: gameBallPlayer.number,
+    };
+  }
+
+  // Historical lineup snapshot: captured only the first time this game is
+  // saved, using whatever the current lineup is at that moment. Later edits
+  // to this same game must NOT re-capture it (that would make the snapshot
+  // track the current lineup instead of staying frozen to this game), and
+  // older games saved before this feature existed simply never get one.
+  let lineupSnapshot: GameLineupSnapshot | null = null;
+
+  if (!gameId) {
+    const currentLineup = await loadCurrentLineup(db, seasonId);
+    if (currentLineup && currentLineup.rows.length > 0) {
+      lineupSnapshot = {
+        capturedAtISO: new Date().toISOString(),
+        inningCount: currentLineup.inningCount,
+        rows: currentLineup.rows,
+      };
+    }
   }
 
   const existingLinesSnap = await getDocs(
@@ -367,8 +428,10 @@ export async function saveGameAndApplyDeltas(opts: {
       result,
       score: { us: num(scoreUs), them: num(scoreThem) },
       coachAwards: selectedCoachAwards,
+      gameBall,
       updatedAt: serverTimestamp(),
       ...(gameId ? {} : { createdAt: serverTimestamp() }),
+      ...(lineupSnapshot ? { lineupSnapshot } : {}),
     },
     { merge: true },
   );

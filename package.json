@@ -1,6 +1,6 @@
 {
   "name": "baseball-coach",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -8,7 +8,7 @@
     "export": "next export",
     "start": "next start -H 0.0.0.0 -p $PORT",
     "lint": "eslint",
-    "deploy": "next build && firebase deploy --only hosting"
+    "deploy": "next build && firebase deploy --only hosting --account mikecbauervision@gmail.com --project baseball-coach-997ab"
   },
   "dependencies": {
     "firebase": "^12.8.0",

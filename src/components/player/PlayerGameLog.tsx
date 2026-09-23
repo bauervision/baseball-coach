@@ -1,5 +1,7 @@
 "use client";
 
+import { IconBall } from "@/components/player/helpers";
+
 function formatGameDate(dateISO: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateISO);
   if (!m) return dateISO;
@@ -37,6 +39,7 @@ export function GameLogRow(props: {
   rbi: number;
   walks: number;
   hitByPitch: number;
+  gotGameBall?: boolean;
 }) {
   const summary = buildLineSummary(props);
 
@@ -44,8 +47,12 @@ export function GameLogRow(props: {
     <div
       className="rounded-xl border px-3 py-3"
       style={{
-        borderColor: "color-mix(in oklab, var(--stroke) 88%, transparent)",
-        background: "color-mix(in oklab, var(--bg-base) 65%, transparent)",
+        borderColor: props.gotGameBall
+          ? "color-mix(in oklab, var(--secondary) 55%, transparent)"
+          : "color-mix(in oklab, var(--stroke) 88%, transparent)",
+        background: props.gotGameBall
+          ? "linear-gradient(180deg, color-mix(in oklab, var(--secondary) 10%, var(--bg-base)), color-mix(in oklab, var(--bg-base) 65%, transparent))"
+          : "color-mix(in oklab, var(--bg-base) 65%, transparent)",
       }}
     >
       <div className="flex items-start justify-between gap-3">
@@ -56,6 +63,16 @@ export function GameLogRow(props: {
           <div className="mt-1 text-sm" style={{ color: "var(--muted)" }}>
             {summary}
           </div>
+          {props.gotGameBall ? (
+            <div
+              className="mt-1 inline-flex items-center gap-1 text-xs font-semibold"
+              style={{ color: "var(--secondary)" }}
+              title="Game Ball awarded"
+            >
+              <IconBall />
+              <span>Game Ball</span>
+            </div>
+          ) : null}
           {props.hitStreak > 0 ? (
             <div
               className={[

@@ -205,6 +205,7 @@ export default function AdminClient() {
           canEdit={canEdit}
           rosterError={rosterError}
           players={players}
+          orderedPlayers={game.orderedPlayers}
           lines={game.lines}
           playedCount={game.playedCount}
           hiddenCount={game.hiddenCount}
@@ -233,6 +234,9 @@ export default function AdminClient() {
           onSaveGameAction={game.onSaveGameAction}
           coachPicks={game.coachPicks}
           setCoachPickAction={game.setCoachPickAction}
+          gameBallPlayerId={game.gameBallPlayerId}
+          eligibleGameBallPlayers={game.eligibleGameBallPlayers}
+          setGameBallPlayerIdAction={game.setGameBallPlayerIdAction}
         />
       ) : tab === "players" ? (
         <PlayersTab

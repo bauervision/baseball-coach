@@ -32,7 +32,20 @@ export type PlayerGameLogItem = {
   scoreUs: number;
   scoreThem: number;
   delta: GameLineDelta;
+  gotGameBall: boolean;
 };
+
+function isGameBallRecipient(
+  gameData: Record<string, unknown>,
+  playerId: string,
+): boolean {
+  const gameBall = gameData.gameBall;
+  return (
+    !!gameBall &&
+    typeof gameBall === "object" &&
+    (gameBall as { playerId?: unknown }).playerId === playerId
+  );
+}
 
 function asInt(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) ? Math.floor(v) : 0;
@@ -137,13 +150,21 @@ export function usePlayerGameLog(opts: {
           const unsubLine = onSnapshot(
             lineRef,
             (lineSnap) => {
-              if (!lineSnap.exists()) {
+              const gotGameBall = isGameBallRecipient(gameData, playerId);
+
+              // Normally a game with no recorded stat line for this player
+              // is excluded from the log. The one exception: a persisted
+              // Game Ball must always be visible on the recipient's page,
+              // even for a game where they otherwise have no batting stats.
+              if (!lineSnap.exists() && !gotGameBall) {
                 gameMap.delete(gameDoc.id);
                 finishIfReady();
                 return;
               }
 
-              const lineData = lineSnap.data() as Record<string, unknown>;
+              const lineData = lineSnap.exists()
+                ? (lineSnap.data() as Record<string, unknown>)
+                : {};
               const score =
                 gameData.score && typeof gameData.score === "object"
                   ? (gameData.score as Record<string, unknown>)
@@ -164,6 +185,7 @@ export function usePlayerGameLog(opts: {
                 scoreUs: asInt(score.us),
                 scoreThem: asInt(score.them),
                 delta: normalizeDelta(lineData.delta),
+                gotGameBall,
               });
 
               finishIfReady();

@@ -12,6 +12,8 @@ import {
   type Firestore,
 } from "firebase/firestore";
 import type { Player } from "@/lib/roster";
+import { orderPlayersByLineup, type LineupPlayerRow } from "@/lib/lineup";
+import { subscribeCurrentLineup } from "@/lib/lineupStore";
 
 import {
   LineState,
@@ -29,6 +31,7 @@ import { saveGameAndApplyDeltas } from "./adminActions";
 type SavedGameOption = {
   id: string;
   label: string;
+  gameBallPlayerId: string;
 };
 
 type SavedGameDoc = {
@@ -47,6 +50,16 @@ type SavedGameDoc = {
       playerNumber?: unknown;
     }
   >;
+  gameBall?: {
+    playerId?: unknown;
+    playerName?: unknown;
+    playerNumber?: unknown;
+  } | null;
+  lineupSnapshot?: {
+    capturedAtISO?: unknown;
+    inningCount?: unknown;
+    rows?: unknown;
+  } | null;
 };
 
 type SavedLineDoc = {
@@ -64,6 +77,36 @@ function asString(v: unknown, fallback = ""): string {
 
 function asNumberString(v: unknown): string {
   return typeof v === "number" && Number.isFinite(v) ? String(v) : "0";
+}
+
+function asGameBallPlayerId(v: SavedGameDoc["gameBall"]): string {
+  return v && typeof v.playerId === "string" ? v.playerId : "";
+}
+
+function parseLineupSnapshotRows(
+  v: SavedGameDoc["lineupSnapshot"],
+): LineupPlayerRow[] | null {
+  if (!v || !Array.isArray(v.rows)) return null;
+
+  const rows = v.rows
+    .filter(
+      (row): row is { playerId: string; battingOrder: number } =>
+        !!row &&
+        typeof row === "object" &&
+        typeof (row as { playerId?: unknown }).playerId === "string" &&
+        typeof (row as { battingOrder?: unknown }).battingOrder === "number",
+    )
+    .map((row) => ({
+      playerId: row.playerId,
+      battingOrder: row.battingOrder,
+      innings:
+        (row as LineupPlayerRow).innings &&
+        typeof (row as LineupPlayerRow).innings === "object"
+          ? (row as LineupPlayerRow).innings
+          : {},
+    }));
+
+  return rows.length > 0 ? rows : null;
 }
 
 function emptyLinesForPlayers(
@@ -87,6 +130,7 @@ export function useGameEntry(opts: {
   const [lines, setLines] = React.useState<Record<string, LineState>>({});
   const [coachPicks, setCoachPicks] =
     React.useState<CoachPicks>(EMPTY_COACH_PICKS);
+  const [gameBallPlayerId, setGameBallPlayerId] = React.useState("");
 
   const [date, setDate] = React.useState(todayISO());
   const [opponent, setOpponent] = React.useState("");
@@ -99,9 +143,27 @@ export function useGameEntry(opts: {
   const [gamesLoading, setGamesLoading] = React.useState(false);
   const [loadingGame, setLoadingGame] = React.useState(false);
 
+  // Batting order source for the Stat Update list (requirement #1/#3):
+  // the live "current" lineup while building a new game that has no saved
+  // snapshot yet, and the frozen snapshot on the game being edited once one
+  // exists. Neither read is per-player — a single lineup doc each.
+  const [currentLineupRows, setCurrentLineupRows] = React.useState<
+    LineupPlayerRow[] | null
+  >(null);
+  const [editingGameLineupRows, setEditingGameLineupRows] = React.useState<
+    LineupPlayerRow[] | null
+  >(null);
+
   const [saving, setSaving] = React.useState(false);
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [savedMsg, setSavedMsg] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    const unsubscribe = subscribeCurrentLineup(db, seasonId, (lineup) => {
+      setCurrentLineupRows(lineup?.rows ?? null);
+    });
+    return unsubscribe;
+  }, [db, seasonId]);
 
   React.useEffect(() => {
     const ps = players ?? null;
@@ -157,6 +219,7 @@ export function useGameEntry(opts: {
         return {
           id: snap.id,
           label: `${gameDate} • ${opp} • ${res}`,
+          gameBallPlayerId: asGameBallPlayerId(data.gameBall),
         };
       });
 
@@ -181,7 +244,9 @@ export function useGameEntry(opts: {
       return out;
     });
     setCoachPicks({ ...EMPTY_COACH_PICKS });
+    setGameBallPlayerId("");
     setEditingGameId(null);
+    setEditingGameLineupRows(null);
     setDate(todayISO());
     setOpponent("");
     setResult("W");
@@ -266,6 +331,7 @@ export function useGameEntry(opts: {
         });
 
         setEditingGameId(gid);
+        setEditingGameLineupRows(parseLineupSnapshotRows(gameData.lineupSnapshot));
         setDate(asString(gameData.date, todayISO()));
         setOpponent(asString(gameData.opponent, ""));
         setResult(asGameResult(gameData.result));
@@ -273,6 +339,7 @@ export function useGameEntry(opts: {
         setScoreThem(asNumberString(gameData.score?.them));
         setLines(nextLines);
         setCoachPicks(nextCoachPicks);
+        setGameBallPlayerId(asGameBallPlayerId(gameData.gameBall));
       } catch (e: unknown) {
         const msg =
           e && typeof e === "object" && "message" in e
@@ -351,6 +418,51 @@ export function useGameEntry(opts: {
     });
   }, []);
 
+  // Batting order for the Stat Update list: the game being edited uses its
+  // own frozen snapshot once one exists; a new, not-yet-saved game falls
+  // back to whatever the current lineup is right now. Players missing from
+  // the lineup (e.g. added afterward) keep their existing order and land
+  // at the end rather than being dropped. When no lineup data is available
+  // at all (old game with no snapshot, or no current lineup saved yet),
+  // this falls back to the previous default: jersey number, then name.
+  const orderedPlayers = React.useMemo(() => {
+    const byNumberThenName = (players ?? []).slice().sort((a, b) => {
+      const na = Number(a.number ?? 0);
+      const nb = Number(b.number ?? 0);
+      if (na !== nb) return na - nb;
+      return String(a.name).localeCompare(String(b.name));
+    });
+
+    const rows = editingGameId ? editingGameLineupRows : currentLineupRows;
+    return orderPlayersByLineup(byNumberThenName, rows);
+  }, [players, editingGameId, editingGameLineupRows, currentLineupRows]);
+
+  const gameBallByGameId = React.useMemo(() => {
+    const map = new Map<string, string>();
+    for (const g of savedGames) {
+      if (g.gameBallPlayerId) map.set(g.id, g.gameBallPlayerId);
+    }
+    return map;
+  }, [savedGames]);
+
+  // Eligible = never received a Game Ball, OR is the recipient already
+  // saved on the game currently being edited (so editing a game never hides
+  // its own pick). Derived entirely from the already-loaded games list, so
+  // no per-player reads are needed just to compute eligibility.
+  const eligibleGameBallPlayers = React.useMemo(() => {
+    const ps = players ?? [];
+    const awardedElsewhere = new Set<string>();
+
+    for (const [gid, playerId] of gameBallByGameId.entries()) {
+      if (editingGameId && gid === editingGameId) continue;
+      awardedElsewhere.add(playerId);
+    }
+
+    return ps.filter(
+      (p) => !awardedElsewhere.has(p.id) || p.id === gameBallPlayerId,
+    );
+  }, [players, gameBallByGameId, editingGameId, gameBallPlayerId]);
+
   const onSaveGameAction = React.useCallback(async () => {
     if (!canEdit || saving) return;
 
@@ -360,6 +472,7 @@ export function useGameEntry(opts: {
 
     try {
       const ps = players ?? [];
+      const wasNewGame = !editingGameId;
       const res = await saveGameAndApplyDeltas({
         db,
         seasonId,
@@ -371,6 +484,7 @@ export function useGameEntry(opts: {
         players: ps,
         lines,
         coachPicks,
+        gameBallPlayerId,
         gameId: editingGameId,
       });
 
@@ -381,6 +495,10 @@ export function useGameEntry(opts: {
       );
 
       setEditingGameId(res.gameId);
+      // The snapshot just captured server-side for a brand-new game is
+      // exactly the current lineup we already have locally — reuse it so
+      // the list doesn't flash back to default ordering post-save.
+      if (wasNewGame) setEditingGameLineupRows(currentLineupRows);
       await loadSavedGamesAction();
     } catch (e: unknown) {
       const msg =
@@ -404,13 +522,19 @@ export function useGameEntry(opts: {
     scoreThem,
     lines,
     coachPicks,
+    gameBallPlayerId,
     editingGameId,
+    currentLineupRows,
     loadSavedGamesAction,
   ]);
 
   return {
     lines,
     coachPicks,
+    orderedPlayers,
+    gameBallPlayerId,
+    setGameBallPlayerIdAction: setGameBallPlayerId,
+    eligibleGameBallPlayers,
     setDeltaValue,
     setCoachPickAction,
     toggleHidden,

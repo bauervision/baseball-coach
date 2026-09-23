@@ -689,6 +689,7 @@ export default function PlayerPageClient() {
                             walks={item.delta.walks}
                             hitByPitch={item.delta.hitByPitch}
                             hitStreak={streakByGameId.get(item.gameId) ?? 0}
+                            gotGameBall={item.gotGameBall}
                           />
                         ));
                       })()}
