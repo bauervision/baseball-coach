@@ -1,6 +1,6 @@
 {
   "name": "baseball-coach",
-  "version": "1.2.2",
+  "version": "1.2.3",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -8,6 +8,7 @@
     "export": "next export",
     "start": "next start -H 0.0.0.0 -p $PORT",
     "lint": "eslint",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"tests/**/*.test.mjs\"",
     "deploy": "next build && firebase deploy --only hosting --account mikecbauervision@gmail.com --project baseball-coach-997ab"
   },
   "dependencies": {

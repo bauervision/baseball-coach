@@ -115,7 +115,8 @@ export function RosterBuilderTab(props: {
                     onChangeAction={(v) =>
                       updateDraftRowAction(d.key, { number: v })
                     }
-                    inputMode="numeric"
+                    numeric
+                    allowEmpty
                     placeholder="7"
                     disabled={!canEdit || rosterBusy}
                   />

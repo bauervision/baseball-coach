@@ -158,7 +158,8 @@ export function PlayersTab(props: {
                           onChangeAction={(v) =>
                             setPlayerEditValueAction(p.id, { number: v })
                           }
-                          inputMode="numeric"
+                          numeric
+                          allowEmpty
                           disabled={!canEdit || playerBusy}
                         />
                       </div>

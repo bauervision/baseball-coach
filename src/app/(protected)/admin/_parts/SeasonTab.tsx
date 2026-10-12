@@ -115,8 +115,7 @@ export function SeasonTab(props: {
             label="Scheduled games"
             value={scheduledGames}
             onChangeAction={setScheduledGamesAction}
-            type="number"
-            inputMode="numeric"
+            numeric
             placeholder="10"
             disabled={!canEdit || seasonBusy}
           />

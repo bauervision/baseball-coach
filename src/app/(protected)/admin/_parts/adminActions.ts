@@ -33,6 +33,11 @@ import {
 } from "@/lib/playerIdentity";
 import { loadCurrentLineup } from "@/lib/lineupStore";
 import type { GameLineupSnapshot } from "@/lib/lineup";
+import {
+  asGameType,
+  computeOfficialSeasonTally,
+  type GameType,
+} from "@/lib/gameClassification";
 
 const COACH_PICK_STAT_FIELD: Record<CoachPickKey, string> = {
   charlieHustle: "stats.charlieHustleAwards",
@@ -105,6 +110,30 @@ export async function switchSeason(opts: {
     { merge: true },
   );
 
+  await batch.commit();
+}
+
+// Edits the official schedule size for an existing season without touching
+// games, record, or gamesPlayed (unlike switchSeason, which resets them).
+export async function updateScheduledGames(opts: {
+  db: Firestore;
+  seasonId: string;
+  scheduledGames: number;
+}): Promise<void> {
+  const { db, seasonId, scheduledGames } = opts;
+  if (!Number.isFinite(scheduledGames) || scheduledGames < 0) {
+    throw new Error("Scheduled games must be a whole number, 0 or more.");
+  }
+
+  const batch = writeBatch(db);
+  batch.set(
+    doc(db, "seasons", seasonId),
+    {
+      scheduledGames: Math.floor(scheduledGames),
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true },
+  );
   await batch.commit();
 }
 
@@ -250,6 +279,7 @@ export async function saveGameAndApplyDeltas(opts: {
   date: string;
   opponent: string;
   result: GameResult;
+  gameType: GameType;
   scoreUs: string;
   scoreThem: string;
   players: Player[];
@@ -264,6 +294,7 @@ export async function saveGameAndApplyDeltas(opts: {
     date,
     opponent,
     result,
+    gameType,
     scoreUs,
     scoreThem,
     players,
@@ -364,29 +395,8 @@ export async function saveGameAndApplyDeltas(opts: {
       throw new Error("Selected Game Ball player was not found in roster.");
     }
 
-    // Domain-level invariant: a player may only hold one Game Ball across the
-    // season. Checked here (not just filtered out of the picker) so stale or
-    // concurrent admin sessions can't create a duplicate.
-    const allGamesSnap = await getDocs(
-      collection(db, "seasons", seasonId, "games"),
-    );
-
-    const conflict = allGamesSnap.docs.find((gameDoc) => {
-      if (gameDoc.id === gid) return false;
-
-      const data = gameDoc.data() as {
-        gameBall?: { playerId?: unknown } | null;
-      };
-
-      return data.gameBall?.playerId === gameBallPlayerId;
-    });
-
-    if (conflict) {
-      throw new Error(
-        `${gameBallPlayer.name} already has a Game Ball from another game. Change that game's Game Ball first if you want to reassign it.`,
-      );
-    }
-
+    // Repeat recipients across games are allowed. Each game stores a single
+    // gameBall object, so one game can never hold two awards.
     gameBall = {
       playerId: gameBallPlayer.id,
       playerName: gameBallPlayer.name,
@@ -426,6 +436,7 @@ export async function saveGameAndApplyDeltas(opts: {
       date,
       opponent: opp,
       result,
+      gameType: asGameType(gameType),
       score: { us: num(scoreUs), them: num(scoreThem) },
       coachAwards: selectedCoachAwards,
       gameBall,
@@ -465,9 +476,15 @@ export async function saveGameAndApplyDeltas(opts: {
     query(collection(db, "seasons", seasonId, "games"), orderBy("date", "asc")),
   );
 
-  let wins = 0;
-  let losses = 0;
-  let ties = 0;
+  // Official record and games played exclude scrimmages; legacy games with
+  // no gameType count as Regular Season. Player stat totals below still
+  // include every game, as before.
+  const tally = computeOfficialSeasonTally(
+    gamesSnap.docs.map((gameDoc) => {
+      const data = gameDoc.data() as { result?: unknown; gameType?: unknown };
+      return { result: data.result, gameType: data.gameType };
+    }),
+  );
 
   type StatTotals = typeof EMPTY_STATS;
   const totalsByPlayer = new Map<string, StatTotals>();
@@ -483,21 +500,11 @@ export async function saveGameAndApplyDeltas(opts: {
 
   for (const gameDoc of gamesSnap.docs) {
     const gameData = gameDoc.data() as {
-      result?: unknown;
       coachAwards?: Record<
         string,
         { playerId?: unknown; playerName?: unknown; playerNumber?: unknown }
       >;
     };
-
-    const gameResult =
-      typeof gameData.result === "string"
-        ? gameData.result.trim().toUpperCase()
-        : "";
-
-    if (gameResult === "W") wins += 1;
-    else if (gameResult === "L") losses += 1;
-    else if (gameResult === "T") ties += 1;
 
     const coachAwards = gameData.coachAwards;
     if (coachAwards && typeof coachAwards === "object") {
@@ -660,8 +667,8 @@ export async function saveGameAndApplyDeltas(opts: {
   rebuildBatch.set(
     seasonRef,
     {
-      record: { wins, losses, ties },
-      gamesPlayed: gamesSnap.size,
+      record: { wins: tally.wins, losses: tally.losses, ties: tally.ties },
+      gamesPlayed: tally.gamesPlayed,
       updatedAt: serverTimestamp(),
     },
     { merge: true },

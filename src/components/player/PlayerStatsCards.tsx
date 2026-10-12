@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { behindLeaderText, behindLeaderTone } from "@/lib/withinReach";
 
 export function BigStat(props: {
   label: string;
@@ -90,7 +91,12 @@ export function SmallStat(props: {
   label: string;
   value: string;
   leader?: boolean;
+  /** Gap to the team leader (1–3); never shown on a leading card. */
+  behindLeader?: number | null;
 }) {
+  const gap = !props.leader && props.behindLeader ? props.behindLeader : null;
+  const emphasis = gap !== null && behindLeaderTone(gap) === "emphasis";
+
   return (
     <div
       className="rounded-xl border px-3 py-2"
@@ -124,7 +130,24 @@ export function SmallStat(props: {
         ) : null}
       </div>
 
-      <div className="text-sm font-semibold">{props.value}</div>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-2">
+        <div className="text-sm font-semibold">{props.value}</div>
+        {gap ? (
+          <div
+            className={[
+              "ml-auto text-xs leading-tight",
+              emphasis ? "font-semibold" : "font-medium",
+            ].join(" ")}
+            style={{
+              color: emphasis
+                ? "color-mix(in oklab, var(--secondary) 78%, var(--foreground))"
+                : "var(--muted)",
+            }}
+          >
+            {behindLeaderText(gap)}
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }

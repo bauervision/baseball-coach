@@ -43,6 +43,9 @@ import {
 import { Dialog, DialogContent, DialogClose } from "@/components/ui/Dialog";
 
 import { usePlayerGameLog } from "@/components/roster/usePlayerGameLog";
+import { gameLogHitStreaks } from "@/lib/playerGameLog";
+import { computeWithinReach, type WithinReachKey } from "@/lib/withinReach";
+
 import { AnimatedBackgroundSkin } from "@/components/shell/AnimatedBackgroundSkin";
 import { exportPlayerStatsPdf } from "@/lib/exportPlayerStatsPdf";
 
@@ -151,6 +154,13 @@ export default function PlayerPageClient() {
       return leaders[key].includes(player.id);
     },
     [leaders, player],
+  );
+
+  // "N behind leader" gaps, derived from the same leaders as LEAD and
+  // recomputed whenever roster stats change.
+  const withinReach = React.useMemo(
+    () => (player ? computeWithinReach(players ?? [], player.id, leaders) : {}),
+    [players, player, leaders],
   );
 
   const allTrophyAwards = React.useMemo(
@@ -280,6 +290,9 @@ export default function PlayerPageClient() {
     statsView === "career" && careerStats
       ? { ...player, stats: careerStats }
       : player;
+  // Leaders are season-based, so gaps only make sense on season stats.
+  const reach = (key: WithinReachKey): number | null =>
+    displayedPlayer === player ? (withinReach[key] ?? null) : null;
   const ba = battingAverage(displayedPlayer);
   const obp = onBasePercentage(displayedPlayer);
   const slgV = slugging(displayedPlayer);
@@ -547,41 +560,49 @@ export default function PlayerPageClient() {
                   label="Hits"
                   value={String(displayedPlayer.stats.hits)}
                   leader={isLeader("hits")}
+                  behindLeader={reach("hits")}
                 />
                 <SmallStat
                   label="Longest Hit Streak"
                   value={String(displayedPlayer.stats.longestHitStreak ?? 0)}
                   leader={isLeader("longestHitStreak")}
+                  behindLeader={reach("longestHitStreak")}
                 />
                 <SmallStat
                   label="Doubles"
                   value={String(displayedPlayer.stats.doubles)}
                   leader={isLeader("doubles")}
+                  behindLeader={reach("doubles")}
                 />
                 <SmallStat
                   label="Triples"
                   value={String(displayedPlayer.stats.triples)}
                   leader={isLeader("triples")}
+                  behindLeader={reach("triples")}
                 />
                 <SmallStat
                   label="Home Runs"
                   value={String(displayedPlayer.stats.homeRuns)}
                   leader={isLeader("homeRuns")}
+                  behindLeader={reach("homeRuns")}
                 />
                 <SmallStat
                   label="RBIs: Runs Batted In"
                   value={String(displayedPlayer.stats.rbi)}
                   leader={isLeader("rbi")}
+                  behindLeader={reach("rbi")}
                 />
                 <SmallStat
                   label="Runs"
                   value={String(displayedPlayer.stats.runs)}
                   leader={isLeader("runs")}
+                  behindLeader={reach("runs")}
                 />
                 <SmallStat
                   label="Base on Balls (Walk)"
                   value={String(displayedPlayer.stats.walks)}
                   leader={isLeader("walks")}
+                  behindLeader={reach("walks")}
                 />
                 <SmallStat
                   label="Hit By Pitch"
@@ -592,6 +613,7 @@ export default function PlayerPageClient() {
                   label="Stolen Bases"
                   value={String(displayedPlayer.stats.stolenBases)}
                   leader={isLeader("stolenBases")}
+                  behindLeader={reach("stolenBases")}
                 />
               </div>
 
@@ -608,6 +630,7 @@ export default function PlayerPageClient() {
                       label="Pitching Strike Outs"
                       value={String(displayedPlayer.stats.pitchingStrikeouts)}
                       leader={isLeader("pitchingStrikeouts")}
+                      behindLeader={reach("pitchingStrikeouts")}
                     />
                     <SmallStat
                       label="Pitching Saves"
@@ -621,11 +644,13 @@ export default function PlayerPageClient() {
                       label="Put Outs (PO)"
                       value={String(displayedPlayer.stats.putOuts)}
                       leader={isLeader("putOuts")}
+                      behindLeader={reach("putOuts")}
                     />
                     <SmallStat
                       label="Assists (A)"
                       value={String(displayedPlayer.stats.assists)}
                       leader={isLeader("assists")}
+                      behindLeader={reach("assists")}
                     />
                   </div>
 
@@ -643,7 +668,7 @@ export default function PlayerPageClient() {
                 <CardHeader>
                   <CardTitle>Game Log</CardTitle>
                   <CardSubtitle>
-                    Per-game batting lines for this season
+                    Per-game stats and coach recognition for this season
                   </CardSubtitle>
                 </CardHeader>
 
@@ -663,33 +688,13 @@ export default function PlayerPageClient() {
                   ) : (
                     <div className="grid gap-2">
                       {(() => {
-                        const streakByGameId = new Map<string, number>();
-                        let streak = 0;
-
-                        [...gameLog]
-                          .sort((a, b) => a.date.localeCompare(b.date))
-                          .forEach((item) => {
-                            const hadHit = item.delta.hits > 0;
-                            streak = hadHit ? streak + 1 : 0;
-                            streakByGameId.set(item.gameId, streak);
-                          });
+                        const streakByGameId = gameLogHitStreaks(gameLog);
 
                         return gameLog.map((item) => (
                           <GameLogRow
                             key={item.gameId}
-                            date={item.date}
-                            opponent={item.opponent}
-                            result={item.result}
-                            scoreUs={item.scoreUs}
-                            scoreThem={item.scoreThem}
-                            atBats={item.delta.atBats}
-                            hits={item.delta.hits}
-                            runs={item.delta.runs}
-                            rbi={item.delta.rbi}
-                            walks={item.delta.walks}
-                            hitByPitch={item.delta.hitByPitch}
+                            item={item}
                             hitStreak={streakByGameId.get(item.gameId) ?? 0}
-                            gotGameBall={item.gotGameBall}
                           />
                         ));
                       })()}

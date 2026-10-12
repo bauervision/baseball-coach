@@ -12,6 +12,10 @@ import {
   CardSubtitle,
 } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
+import { GAME_TYPE_OPTIONS, type GameType } from "@/lib/gameClassification";
+import type { GameBallGroups } from "@/lib/gameBall";
+// Coach Choice titles are shared with the player Game Log.
+import { COACH_PICK_FIELDS } from "@/lib/coachRecognition";
 
 import { Field, MiniNumber, Select } from "../adminUiHelpers";
 import {
@@ -24,20 +28,6 @@ import {
   type LineDelta,
 } from "../adminHelpers";
 
-const COACH_PICK_FIELDS: Array<{ key: CoachPickKey; label: string }> = [
-  { key: "charlieHustle", label: "Charlie Hustle" },
-  { key: "mostImproved", label: "Most Improved" },
-  { key: "bestPitcher", label: "Best Pitcher" },
-  { key: "bestCatcher", label: "Best Catcher" },
-  { key: "bestFirstBaseman", label: "Best 1B" },
-  { key: "bestSecondBaseman", label: "Best 2B" },
-  { key: "bestThirdBaseman", label: "Best 3B" },
-  { key: "bestShortstop", label: "Best SS" },
-  { key: "bestLeftFielder", label: "Best LF" },
-  { key: "bestCenterFielder", label: "Best CF" },
-  { key: "bestRightFielder", label: "Best RF" },
-];
-
 export function StatsTab(props: {
   canEdit: boolean;
   rosterError: string | null;
@@ -46,7 +36,7 @@ export function StatsTab(props: {
   lines: Record<string, LineState>;
   coachPicks: CoachPicks;
   gameBallPlayerId: string;
-  eligibleGameBallPlayers: Player[];
+  gameBallGroups: GameBallGroups<Player>;
   playedCount: number;
   hiddenCount: number;
 
@@ -56,6 +46,8 @@ export function StatsTab(props: {
   setOpponentAction: (v: string) => void;
   result: GameResult;
   setResultAction: (v: GameResult) => void;
+  gameType: GameType;
+  setGameTypeAction: (v: GameType) => void;
   scoreUs: string;
   setScoreUsAction: (v: string) => void;
   scoreThem: string;
@@ -66,6 +58,9 @@ export function StatsTab(props: {
   loadingGame: boolean;
   editingGameId: string | null;
   loadExistingGameAction: (gameId: string) => void;
+
+  unsavedPlayerIds: Set<string>;
+  activeEditPlayerId: string | null;
 
   setDeltaValueAction: (
     playerId: string,
@@ -91,7 +86,7 @@ export function StatsTab(props: {
     lines,
     coachPicks,
     gameBallPlayerId,
-    eligibleGameBallPlayers,
+    gameBallGroups,
     playedCount,
     hiddenCount,
     date,
@@ -100,6 +95,8 @@ export function StatsTab(props: {
     setOpponentAction,
     result,
     setResultAction,
+    gameType,
+    setGameTypeAction,
     scoreUs,
     setScoreUsAction,
     scoreThem,
@@ -109,6 +106,8 @@ export function StatsTab(props: {
     loadingGame,
     editingGameId,
     loadExistingGameAction,
+    unsavedPlayerIds,
+    activeEditPlayerId,
     setDeltaValueAction,
     setCoachPickAction,
     setGameBallPlayerIdAction,
@@ -135,19 +134,27 @@ export function StatsTab(props: {
     ];
   }, [players]);
 
-  const gameBallOptions = React.useMemo<[string, string][]>(() => {
-    const sorted = eligibleGameBallPlayers.slice().sort((a, b) => {
-      const na = Number(a.number ?? 0);
-      const nb = Number(b.number ?? 0);
-      if (na !== nb) return na - nb;
-      return String(a.name).localeCompare(String(b.name));
-    });
-
-    return [
-      ["", "— None —"],
-      ...sorted.map((p): [string, string] => [p.id, `#${p.number} ${p.name}`]),
-    ];
-  }, [eligibleGameBallPlayers]);
+  const gameBallSelectGroups = React.useMemo(
+    () => [
+      {
+        label: "No Game Ball yet",
+        options: gameBallGroups.firstTime.map((p): [string, string] => [
+          p.id,
+          `#${p.number} ${p.name}`,
+        ]),
+      },
+      {
+        label: "Previous recipients",
+        options: gameBallGroups.previous.map(
+          ({ player: p, count }): [string, string] => [
+            p.id,
+            `#${p.number} ${p.name} (${count} Game Ball${count === 1 ? "" : "s"})`,
+          ],
+        ),
+      },
+    ],
+    [gameBallGroups],
+  );
 
   const gameOptions = React.useMemo<[string, string][]>(() => {
     return [
@@ -202,7 +209,7 @@ export function StatsTab(props: {
           </div>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           <Field
             label="Date"
             value={date}
@@ -226,20 +233,32 @@ export function StatsTab(props: {
             ]}
           />
 
+          <Select
+            label="Game type"
+            value={gameType}
+            onChangeAction={(v) => setGameTypeAction(v as GameType)}
+            options={GAME_TYPE_OPTIONS}
+          />
+
           <div className="grid grid-cols-2 gap-2">
             <Field
               label="Us"
               value={scoreUs}
               onChangeAction={setScoreUsAction}
-              inputMode="numeric"
+              numeric
             />
             <Field
               label="Them"
               value={scoreThem}
               onChangeAction={setScoreThemAction}
-              inputMode="numeric"
+              numeric
             />
           </div>
+        </div>
+
+        <div className="-mt-2 text-xs" style={{ color: "var(--muted)" }}>
+          Scrimmages don&apos;t count toward the official record or games
+          played. Make-up games count once, in place of the postponed game.
         </div>
 
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -341,6 +360,26 @@ export function StatsTab(props: {
               }
 
               const hasDelta = anyNonZero(row.delta);
+              const rowUnsaved = unsavedPlayerIds.has(p.id);
+              const isActiveEditor = activeEditPlayerId === p.id;
+              const showSaveData = isActiveEditor && (rowUnsaved || saving);
+              const otherUnsavedCount =
+                unsavedPlayerIds.size - (rowUnsaved ? 1 : 0);
+              // Save Data runs the same whole-game save as the button at the
+              // bottom, so the copy never implies a single-player save.
+              const saveStatus = saving
+                ? "Saving game…"
+                : rowUnsaved
+                  ? saveError
+                    ? "Save failed — your entries are kept. See the message above."
+                    : `Save Data saves the whole game${
+                        otherUnsavedCount > 0
+                          ? `, including unsaved stats for ${otherUnsavedCount} other player(s)`
+                          : ""
+                      }.`
+                  : savedMsg
+                    ? "Saved with the game."
+                    : null;
 
               return (
                 <div
@@ -377,13 +416,43 @@ export function StatsTab(props: {
                       ) : null}
                     </div>
 
-                    <Button
-                      variant="ghost"
-                      onClick={() => toggleHiddenAction(p.id)}
-                    >
-                      Hide
-                    </Button>
+                    <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">
+                      {rowUnsaved && !isActiveEditor ? (
+                        <span
+                          className="text-[11px] font-semibold uppercase tracking-wide"
+                          style={{ color: "var(--muted)" }}
+                        >
+                          Unsaved
+                        </span>
+                      ) : null}
+                      {showSaveData ? (
+                        <Button
+                          onClick={onSaveGameAction}
+                          disabled={!canEdit || saving || loadingGame}
+                          loading={saving}
+                          title="Saves the whole game, including any other unsaved player stats"
+                        >
+                          {saving ? "Saving…" : "Save Data"}
+                        </Button>
+                      ) : null}
+                      <Button
+                        variant="ghost"
+                        onClick={() => toggleHiddenAction(p.id)}
+                      >
+                        Hide
+                      </Button>
+                    </div>
                   </div>
+
+                  {isActiveEditor && saveStatus ? (
+                    <div
+                      className="mt-1 text-xs"
+                      style={{ color: "var(--muted)" }}
+                      aria-live="polite"
+                    >
+                      {saveStatus}
+                    </div>
+                  ) : null}
 
                   <div className="mt-3 grid gap-3">
                     <div>
@@ -554,13 +623,13 @@ export function StatsTab(props: {
                 label="Game Ball"
                 value={gameBallPlayerId}
                 onChangeAction={setGameBallPlayerIdAction}
-                options={gameBallOptions}
+                options={[["", "— None —"]]}
+                groups={gameBallSelectGroups}
               />
             </div>
             <div className="text-xs" style={{ color: "var(--muted)" }}>
-              Every player gets one Game Ball this season, so only players who
-              haven&apos;t received one yet (plus this game&apos;s current
-              pick) are listed.
+              One Game Ball per game. Players who haven&apos;t received one yet
+              are listed first; previous recipients can win it again.
             </div>
           </div>
 

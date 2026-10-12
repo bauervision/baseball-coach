@@ -10,62 +10,31 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { getFirestoreDb } from "@/lib/firebase.client";
-
-type GameLineDelta = {
-  atBats: number;
-  hits: number;
-  doubles: number;
-  triples: number;
-  homeRuns: number;
-  runs: number;
-  rbi: number;
-  walks: number;
-  strikeouts: number;
-  hitByPitch: number;
-};
+import { asGameType, type GameType } from "@/lib/gameClassification";
+import {
+  recognitionsForPlayer,
+  type GameRecognition,
+} from "@/lib/coachRecognition";
+import { normalizeGameLogDelta, type GameLogDelta } from "@/lib/playerGameLog";
 
 export type PlayerGameLogItem = {
   gameId: string;
   date: string;
   opponent: string;
   result: "W" | "L" | "T";
+  gameType: GameType;
   scoreUs: number;
   scoreThem: number;
-  delta: GameLineDelta;
+  delta: GameLogDelta;
+  /** False for games listed only because of a recognition. */
+  hasStatLine: boolean;
   gotGameBall: boolean;
+  /** Game Ball and Coach Choices this player received in this game. */
+  recognitions: GameRecognition[];
 };
-
-function isGameBallRecipient(
-  gameData: Record<string, unknown>,
-  playerId: string,
-): boolean {
-  const gameBall = gameData.gameBall;
-  return (
-    !!gameBall &&
-    typeof gameBall === "object" &&
-    (gameBall as { playerId?: unknown }).playerId === playerId
-  );
-}
 
 function asInt(v: unknown): number {
   return typeof v === "number" && Number.isFinite(v) ? Math.floor(v) : 0;
-}
-
-function normalizeDelta(v: unknown): GameLineDelta {
-  const d = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
-
-  return {
-    atBats: asInt(d.atBats),
-    hits: asInt(d.hits),
-    doubles: asInt(d.doubles),
-    triples: asInt(d.triples),
-    homeRuns: asInt(d.homeRuns),
-    runs: asInt(d.runs),
-    rbi: asInt(d.rbi),
-    walks: asInt(d.walks),
-    strikeouts: asInt(d.strikeouts),
-    hitByPitch: asInt(d.hitByPitch),
-  };
 }
 
 function compareDateDesc(a: string, b: string): number {
@@ -150,13 +119,14 @@ export function usePlayerGameLog(opts: {
           const unsubLine = onSnapshot(
             lineRef,
             (lineSnap) => {
-              const gotGameBall = isGameBallRecipient(gameData, playerId);
+              const recognitions = recognitionsForPlayer(gameData, playerId);
+              const gotGameBall = recognitions.some((r) => r.isGameBall);
 
               // Normally a game with no recorded stat line for this player
-              // is excluded from the log. The one exception: a persisted
-              // Game Ball must always be visible on the recipient's page,
-              // even for a game where they otherwise have no batting stats.
-              if (!lineSnap.exists() && !gotGameBall) {
+              // is excluded from the log. The exception: any persisted
+              // recognition (Game Ball or Coach Choice) must always be
+              // visible on the recipient's page, even without stats.
+              if (!lineSnap.exists() && recognitions.length === 0) {
                 gameMap.delete(gameDoc.id);
                 finishIfReady();
                 return;
@@ -182,11 +152,15 @@ export function usePlayerGameLog(opts: {
                   gameData.result === "L" || gameData.result === "T"
                     ? gameData.result
                     : "W",
+                gameType: asGameType(gameData.gameType),
                 scoreUs: asInt(score.us),
                 scoreThem: asInt(score.them),
-                delta: normalizeDelta(lineData.delta),
+                delta: normalizeGameLogDelta(lineData.delta),
+                hasStatLine: lineSnap.exists(),
                 gotGameBall,
+                recognitions,
               });
+
 
               finishIfReady();
             },

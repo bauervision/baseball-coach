@@ -14,6 +14,13 @@ import {
 import type { Player } from "@/lib/roster";
 import { orderPlayersByLineup, type LineupPlayerRow } from "@/lib/lineup";
 import { subscribeCurrentLineup } from "@/lib/lineupStore";
+import {
+  asGameType,
+  gameTypeLabel,
+  DEFAULT_GAME_TYPE,
+  type GameType,
+} from "@/lib/gameClassification";
+import { groupGameBallPlayers } from "@/lib/gameBall";
 
 import {
   LineState,
@@ -27,17 +34,40 @@ import {
   type CoachPicks,
 } from "../adminHelpers";
 import { saveGameAndApplyDeltas } from "./adminActions";
+import {
+  dirtyPlayerIds,
+  hasUnsavedGameChanges,
+  type GameFormSnapshot,
+} from "../unsavedEdits";
 
 type SavedGameOption = {
   id: string;
   label: string;
   gameBallPlayerId: string;
+  gameType: GameType;
 };
+
+const DISCARD_PROMPT = "You have unsaved changes in this game. Discard them?";
+
+function emptyFormSnapshot(): GameFormSnapshot {
+  return {
+    lines: {},
+    coachPicks: { ...EMPTY_COACH_PICKS },
+    gameBallPlayerId: "",
+    gameType: DEFAULT_GAME_TYPE,
+    date: todayISO(),
+    opponent: "",
+    result: "W",
+    scoreUs: "0",
+    scoreThem: "0",
+  };
+}
 
 type SavedGameDoc = {
   date?: unknown;
   opponent?: unknown;
   result?: unknown;
+  gameType?: unknown;
   score?: {
     us?: unknown;
     them?: unknown;
@@ -135,6 +165,7 @@ export function useGameEntry(opts: {
   const [date, setDate] = React.useState(todayISO());
   const [opponent, setOpponent] = React.useState("");
   const [result, setResult] = React.useState<GameResult>("W");
+  const [gameType, setGameType] = React.useState<GameType>(DEFAULT_GAME_TYPE);
   const [scoreUs, setScoreUs] = React.useState("0");
   const [scoreThem, setScoreThem] = React.useState("0");
 
@@ -155,6 +186,19 @@ export function useGameEntry(opts: {
   >(null);
 
   const [saving, setSaving] = React.useState(false);
+  // Synchronous guard: two fast clicks can both see `saving === false`
+  // before React re-renders, so the state flag alone can't stop a double
+  // submit.
+  const savingRef = React.useRef(false);
+
+  // Form as last loaded/saved; edits are "unsaved" relative to this.
+  const [baseline, setBaseline] =
+    React.useState<GameFormSnapshot>(emptyFormSnapshot);
+  // Player whose row most recently received a stat edit; that row shows
+  // the contextual Save Data button.
+  const [activeEditPlayerId, setActiveEditPlayerId] = React.useState<
+    string | null
+  >(null);
   const [saveError, setSaveError] = React.useState<string | null>(null);
   const [savedMsg, setSavedMsg] = React.useState<string | null>(null);
 
@@ -216,10 +260,14 @@ export function useGameEntry(opts: {
         const gameDate = asString(data.date, "Unknown date");
         const opp = asString(data.opponent, "Opponent");
         const res = asString(data.result, "?");
+        const type = asGameType(data.gameType);
+        const typeSuffix =
+          type === DEFAULT_GAME_TYPE ? "" : ` • ${gameTypeLabel(type)}`;
         return {
           id: snap.id,
-          label: `${gameDate} • ${opp} • ${res}`,
+          label: `${gameDate} • ${opp} • ${res}${typeSuffix}`,
           gameBallPlayerId: asGameBallPlayerId(data.gameBall),
+          gameType: type,
         };
       });
 
@@ -250,10 +298,13 @@ export function useGameEntry(opts: {
     setDate(todayISO());
     setOpponent("");
     setResult("W");
+    setGameType(DEFAULT_GAME_TYPE);
     setScoreUs("0");
     setScoreThem("0");
     setSaveError(null);
     setSavedMsg(null);
+    setBaseline(emptyFormSnapshot());
+    setActiveEditPlayerId(null);
   }, []);
 
   React.useEffect(() => {
@@ -335,11 +386,24 @@ export function useGameEntry(opts: {
         setDate(asString(gameData.date, todayISO()));
         setOpponent(asString(gameData.opponent, ""));
         setResult(asGameResult(gameData.result));
+        setGameType(asGameType(gameData.gameType));
         setScoreUs(asNumberString(gameData.score?.us));
         setScoreThem(asNumberString(gameData.score?.them));
         setLines(nextLines);
         setCoachPicks(nextCoachPicks);
         setGameBallPlayerId(asGameBallPlayerId(gameData.gameBall));
+        setBaseline({
+          lines: nextLines,
+          coachPicks: nextCoachPicks,
+          gameBallPlayerId: asGameBallPlayerId(gameData.gameBall),
+          gameType: asGameType(gameData.gameType),
+          date: asString(gameData.date, todayISO()),
+          opponent: asString(gameData.opponent, ""),
+          result: asGameResult(gameData.result),
+          scoreUs: asNumberString(gameData.score?.us),
+          scoreThem: asNumberString(gameData.score?.them),
+        });
+        setActiveEditPlayerId(null);
       } catch (e: unknown) {
         const msg =
           e && typeof e === "object" && "message" in e
@@ -373,6 +437,7 @@ export function useGameEntry(opts: {
     key: keyof LineDelta,
     value: number,
   ) {
+    setActiveEditPlayerId(playerId);
     setLines((prev) => {
       const cur = prev[playerId];
       if (!cur) return prev;
@@ -437,38 +502,78 @@ export function useGameEntry(opts: {
     return orderPlayersByLineup(byNumberThenName, rows);
   }, [players, editingGameId, editingGameLineupRows, currentLineupRows]);
 
-  const gameBallByGameId = React.useMemo(() => {
-    const map = new Map<string, string>();
-    for (const g of savedGames) {
-      if (g.gameBallPlayerId) map.set(g.id, g.gameBallPlayerId);
-    }
-    return map;
-  }, [savedGames]);
+  // Every player stays selectable; prior recipients (in other games) are
+  // grouped separately with their counts. Derived from the already-loaded
+  // games list, so no per-player reads are needed.
+  const gameBallGroups = React.useMemo(
+    () => groupGameBallPlayers(players ?? [], savedGames, editingGameId),
+    [players, savedGames, editingGameId],
+  );
 
-  // Eligible = never received a Game Ball, OR is the recipient already
-  // saved on the game currently being edited (so editing a game never hides
-  // its own pick). Derived entirely from the already-loaded games list, so
-  // no per-player reads are needed just to compute eligibility.
-  const eligibleGameBallPlayers = React.useMemo(() => {
-    const ps = players ?? [];
-    const awardedElsewhere = new Set<string>();
+  const currentSnapshot = React.useMemo<GameFormSnapshot>(
+    () => ({
+      lines,
+      coachPicks,
+      gameBallPlayerId,
+      gameType,
+      date,
+      opponent,
+      result,
+      scoreUs,
+      scoreThem,
+    }),
+    [
+      lines,
+      coachPicks,
+      gameBallPlayerId,
+      gameType,
+      date,
+      opponent,
+      result,
+      scoreUs,
+      scoreThem,
+    ],
+  );
 
-    for (const [gid, playerId] of gameBallByGameId.entries()) {
-      if (editingGameId && gid === editingGameId) continue;
-      awardedElsewhere.add(playerId);
-    }
+  const unsavedPlayerIds = React.useMemo(
+    () => dirtyPlayerIds(lines, baseline.lines),
+    [lines, baseline],
+  );
 
-    return ps.filter(
-      (p) => !awardedElsewhere.has(p.id) || p.id === gameBallPlayerId,
-    );
-  }, [players, gameBallByGameId, editingGameId, gameBallPlayerId]);
+  const hasUnsavedChanges = React.useMemo(
+    () => hasUnsavedGameChanges(currentSnapshot, baseline),
+    [currentSnapshot, baseline],
+  );
+
+  // Guarded versions of the discard paths used by the UI: switching games
+  // or starting over never silently drops unsaved edits.
+  const confirmDiscard = React.useCallback(() => {
+    if (!hasUnsavedChanges) return true;
+    return window.confirm(DISCARD_PROMPT);
+  }, [hasUnsavedChanges]);
+
+  const requestResetAction = React.useCallback(() => {
+    if (confirmDiscard()) resetAllAction();
+  }, [confirmDiscard, resetAllAction]);
+
+  const requestLoadGameAction = React.useCallback(
+    (gameId: string) => {
+      if (confirmDiscard()) void loadExistingGameAction(gameId);
+    },
+    [confirmDiscard, loadExistingGameAction],
+  );
 
   const onSaveGameAction = React.useCallback(async () => {
-    if (!canEdit || saving) return;
+    if (!canEdit || savingRef.current) return;
 
+    savingRef.current = true;
     setSaving(true);
     setSaveError(null);
     setSavedMsg(null);
+
+    // What is being submitted becomes the new baseline on success; edits
+    // typed while the save is in flight stay marked unsaved.
+    const submitted = currentSnapshot;
 
     try {
       const ps = players ?? [];
@@ -479,6 +584,7 @@ export function useGameEntry(opts: {
         date,
         opponent,
         result,
+        gameType,
         scoreUs,
         scoreThem,
         players: ps,
@@ -495,6 +601,7 @@ export function useGameEntry(opts: {
       );
 
       setEditingGameId(res.gameId);
+      setBaseline(submitted);
       // The snapshot just captured server-side for a brand-new game is
       // exactly the current lineup we already have locally — reuse it so
       // the list doesn't flash back to default ordering post-save.
@@ -507,17 +614,19 @@ export function useGameEntry(opts: {
           : "Save failed.";
       setSaveError(msg);
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   }, [
     canEdit,
-    saving,
+    currentSnapshot,
     players,
     db,
     seasonId,
     date,
     opponent,
     result,
+    gameType,
     scoreUs,
     scoreThem,
     lines,
@@ -534,12 +643,13 @@ export function useGameEntry(opts: {
     orderedPlayers,
     gameBallPlayerId,
     setGameBallPlayerIdAction: setGameBallPlayerId,
-    eligibleGameBallPlayers,
+    gameBallGroups,
     setDeltaValue,
     setCoachPickAction,
     toggleHidden,
     unhideAllAction,
     resetAllAction,
+    requestResetAction,
     hiddenCount,
     playedCount,
 
@@ -549,6 +659,8 @@ export function useGameEntry(opts: {
     setOpponent,
     result,
     setResult,
+    gameType,
+    setGameType,
     scoreUs,
     setScoreUs,
     scoreThem,
@@ -559,8 +671,14 @@ export function useGameEntry(opts: {
     loadingGame,
     editingGameId,
     loadExistingGameAction,
+    requestLoadGameAction,
+
+    unsavedPlayerIds,
+    hasUnsavedChanges,
+    activeEditPlayerId,
 
     saving,
+
     saveError,
     savedMsg,
     onSaveGameAction,

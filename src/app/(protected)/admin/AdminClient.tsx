@@ -32,6 +32,7 @@ import { useRosterDraft } from "./_parts/useRosterDraft";
 import { StatsTab } from "./_parts/StatsTab";
 import { PlayersTab } from "./_parts/PlayersTab";
 import { SeasonTab } from "./_parts/SeasonTab";
+import { SeasonScheduleCard } from "./_parts/SeasonScheduleCard";
 import { RosterBuilderTab } from "./_parts/RosterBuilderTab";
 import { LineupBuilderTab } from "./_parts/LineupBuilderTab";
 
@@ -215,6 +216,8 @@ export default function AdminClient() {
           setOpponentAction={game.setOpponent}
           result={game.result}
           setResultAction={game.setResult}
+          gameType={game.gameType}
+          setGameTypeAction={game.setGameType}
           scoreUs={game.scoreUs}
           setScoreUsAction={game.setScoreUs}
           scoreThem={game.scoreThem}
@@ -223,11 +226,13 @@ export default function AdminClient() {
           gamesLoading={game.gamesLoading}
           loadingGame={game.loadingGame}
           editingGameId={game.editingGameId}
-          loadExistingGameAction={game.loadExistingGameAction}
+          loadExistingGameAction={game.requestLoadGameAction}
+          unsavedPlayerIds={game.unsavedPlayerIds}
+          activeEditPlayerId={game.activeEditPlayerId}
           setDeltaValueAction={game.setDeltaValue}
           toggleHiddenAction={game.toggleHidden}
           unhideAllAction={game.unhideAllAction}
-          resetAllAction={game.resetAllAction}
+          resetAllAction={game.requestResetAction}
           saving={game.saving}
           saveError={game.saveError}
           savedMsg={game.savedMsg}
@@ -235,7 +240,7 @@ export default function AdminClient() {
           coachPicks={game.coachPicks}
           setCoachPickAction={game.setCoachPickAction}
           gameBallPlayerId={game.gameBallPlayerId}
-          eligibleGameBallPlayers={game.eligibleGameBallPlayers}
+          gameBallGroups={game.gameBallGroups}
           setGameBallPlayerIdAction={game.setGameBallPlayerIdAction}
         />
       ) : tab === "players" ? (
@@ -261,7 +266,15 @@ export default function AdminClient() {
         />
       ) : (
         <div className="grid gap-5">
+          <SeasonScheduleCard
+            db={db}
+            seasonId={effectiveSeasonId}
+            canEdit={canEdit}
+            scheduledGames={meta.scheduledGames}
+            gamesPlayed={meta.gamesPlayed}
+          />
           <SeasonTab
+
             canEdit={canEdit}
             seasonEditId={seasonSwitch.seasonEditId}
             setSeasonEditIdAction={seasonSwitch.setSeasonEditId}
