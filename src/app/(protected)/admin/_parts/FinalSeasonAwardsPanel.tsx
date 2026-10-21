@@ -19,7 +19,8 @@ export type FinalAwardKey =
   | "mvp"
   | "dominator"
   | "honorableMention"
-  | "bestAllAround";
+  | "bestAllAround"
+  | "bestAttitude";
 
 export type FinalAwards = Record<FinalAwardKey, string>;
 
@@ -28,6 +29,7 @@ const FINAL_AWARD_FIELDS: Array<{ key: FinalAwardKey; label: string }> = [
   { key: "dominator", label: "Dominator" },
   { key: "honorableMention", label: "Honorable Mention" },
   { key: "bestAllAround", label: "Best All-Around" },
+  { key: "bestAttitude", label: "Best Attitude" },
 ];
 
 type SeasonFinalState = {
@@ -54,6 +56,7 @@ export function normalizeSeasonFinalState(meta: unknown): SeasonFinalState {
       dominator: asPlayerId(rawFinalAwards.dominator),
       honorableMention: asPlayerId(rawFinalAwards.honorableMention),
       bestAllAround: asPlayerId(rawFinalAwards.bestAllAround),
+      bestAttitude: asPlayerId(rawFinalAwards.bestAttitude),
     },
   };
 }

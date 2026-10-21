@@ -16,12 +16,17 @@ import {
   type StatKey as LeaderStatKey,
 } from "@/lib/roster";
 import { useRosterPlayers } from "@/lib/rosterStore";
-import { getFirestoreDb } from "@/lib/firebase.client";
+import { getFirebaseAuth, getFirestoreDb } from "@/lib/firebase.client";
 import { loadCareerStats } from "@/lib/playerCareerStats";
 import { ArrowLeft } from "lucide-react";
 import { computeTrophies, computeRunnerUpAwards } from "@/lib/trophies";
 
-import { PlayerSeasonPlaque } from "@/components/player/PlayerSeasonPlaque";
+import { buildRecognitionCards } from "@/components/player/PlayerSeasonPlaque";
+import {
+  RECOGNITION_PRINT_SHEET_ID,
+  RecognitionPrintRoot,
+  RecognitionSheetStage,
+} from "@/components/player/RecognitionSheetEditor";
 import { pickPlayerBestGame } from "@/components/player/playerBestGame";
 import { PlayerTrophyHero } from "@/components/player/PlayerTrophyHero";
 import { BigStat, SmallStat } from "@/components/player/PlayerStatsCards";
@@ -48,6 +53,21 @@ import { computeWithinReach, type WithinReachKey } from "@/lib/withinReach";
 
 import { AnimatedBackgroundSkin } from "@/components/shell/AnimatedBackgroundSkin";
 import { exportPlayerStatsPdf } from "@/lib/exportPlayerStatsPdf";
+import { exportRecognitionSheetPdf } from "@/lib/exportRecognitionSheetPdf";
+import { sameOrder } from "@/lib/recognitionLayout";
+import {
+  resetRecognitionLayout,
+  saveRecognitionLayout,
+} from "@/lib/recognitionLayoutStore";
+import { useAdminAuth } from "@/app/(protected)/admin/_parts/useAdminAuth";
+
+const DISCARD_ARRANGEMENT_PROMPT = "Discard your unsaved award arrangement?";
+
+function errorMessage(e: unknown, fallback: string): string {
+  return e && typeof e === "object" && "message" in e
+    ? String((e as { message?: unknown }).message)
+    : fallback;
+}
 
 type StatKey = "AVG" | "OBP" | "SLG" | "OPS";
 
@@ -99,6 +119,17 @@ export default function PlayerPageClient() {
     null,
   );
   const [careerStatsLoading, setCareerStatsLoading] = React.useState(false);
+
+  const auth = React.useMemo(() => getFirebaseAuth(), []);
+  const db = React.useMemo(() => getFirestoreDb(), []);
+  const { canEdit } = useAdminAuth({ auth, db });
+
+  // Recognition sheet arrangement: `draftOrder` is non-null while editing.
+  const [draftOrder, setDraftOrder] = React.useState<string[] | null>(null);
+  const [arrangeBusy, setArrangeBusy] = React.useState(false);
+  const [arrangeMsg, setArrangeMsg] = React.useState<string | null>(null);
+  const [arrangeErr, setArrangeErr] = React.useState<string | null>(null);
+  const [pdfBusy, setPdfBusy] = React.useState(false);
 
   React.useEffect(() => {
     queueMicrotask(() => {
@@ -195,6 +226,99 @@ export default function PlayerPageClient() {
   });
 
   const bestGame = React.useMemo(() => pickPlayerBestGame(gameLog), [gameLog]);
+
+  const savedOrder = player
+    ? (meta.recognitionLayouts[player.id] ?? null)
+    : null;
+  const recognition = React.useMemo(
+    () =>
+      buildRecognitionCards({
+        player,
+        awards: playerTrophyAwards,
+        runnerUpAwards: playerRunnerUpAwards,
+        savedOrder,
+      }),
+    [player, playerTrophyAwards, playerRunnerUpAwards, savedOrder],
+  );
+  const editingArrangement = draftOrder !== null;
+  const arrangementDirty =
+    draftOrder !== null && !sameOrder(draftOrder, recognition.order);
+
+  React.useEffect(() => {
+    setDraftOrder(null);
+    setArrangeMsg(null);
+    setArrangeErr(null);
+  }, [player?.id, seasonId]);
+
+  React.useEffect(() => {
+    if (!arrangementDirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [arrangementDirty]);
+
+  const confirmDiscardArrangement = React.useCallback(
+    () => !arrangementDirty || window.confirm(DISCARD_ARRANGEMENT_PROMPT),
+    [arrangementDirty],
+  );
+
+  const startArrangingAction = React.useCallback(() => {
+    setArrangeMsg(null);
+    setArrangeErr(null);
+    setDraftOrder(recognition.order);
+  }, [recognition.order]);
+
+  const cancelArrangingAction = React.useCallback(() => {
+    if (!confirmDiscardArrangement()) return;
+    setDraftOrder(null);
+    setArrangeErr(null);
+  }, [confirmDiscardArrangement]);
+
+  const saveArrangementAction = React.useCallback(async () => {
+    if (!player || !draftOrder || arrangeBusy) return;
+    setArrangeBusy(true);
+    setArrangeErr(null);
+    setArrangeMsg(null);
+
+    try {
+      // Saving the automatic order stores no override, so the sheet keeps
+      // following the automatic arrangement as awards change.
+      if (sameOrder(draftOrder, recognition.autoOrder)) {
+        await resetRecognitionLayout({ db, seasonId, playerId: player.id });
+      } else {
+        await saveRecognitionLayout({
+          db,
+          seasonId,
+          playerId: player.id,
+          order: draftOrder,
+        });
+      }
+      setDraftOrder(null);
+      setArrangeMsg("Award arrangement saved.");
+    } catch (e: unknown) {
+      setArrangeErr(errorMessage(e, "Failed to save award arrangement."));
+    } finally {
+      setArrangeBusy(false);
+    }
+  }, [arrangeBusy, db, draftOrder, player, recognition.autoOrder, seasonId]);
+
+  const exportPlaquePdfAction = React.useCallback(async () => {
+    const node = document.getElementById(RECOGNITION_PRINT_SHEET_ID);
+    if (!node || !player || pdfBusy) return;
+    setPdfBusy(true);
+    try {
+      await exportRecognitionSheetPdf({
+        node,
+        fileName: `${player.name.replace(/[^a-z0-9]+/gi, "-")}-recognition.pdf`,
+      });
+    } catch (e: unknown) {
+      setArrangeErr(errorMessage(e, "Failed to create the PDF."));
+    } finally {
+      setPdfBusy(false);
+    }
+  }, [pdfBusy, player]);
 
   const openStat = React.useCallback((k: StatKey) => setActiveStat(k), []);
   const closeStat = React.useCallback(() => setActiveStat(null), []);
@@ -299,6 +423,16 @@ export default function PlayerPageClient() {
   const opsV = ops(displayedPlayer);
 
   const showingPlaque = meta.endSeasonMode && viewMode === "plaque";
+  const sheetOrder = draftOrder ?? savedOrder;
+  const sheetProps = {
+    player,
+    teamName: meta.teamName,
+    seasonLabel: meta.seasonLabel,
+    awards: playerTrophyAwards,
+    runnerUpAwards: playerRunnerUpAwards,
+    bestGame,
+    leaders,
+  };
 
   return (
     <>
@@ -310,6 +444,9 @@ export default function PlayerPageClient() {
             className="inline-flex items-center gap-2 text-sm font-semibold"
             style={{ color: "var(--muted)" }}
             aria-label="Back to roster"
+            onClick={(e) => {
+              if (!confirmDiscardArrangement()) e.preventDefault();
+            }}
           >
             <ArrowLeft
               size={20}
@@ -347,7 +484,11 @@ export default function PlayerPageClient() {
 
               <button
                 type="button"
-                onClick={() => setViewMode("season")}
+                onClick={() => {
+                  if (!confirmDiscardArrangement()) return;
+                  setDraftOrder(null);
+                  setViewMode("season");
+                }}
                 className="rounded-xl border px-3 py-2 text-sm font-semibold"
                 style={{
                   borderColor:
@@ -417,6 +558,22 @@ export default function PlayerPageClient() {
           ) : null}
 
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {showingPlaque && canEdit && !editingArrangement ? (
+              <button
+                type="button"
+                onClick={startArrangingAction}
+                className="rounded-xl border px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-90"
+                style={{
+                  borderColor:
+                    "color-mix(in oklab, var(--secondary) 70%, transparent)",
+                  background:
+                    "color-mix(in oklab, var(--bg-base) 65%, transparent)",
+                  color: "var(--foreground)",
+                }}
+              >
+                Arrange Awards
+              </button>
+            ) : null}
             {showingPlaque ? (
               <button
                 type="button"
@@ -433,19 +590,22 @@ export default function PlayerPageClient() {
                 Print Plaque
               </button>
             ) : null}
-            {displayedPlayer.stats.games > 0 ? (
+            {showingPlaque || displayedPlayer.stats.games > 0 ? (
               <button
                 type="button"
+                disabled={pdfBusy}
                 onClick={() =>
-                  exportPlayerStatsPdf({
-                    teamName: meta.teamName,
-                    seasonLabel: meta.seasonLabel,
-                    player: displayedPlayer,
-                    awards: playerTrophyAwards,
-                    leaders,
-                  })
+                  showingPlaque
+                    ? void exportPlaquePdfAction()
+                    : exportPlayerStatsPdf({
+                        teamName: meta.teamName,
+                        seasonLabel: meta.seasonLabel,
+                        player: displayedPlayer,
+                        awards: playerTrophyAwards,
+                        leaders,
+                      })
                 }
-                className="rounded-xl border px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-90"
+                className="rounded-xl border px-3 py-2 text-xs font-semibold transition-opacity hover:opacity-90 disabled:opacity-60"
                 style={{
                   borderColor:
                     "color-mix(in oklab, var(--stroke) 92%, transparent)",
@@ -454,7 +614,7 @@ export default function PlayerPageClient() {
                   color: "rgba(0,0,0,0.92)",
                 }}
               >
-                Print PDF
+                {pdfBusy ? "Creating PDF…" : "Print PDF"}
               </button>
             ) : null}
 
@@ -467,19 +627,105 @@ export default function PlayerPageClient() {
         </div>
 
         {showingPlaque ? (
-          <div
-            data-player-plaque="true"
-            className="mx-auto aspect-video h-[calc(100dvh-150px)] max-h-[1000px] min-h-[920px] w-full max-w-[1600px] overflow-hidden rounded-[32px] border print:h-auto print:max-h-none print:rounded-none"
-          >
-            <PlayerSeasonPlaque
-              player={player}
-              teamName={meta.teamName}
-              seasonLabel={meta.seasonLabel}
-              awards={playerTrophyAwards}
-              runnerUpAwards={playerRunnerUpAwards}
-              bestGame={bestGame}
-              leaders={leaders}
+          <div data-player-plaque="true" className="grid gap-3">
+            {editingArrangement || arrangeMsg || arrangeErr ? (
+              <div
+                className="mx-auto flex w-full max-w-240 flex-wrap items-center gap-2 rounded-xl border px-3 py-2 print:hidden"
+                style={{
+                  borderColor:
+                    "color-mix(in oklab, var(--secondary) 55%, var(--stroke))",
+                  background:
+                    "color-mix(in oklab, var(--bg-base) 80%, transparent)",
+                }}
+              >
+                {editingArrangement ? (
+                  <>
+                    <div className="mr-auto min-w-0 text-xs leading-snug">
+                      <span className="font-black">Arrange awards</span>
+                      <span style={{ color: "var(--muted)" }}>
+                        {" "}
+                        — drag an award onto another slot to swap. Keyboard:
+                        Space picks up, arrows move, Space drops.
+                      </span>
+                      {arrangementDirty ? (
+                        <span
+                          className="ml-2 font-semibold"
+                          style={{ color: "var(--secondary)" }}
+                        >
+                          Unsaved changes
+                        </span>
+                      ) : null}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setDraftOrder(recognition.autoOrder)}
+                      disabled={
+                        arrangeBusy ||
+                        sameOrder(draftOrder ?? [], recognition.autoOrder)
+                      }
+                      className="rounded-lg border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-50"
+                      style={{
+                        borderColor:
+                          "color-mix(in oklab, var(--stroke) 92%, transparent)",
+                        color: "var(--foreground)",
+                      }}
+                    >
+                      Reset to Automatic
+                    </button>
+                    <button
+                      type="button"
+                      onClick={cancelArrangingAction}
+                      disabled={arrangeBusy}
+                      className="rounded-lg border px-2.5 py-1.5 text-xs font-semibold disabled:opacity-50"
+                      style={{
+                        borderColor:
+                          "color-mix(in oklab, var(--stroke) 92%, transparent)",
+                        color: "var(--foreground)",
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void saveArrangementAction()}
+                      disabled={arrangeBusy || !arrangementDirty}
+                      className="rounded-lg border px-3 py-1.5 text-xs font-black disabled:opacity-50"
+                      style={{
+                        borderColor:
+                          "color-mix(in oklab, var(--secondary) 70%, transparent)",
+                        background:
+                          "linear-gradient(90deg, var(--primary), var(--secondary))",
+                        color: "rgba(0,0,0,0.92)",
+                      }}
+                    >
+                      {arrangeBusy ? "Saving…" : "Save Arrangement"}
+                    </button>
+                    {arrangeErr ? (
+                      <div className="w-full text-xs font-semibold text-red-400">
+                        {arrangeErr}
+                      </div>
+                    ) : null}
+                  </>
+                ) : (
+                  <div
+                    className="text-xs font-semibold"
+                    style={{
+                      color: arrangeErr ? "#f87171" : "var(--secondary)",
+                    }}
+                  >
+                    {arrangeErr ?? arrangeMsg}
+                  </div>
+                )}
+              </div>
+            ) : null}
+
+            <RecognitionSheetStage
+              sheet={sheetProps}
+              order={sheetOrder}
+              editing={editingArrangement}
+              onOrderChange={setDraftOrder}
             />
+            <RecognitionPrintRoot sheet={sheetProps} order={sheetOrder} />
           </div>
         ) : (
           <Card>

@@ -112,7 +112,9 @@ export type StatKey =
   | "stolenBases"
   | "putOuts"
   | "assists"
-  | "pitchingStrikeouts";
+  | "pitchingStrikeouts"
+  | "pitchingSaves"
+  | "flyBallCatches";
 
 export type LeadersMap = Record<StatKey, string[]>;
 
@@ -158,6 +160,10 @@ function statValue(p: Player, k: StatKey): number {
       return p.stats.assists;
     case "pitchingStrikeouts":
       return p.stats.pitchingStrikeouts;
+    case "pitchingSaves":
+      return p.stats.pitchingSaves;
+    case "flyBallCatches":
+      return p.stats.flyBallCatches;
   }
 }
 
@@ -194,6 +200,8 @@ export function computeLeaders(players: Player[]): LeadersMap {
     "putOuts",
     "assists",
     "pitchingStrikeouts",
+    "pitchingSaves",
+    "flyBallCatches",
   ];
 
   const eligiblePlayers = players.filter((p) => !p.leaderboardHidden);

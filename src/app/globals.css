@@ -578,48 +578,47 @@ body {
     drop-shadow(0 0 28px rgba(239, 162, 67, 0.18));
 }
 
+/* Recognition sheet print copy: a fixed 10in x 8in sheet kept off-screen
+   until printing (and rasterized from there for the PDF). */
+#recognition-print-root {
+  position: fixed;
+  top: 0;
+  left: -20000px;
+  pointer-events: none;
+}
+
 @media print {
+  /* Landscape 8x10 — the recognition sheet's exact physical size. */
   @page {
-    size: landscape;
+    size: 10in 8in;
     margin: 0;
   }
 
   html,
   body {
-    width: 100%;
-    height: 100%;
+    width: 10in;
+    height: 8in;
     margin: 0 !important;
     padding: 0 !important;
     background: white !important;
     overflow: hidden !important;
   }
 
-  body * {
-    visibility: hidden !important;
+  body:has(> #recognition-print-root) > :not(#recognition-print-root) {
+    display: none !important;
   }
 
-  #player-season-plaque-print,
-  #player-season-plaque-print * {
-    visibility: visible !important;
+  #recognition-print-root {
+    position: static;
+    left: auto;
   }
 
   #player-season-plaque-print {
-    position: fixed !important;
-    inset: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
-    max-width: none !important;
-    max-height: none !important;
-    min-height: 0 !important;
-    margin: 0 !important;
-    border-radius: 0 !important;
-    box-shadow: none !important;
+    width: 10in !important;
+    height: 8in !important;
+    break-inside: avoid;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
-  }
-
-  #player-season-plaque-print > div {
-    padding: 0.18in !important;
   }
 
   .print\:hidden {

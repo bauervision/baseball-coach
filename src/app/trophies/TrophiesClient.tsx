@@ -10,6 +10,7 @@ import { TROPHY_ART } from "@/lib/trophyArtwork";
 import {
   getTrophyDefinitions,
   computeTrophies,
+  isFinalCoachAwardKey,
   type TrophyTone,
   type TrophyAward,
 } from "@/lib/trophies";
@@ -287,11 +288,7 @@ function TrophyTile(props: {
   const tone = toneVar(trophy.tone);
   const artworkSrc = TROPHY_ART[trophy.key];
 
-  const isFinalAward =
-    trophy.key === "mvp" ||
-    trophy.key === "dominator" ||
-    trophy.key === "honorable_mention" ||
-    trophy.key === "best_all_around";
+  const isFinalAward = isFinalCoachAwardKey(trophy.key);
 
   return (
     <div

@@ -16,6 +16,7 @@ import {
 } from "firebase/firestore";
 import { getFirestoreDb } from "@/lib/firebase.client";
 import type { Player, PlayerBattingStats } from "@/lib/roster";
+import { normalizeSavedOrder } from "@/lib/recognitionLayout";
 
 /**
  * Fallback if app/config is missing.
@@ -28,6 +29,7 @@ export type RosterFinalAwards = {
   dominator?: string;
   honorableMention?: string;
   bestAllAround?: string;
+  bestAttitude?: string;
 };
 
 export type RosterMeta = {
@@ -40,6 +42,8 @@ export type RosterMeta = {
   gamesPlayed: number;
   endSeasonMode: boolean;
   finalAwards: RosterFinalAwards;
+  /** Coach-saved recognition sheet award order, keyed by player id. */
+  recognitionLayouts: Record<string, string[]>;
 };
 
 const DEFAULT_META: RosterMeta = {
@@ -52,6 +56,7 @@ const DEFAULT_META: RosterMeta = {
   gamesPlayed: 0,
   endSeasonMode: false,
   finalAwards: {},
+  recognitionLayouts: {},
 };
 
 function asNum(v: unknown): number {
@@ -75,7 +80,26 @@ function normalizeFinalAwards(v: unknown): RosterFinalAwards {
     dominator: asNonEmptyString(d.dominator),
     honorableMention: asNonEmptyString(d.honorableMention),
     bestAllAround: asNonEmptyString(d.bestAllAround),
+    bestAttitude: asNonEmptyString(d.bestAttitude),
   };
+}
+
+function normalizeRecognitionLayouts(
+  v: unknown,
+): RosterMeta["recognitionLayouts"] {
+  const d = v && typeof v === "object" ? (v as Record<string, unknown>) : {};
+  const out: RosterMeta["recognitionLayouts"] = {};
+
+  for (const [playerId, layout] of Object.entries(d)) {
+    const order = normalizeSavedOrder(
+      layout && typeof layout === "object"
+        ? (layout as { order?: unknown }).order
+        : undefined,
+    );
+    if (order) out[playerId] = order;
+  }
+
+  return out;
 }
 
 function normalizeRecord(v: unknown): RosterMeta["record"] {
@@ -112,6 +136,7 @@ function normalizeMeta(v: unknown): RosterMeta {
     gamesPlayed: Math.max(0, asInt(d.gamesPlayed)),
     endSeasonMode: d.endSeasonMode === true,
     finalAwards: normalizeFinalAwards(d.finalAwards),
+    recognitionLayouts: normalizeRecognitionLayouts(d.recognitionLayouts),
   };
 }
 

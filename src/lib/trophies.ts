@@ -13,6 +13,7 @@ export type TrophyKey =
   | "dominator"
   | "honorable_mention"
   | "best_all_around"
+  | "best_attitude"
   | "batting_champ"
   | "on_base_king"
   | "slugger"
@@ -50,7 +51,8 @@ export type FinalAwardKey =
   | "mvp"
   | "dominator"
   | "honorableMention"
-  | "bestAllAround";
+  | "bestAllAround"
+  | "bestAttitude";
 
 export type FinalAwards = Partial<Record<FinalAwardKey, string>>;
 
@@ -68,6 +70,8 @@ export type TrophyDef = {
   tone?: TrophyTone;
 };
 
+export type AwardValue = { valueLabel: string; valueSub?: string };
+
 export type TrophyAward = {
   trophy: TrophyDef;
   leaders: Player[];
@@ -75,6 +79,11 @@ export type TrophyAward = {
   runnerUp: Player | null;
   valueLabel: string;
   valueSub?: string;
+  /**
+   * The award's deciding metric formatted for any player (the same metric
+   * that ranked them). Absent for coach-selected final awards.
+   */
+  valueFor?: (p: Player) => AwardValue;
 };
 
 export type RunnerUpAward = {
@@ -83,6 +92,7 @@ export type RunnerUpAward = {
   runnerUp: Player;
   valueLabel: string;
   valueSub?: string;
+  valueFor?: (p: Player) => AwardValue;
 };
 
 type Candidate = {
@@ -153,7 +163,7 @@ function pickWinner(opts: {
   trophy: TrophyDef;
   players: Player[];
   buildCandidates: (p: Player) => Candidate;
-  formatValue: (p: Player) => { valueLabel: string; valueSub?: string };
+  formatValue: (p: Player) => AwardValue;
   requirePositiveScore?: boolean;
 }): TrophyAward | null {
   const {
@@ -200,6 +210,7 @@ function pickWinner(opts: {
     runnerUp,
     valueLabel: v.valueLabel,
     valueSub: v.valueSub,
+    valueFor: formatValue,
   };
 }
 
@@ -227,6 +238,13 @@ const TROPHIES: TrophyDef[] = [
     title: "Best All-Around",
     subtitle: "Final coach-selected complete player award",
     tone: "accent2",
+  },
+  {
+    key: "best_attitude",
+    title: "Best Attitude",
+    subtitle:
+      "Recognizes a player who consistently brings positivity, encouragement, and a great attitude to the team.",
+    tone: "primary",
   },
   {
     key: "batting_champ",
@@ -431,6 +449,7 @@ const FINAL_AWARD_TROPHY_KEYS: Record<FinalAwardKey, TrophyKey> = {
   dominator: "dominator",
   honorableMention: "honorable_mention",
   bestAllAround: "best_all_around",
+  bestAttitude: "best_attitude",
 };
 
 function finalAwardForPlayer(opts: {
@@ -464,6 +483,7 @@ function computeFinalTrophies(
     "dominator",
     "honorableMention",
     "bestAllAround",
+    "bestAttitude",
   ];
 
   for (const finalKey of orderedKeys) {
@@ -1071,12 +1091,14 @@ export function computeTrophies(
   return awards;
 }
 
-const FINAL_COACH_AWARD_KEYS = new Set<TrophyKey>([
-  "mvp",
-  "dominator",
-  "honorable_mention",
-  "best_all_around",
-]);
+const FINAL_COACH_AWARD_KEYS = new Set<string>(
+  Object.values(FINAL_AWARD_TROPHY_KEYS),
+);
+
+/** True for the manually selected final Coach's Awards (MVP, etc.). */
+export function isFinalCoachAwardKey(trophyKey: string): boolean {
+  return FINAL_COACH_AWARD_KEYS.has(trophyKey);
+}
 
 export function computeRunnerUpAwards(
   allAwards: TrophyAward[],
@@ -1096,5 +1118,6 @@ export function computeRunnerUpAwards(
       runnerUp: award.runnerUp!,
       valueLabel: award.valueLabel,
       valueSub: award.valueSub,
+      valueFor: award.valueFor,
     }));
 }
