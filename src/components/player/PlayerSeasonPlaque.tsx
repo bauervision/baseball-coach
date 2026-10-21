@@ -238,6 +238,7 @@ function FitText(props: {
   } = props;
   const ref = React.useRef<HTMLDivElement>(null);
   const [size, setSize] = React.useState(max);
+  const [breakWords, setBreakWords] = React.useState(false);
 
   React.useLayoutEffect(() => {
     const el = ref.current;
@@ -254,6 +255,7 @@ function FitText(props: {
       );
     };
 
+    el.style.overflowWrap = "normal";
     let next = max;
     for (; next > min; next -= 1) {
       el.style.fontSize = `${next}px`;
@@ -264,6 +266,9 @@ function FitText(props: {
     }
     el.style.fontSize = `${next}px`;
     setSize(next);
+    // Last resort for a single word too long even at `min`: let it break
+    // rather than overflow its box.
+    setBreakWords(!fitsWidth());
   }, [children, max, min, maxLines, lineHeight]);
 
   return (
@@ -274,7 +279,9 @@ function FitText(props: {
         ...style,
         fontSize: size,
         lineHeight,
-        overflowWrap: "normal",
+        // Never let content widen the box it is being fitted to.
+        minWidth: 0,
+        overflowWrap: breakWords ? "anywhere" : "normal",
         wordBreak: "keep-all",
       }}
     >
@@ -709,6 +716,45 @@ function SmallAwardCard(props: { card: PlaqueAwardCard }) {
   );
 }
 
+/**
+ * A two-row award panel for sheets with few awards: artwork on top at a
+ * larger size, details centered beneath.
+ */
+function TallAwardCard(props: { card: PlaqueAwardCard }) {
+  const { card } = props;
+
+  return (
+    <Panel className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-3 p-3 text-center">
+      <ArtTile src={trophyArt(card.trophy)} alt={card.trophy.title} radius={14} />
+
+      <div className="min-w-0 px-1">
+        <FitText
+          max={26}
+          min={14}
+          maxLines={2}
+          lineHeight={1}
+          className="font-black uppercase"
+        >
+          {card.trophy.title}
+        </FitText>
+
+        <FitText
+          max={13}
+          min={10}
+          maxLines={2}
+          lineHeight={1.25}
+          className="mt-1.5 font-semibold"
+          style={{ color: MUTED }}
+        >
+          <AwardDetail card={card} />
+        </FitText>
+
+        <EarnedBadge isRunnerUp={card.kind === "runnerUp"} />
+      </div>
+    </Panel>
+  );
+}
+
 function HonorsCount(props: { count: number; compact?: boolean }) {
   const { count, compact = false } = props;
 
@@ -830,7 +876,7 @@ function AwardsGrid(props: { recognition: RecognitionCards }) {
 
   if (cards.length === 1) {
     return (
-      <section className="grid min-h-0 grid-rows-[1.45fr_1fr] gap-3">
+      <section className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[1.45fr_1fr] gap-3">
         {panel(0)}
         {honors}
       </section>
@@ -839,7 +885,7 @@ function AwardsGrid(props: { recognition: RecognitionCards }) {
 
   if (cards.length === 2) {
     return (
-      <section className="grid min-h-0 grid-rows-[1.25fr_1fr] gap-3">
+      <section className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[1.25fr_1fr] gap-3">
         {panel(0)}
         <div className="grid min-h-0 grid-cols-2 gap-3">
           {panel(1)}
@@ -849,21 +895,25 @@ function AwardsGrid(props: { recognition: RecognitionCards }) {
     );
   }
 
+  // Same 2x2 grid as a full sheet; the first smaller award takes the
+  // empty cell's height so Honors stays a half-size panel.
   if (cards.length === 3) {
     return (
-      <section className="grid min-h-0 grid-rows-[1.18fr_1fr_0.7fr] gap-3">
+      <section className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[1.18fr_1fr_1fr] gap-3">
         {panel(0)}
-        <div className="grid min-h-0 grid-cols-2 gap-3">
-          {panel(1)}
+        <div className="row-span-2 grid min-h-0 grid-cols-2 grid-rows-[minmax(0,1fr)_minmax(0,1fr)] gap-3">
+          <Slot index={1} className="row-span-2">
+            <TallAwardCard card={cards[1]} />
+          </Slot>
           {panel(2)}
+          {honors}
         </div>
-        {honors}
       </section>
     );
   }
 
   return (
-    <section className="grid min-h-0 grid-rows-[1.18fr_1fr_1fr] gap-3">
+    <section className="grid min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[1.18fr_1fr_1fr] gap-3">
       {panel(0)}
       <div className="grid min-h-0 grid-cols-2 gap-3">
         {panel(1)}
@@ -934,9 +984,9 @@ export function PlayerSeasonPlaque(props: {
         }}
       />
 
-      <div className="relative grid h-full grid-rows-[minmax(0,1fr)_auto] gap-3 px-[30px] pb-[28px] pt-[30px]">
+      <div className="relative grid h-full grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] gap-3 px-[30px] pb-[28px] pt-[30px]">
         <div className="grid min-h-0 grid-cols-[282px_minmax(0,1fr)] gap-4">
-          <aside className="grid min-h-0 grid-rows-[auto_auto_minmax(0,1fr)] gap-3">
+          <aside className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_auto_minmax(0,1fr)] gap-3">
             <header>
               <SectionLabel>End of Season Recognition</SectionLabel>
 
@@ -970,7 +1020,7 @@ export function PlayerSeasonPlaque(props: {
             />
           </aside>
 
-          <main className="grid min-h-0">
+          <main className="grid min-h-0 min-w-0 grid-cols-[minmax(0,1fr)]">
             <AwardsGrid recognition={recognition} />
           </main>
         </div>
