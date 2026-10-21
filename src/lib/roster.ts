@@ -32,6 +32,39 @@ export type PlayerBattingStats = {
   bestRightFielderAwards: number;
 };
 
+export const EMPTY_STATS: PlayerBattingStats = {
+  games: 0,
+  plateAppearances: 0,
+  atBats: 0,
+  hits: 0,
+  currentHitStreak: 0,
+  longestHitStreak: 0,
+  doubles: 0,
+  triples: 0,
+  homeRuns: 0,
+  runs: 0,
+  rbi: 0,
+  walks: 0,
+  pitchingStrikeouts: 0,
+  hitByPitch: 0,
+  putOuts: 0,
+  assists: 0,
+  stolenBases: 0,
+  pitchingSaves: 0,
+  flyBallCatches: 0,
+  charlieHustleAwards: 0,
+  mostImprovedAwards: 0,
+  bestPitcherAwards: 0,
+  bestCatcherAwards: 0,
+  bestFirstBasemanAwards: 0,
+  bestSecondBasemanAwards: 0,
+  bestThirdBasemanAwards: 0,
+  bestShortstopAwards: 0,
+  bestLeftFielderAwards: 0,
+  bestCenterFielderAwards: 0,
+  bestRightFielderAwards: 0,
+};
+
 export type ShirtSize =
   | "YXS"
   | "YS"
@@ -52,6 +85,10 @@ export type Player = {
   primaryPos?: string;
   leaderboardHidden?: boolean;
   returningPlayer?: boolean;
+  /** "confirmed" when the careerPlayerId link was made explicitly. */
+  identityStatus?: "confirmed" | "unreviewed";
+  /** Prior roster entries the coach explicitly linked when importing. */
+  linkedFrom?: Array<{ seasonId: string; seasonPlayerId: string }>;
   stats: PlayerBattingStats;
 };
 

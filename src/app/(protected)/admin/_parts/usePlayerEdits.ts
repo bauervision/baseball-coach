@@ -4,7 +4,7 @@ import * as React from "react";
 import type { Firestore } from "firebase/firestore";
 import type { Player } from "@/lib/roster";
 
-import { savePlayerEdits } from "./adminActions";
+import { removeRosterPlayer, savePlayerEdits } from "./adminActions";
 
 export type PlayerEdit = {
   name: string;
@@ -13,7 +13,6 @@ export type PlayerEdit = {
   leaderboardHidden: boolean;
   returningPlayer: boolean;
   dirty: boolean;
-  careerPlayerId?: string;
 };
 
 type PlayerEditPatch = Partial<{
@@ -32,7 +31,6 @@ function editFromPlayer(p: Player): PlayerEdit {
     leaderboardHidden: p.leaderboardHidden === true,
     returningPlayer: p.returningPlayer === true,
     dirty: false,
-    careerPlayerId: p.careerPlayerId,
   };
 }
 
@@ -94,7 +92,6 @@ export function usePlayerEdits(opts: {
         leaderboardHidden: false,
         returningPlayer: false,
         dirty: false,
-        careerPlayerId: undefined,
       };
 
       return {
@@ -150,6 +147,20 @@ export function usePlayerEdits(opts: {
     }
   }, [canEdit, playerBusy, players, db, seasonId, playerEdits]);
 
+  const onRemovePlayerAction = React.useCallback(
+    async (playerId: string, confirmName: string) => {
+      if (!canEdit) return;
+      await removeRosterPlayer({
+        db,
+        seasonId,
+        seasonPlayerId: playerId,
+        confirmName,
+      });
+      setPlayerMsg(`Removed ${confirmName.trim()} from the roster.`);
+    },
+    [canEdit, db, seasonId],
+  );
+
   return {
     playerEdits,
     setPlayerEditValue,
@@ -158,5 +169,6 @@ export function usePlayerEdits(opts: {
     playerMsg,
     playerErr,
     onSavePlayerEditsAction,
+    onRemovePlayerAction,
   };
 }

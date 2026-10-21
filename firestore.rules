@@ -22,7 +22,82 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // ------------------------------------------------------------------
+    // Private player registry (permanent identities). NOT publicly
+    // readable. Only coaches listed in managerUids may read or update an
+    // identity. Reading a missing doc is allowed so a coach can tell
+    // "absent" from "someone else's" (ids are random UUIDs).
+    // managerUids and careerPlayerId are immutable once created.
+    // ------------------------------------------------------------------
+    match /playerIdentities/{playerId} {
+      function identityKeys() {
+        return ['careerPlayerId', 'displayName', 'managerUids',
+                'createdByUid', 'createdAt', 'updatedAt'];
+      }
+
+      allow get: if isAdmin()
+        && (resource == null || request.auth.uid in resource.data.managerUids);
+      allow list: if isAdmin()
+        && request.auth.uid in resource.data.managerUids;
+
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(identityKeys())
+        && request.resource.data.careerPlayerId == playerId
+        && request.resource.data.managerUids == [request.auth.uid]
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 80;
+
+      allow update: if isAdmin()
+        && request.auth.uid in resource.data.managerUids
+        && request.resource.data.keys().hasOnly(identityKeys())
+        && request.resource.data.careerPlayerId == resource.data.careerPlayerId
+        && request.resource.data.managerUids == resource.data.managerUids
+        && request.resource.data.createdByUid == resource.data.createdByUid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 80;
+
+      allow delete: if false;
+    }
+
+    // ------------------------------------------------------------------
+    // Coach-linked children. Private to the owning coach account. A link
+    // may only point at an identity that coach manages (checked after the
+    // write, so an identity and its link can be created in one batch).
+    // ------------------------------------------------------------------
+    match /coachProfiles/{uid}/linkedPlayers/{playerId} {
+      function isOwner() {
+        return isAdmin() && request.auth.uid == uid;
+      }
+
+      function managesIdentity() {
+        return request.auth.uid in getAfter(
+          /databases/$(database)/documents/playerIdentities/$(playerId)
+        ).data.managerUids;
+      }
+
+      function validLink() {
+        return request.resource.data.keys().hasOnly(
+                 ['careerPlayerId', 'displayName', 'relationship',
+                  'confirmed', 'linkedAt'])
+          && request.resource.data.careerPlayerId == playerId
+          && request.resource.data.relationship == 'child'
+          && request.resource.data.confirmed == true
+          && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() <= 80;
+      }
+
+      allow read: if isOwner();
+      allow create, update: if isOwner() && validLink() && managesIdentity();
+      allow delete: if isOwner();
+    }
+
     // Public season reads
+    // KNOWN EXPOSURE (assessment D1): every season, player, game, line, and
+    // lineup is readable by anyone. Do not store private data under
+    // /seasons. Removing public reads requires real parent auth (Phase E).
     match /seasons/{seasonId} {
       allow read: if true;
       allow write: if isAdmin();

@@ -1,20 +1,47 @@
-import { initializeApp, cert } from "firebase-admin/app";
-import {
-  getFirestore,
-  FieldValue,
-} from "firebase-admin/firestore";
-import fs from "node:fs";
+// DANGER: deletes every game and zeroes every player's stats in one season.
+//
+// Guarded (assessment D5): this script refuses to run unless it targets the
+// local Firestore emulator, names the season explicitly, and confirms.
+// It never reads service-account.json and cannot touch production.
+//
+//   FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 //     node tools/reset-baseball-season.mjs --project demo-baseball-coach //       --season <seasonId> --yes-delete-all-games
+//
+// For production recovery use a reviewed, backed-up procedure instead.
+import { initializeApp } from "firebase-admin/app";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 
-const serviceAccount = JSON.parse(
-  fs.readFileSync("./service-account.json", "utf8"),
-);
+function arg(name) {
+  const i = process.argv.indexOf(name);
+  return i >= 0 ? process.argv[i + 1] : undefined;
+}
 
-initializeApp({
-  credential: cert(serviceAccount),
-});
+const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
+const projectId = arg("--project");
+const seasonId = arg("--season");
 
+if (!emulatorHost) {
+  console.error(
+    "Refusing to run: FIRESTORE_EMULATOR_HOST is not set. This script only runs against the local emulator.",
+  );
+  process.exit(2);
+}
+if (!projectId || !projectId.startsWith("demo-")) {
+  console.error('Refusing to run: pass --project with a "demo-" emulator project id.');
+  process.exit(2);
+}
+if (!seasonId) {
+  console.error("Refusing to run: pass --season <seasonId> explicitly.");
+  process.exit(2);
+}
+if (!process.argv.includes("--yes-delete-all-games")) {
+  console.error(
+    `Refusing to run: add --yes-delete-all-games to confirm deleting every game in ${seasonId}.`,
+  );
+  process.exit(2);
+}
+
+initializeApp({ projectId });
 const db = getFirestore();
-const seasonId = "tigers-2026";
 
 const EMPTY_STATS = {
   games: 0,
@@ -27,7 +54,6 @@ const EMPTY_STATS = {
   runs: 0,
   rbi: 0,
   walks: 0,
-  strikeouts: 0,
   hitByPitch: 0,
   putOuts: 0,
   assists: 0,

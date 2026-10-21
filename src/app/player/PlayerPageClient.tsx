@@ -12,12 +12,11 @@ import {
   ops,
   fmt3,
   computeLeaders,
-  type Player,
   type StatKey as LeaderStatKey,
 } from "@/lib/roster";
 import { useRosterPlayers } from "@/lib/rosterStore";
 import { getFirebaseAuth, getFirestoreDb } from "@/lib/firebase.client";
-import { loadCareerStats } from "@/lib/playerCareerStats";
+import { loadCareerSummary, type CareerSummary } from "@/lib/playerCareerStats";
 import { ArrowLeft } from "lucide-react";
 import { computeTrophies, computeRunnerUpAwards } from "@/lib/trophies";
 
@@ -29,6 +28,7 @@ import {
 } from "@/components/player/RecognitionSheetEditor";
 import { pickPlayerBestGame } from "@/components/player/playerBestGame";
 import { PlayerTrophyHero } from "@/components/player/PlayerTrophyHero";
+import { PlayerCareerHistory } from "@/components/player/PlayerCareerHistory";
 import { BigStat, SmallStat } from "@/components/player/PlayerStatsCards";
 import { GameLogRow } from "@/components/player/PlayerGameLog";
 import {
@@ -115,9 +115,9 @@ export default function PlayerPageClient() {
   const [statsView, setStatsView] = React.useState<"season" | "career">(
     "season",
   );
-  const [careerStats, setCareerStats] = React.useState<Player["stats"] | null>(
-    null,
-  );
+  const [career, setCareer] = React.useState<CareerSummary | null>(null);
+  const careerStats = career?.totals ?? null;
+  const hasCareer = (career?.history.length ?? 0) > 1;
   const [careerStatsLoading, setCareerStatsLoading] = React.useState(false);
 
   const auth = React.useMemo(() => getFirebaseAuth(), []);
@@ -145,28 +145,29 @@ export default function PlayerPageClient() {
 
   React.useEffect(() => {
     setStatsView("season");
-    setCareerStats(null);
+    setCareer(null);
   }, [seasonId, player?.id]);
 
+  // Career follows the permanent identity (careerPlayerId) and only
+  // explicitly linked seasons; names are never matched.
+  const { teamName, seasonLabel, endSeasonMode, finalAwards } = meta;
   React.useEffect(() => {
-    if (!player?.returningPlayer || !seasonId) return;
+    if (!player?.careerPlayerId || !seasonId) return;
 
     let active = true;
     setCareerStatsLoading(true);
 
-    void loadCareerStats({
+    void loadCareerSummary({
       db: getFirestoreDb(),
-      playerId: player.id,
-      careerPlayerId: player.careerPlayerId,
-      playerName: player.name,
-      currentSeasonId: seasonId,
-      currentStats: player.stats,
+      seasonId,
+      player,
+      currentSeason: { teamName, seasonLabel, endSeasonMode, finalAwards },
     })
-      .then((stats) => {
-        if (active) setCareerStats(stats);
+      .then((summary) => {
+        if (active) setCareer(summary);
       })
       .catch(() => {
-        if (active) setCareerStats(null);
+        if (active) setCareer(null);
       })
       .finally(() => {
         if (active) setCareerStatsLoading(false);
@@ -175,7 +176,7 @@ export default function PlayerPageClient() {
     return () => {
       active = false;
     };
-  }, [player, seasonId]);
+  }, [player, seasonId, teamName, seasonLabel, endSeasonMode, finalAwards]);
 
   const leaders = React.useMemo(() => computeLeaders(players ?? []), [players]);
 
@@ -508,7 +509,7 @@ export default function PlayerPageClient() {
             </div>
           ) : null}
 
-          {player.returningPlayer ? (
+          {hasCareer ? (
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
@@ -948,6 +949,11 @@ export default function PlayerPageClient() {
                   )}
                 </CardContent>
               </Card>
+
+              <PlayerCareerHistory
+                rows={career?.history ?? []}
+                currentSeasonId={seasonId}
+              />
 
               <PlayerTrophyHero
                 playerName={player.name}

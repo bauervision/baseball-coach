@@ -17,6 +17,8 @@ import {
 import { getFirestoreDb } from "@/lib/firebase.client";
 import type { Player, PlayerBattingStats } from "@/lib/roster";
 import { normalizeSavedOrder } from "@/lib/recognitionLayout";
+import { asIdentityStatus } from "@/lib/playerIdentity";
+import { normalizeLinkedFrom } from "@/lib/careerHistory";
 
 /**
  * Fallback if app/config is missing.
@@ -222,10 +224,13 @@ function normalizePlayer(data: unknown, fallbackId: string): Player | null {
     shirtSize,
     leaderboardHidden,
     returningPlayer,
+    identityStatus: asIdentityStatus(d.identityStatus),
     stats: normalizeStats(d.stats),
   };
 
   if (primaryPos) p.primaryPos = primaryPos;
+  const linkedFrom = normalizeLinkedFrom(d.linkedFrom);
+  if (linkedFrom.length) p.linkedFrom = linkedFrom;
 
   return p;
 }

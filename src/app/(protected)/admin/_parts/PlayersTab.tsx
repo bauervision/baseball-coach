@@ -38,6 +38,7 @@ export function PlayersTab(props: {
   playerMsg: string | null;
   playerErr: string | null;
   onSavePlayerEditsAction: () => void;
+  onRemovePlayerAction: (playerId: string, confirmName: string) => Promise<void>;
 }) {
   const {
     canEdit,
@@ -49,6 +50,7 @@ export function PlayersTab(props: {
     playerMsg,
     playerErr,
     onSavePlayerEditsAction,
+    onRemovePlayerAction,
   } = props;
 
   const SHIRT_SIZES = [
@@ -185,7 +187,9 @@ export function PlayersTab(props: {
                             }
                             disabled={!canEdit || playerBusy}
                           />
-                          Returning player
+                          <span title="Display only. Career links are made when importing returning players in Roster Builder.">
+                            Returning player
+                          </span>
                         </label>
                       </div>
 
@@ -263,11 +267,20 @@ export function PlayersTab(props: {
                             : "This player is included in leaderboard leader calculations."}
                         </div>
 
-                        <div
-                          className="text-xs"
-                          style={{ color: "var(--muted)" }}
-                        >
-                          {edit.dirty ? "Edited" : "Saved"}
+                        <div className="flex items-center gap-3">
+                          <RemovePlayerControl
+                            name={p.name}
+                            disabled={!canEdit || playerBusy}
+                            onRemoveAction={(confirmName) =>
+                              onRemovePlayerAction(p.id, confirmName)
+                            }
+                          />
+                          <div
+                            className="text-xs"
+                            style={{ color: "var(--muted)" }}
+                          >
+                            {edit.dirty ? "Edited" : "Saved"}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -296,5 +309,103 @@ export function PlayersTab(props: {
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+/**
+ * Removing a roster entry is the only destructive roster action. It needs
+ * the player's name typed exactly, and the action itself refuses players with
+ * any game or recognition history.
+ */
+function RemovePlayerControl(props: {
+  name: string;
+  disabled: boolean;
+  onRemoveAction: (confirmName: string) => Promise<void>;
+}) {
+  const { name, disabled, onRemoveAction } = props;
+  const [open, setOpen] = React.useState(false);
+  const [typed, setTyped] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState<string | null>(null);
+  const inputId = React.useId();
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        className="text-xs underline disabled:opacity-60"
+        style={{ color: "var(--muted)" }}
+        disabled={disabled}
+        onClick={() => {
+          setOpen(true);
+          setTyped("");
+          setErr(null);
+        }}
+      >
+        Remove from roster…
+      </button>
+    );
+  }
+
+  return (
+    <div
+      role="group"
+      aria-label={`Remove ${name} from roster`}
+      className="flex flex-wrap items-center gap-2 rounded-xl border px-2 py-1 text-xs"
+      style={toastStyle("err")}
+    >
+      <label htmlFor={inputId}>
+        Only for players added by mistake. Type <strong>{name}</strong> to
+        confirm:
+      </label>
+      <input
+        id={inputId}
+        value={typed}
+        onChange={(e) => setTyped(e.target.value)}
+        className="h-8 rounded-lg border px-2 text-xs"
+        style={{
+          borderColor: "color-mix(in oklab, var(--stroke) 92%, transparent)",
+          background: "color-mix(in oklab, var(--bg-base) 65%, transparent)",
+          color: "var(--foreground)",
+        }}
+        autoComplete="off"
+        disabled={busy}
+      />
+      <Button
+        variant="danger"
+        size="sm"
+        disabled={busy || typed.trim() !== name}
+        onClick={async () => {
+          setBusy(true);
+          setErr(null);
+          try {
+            await onRemoveAction(typed);
+          } catch (e: unknown) {
+            setErr(
+              e && typeof e === "object" && "message" in e
+                ? String((e as { message?: unknown }).message)
+                : "Could not remove player.",
+            );
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        {busy ? "Checking…" : "Remove"}
+      </Button>
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={busy}
+        onClick={() => setOpen(false)}
+      >
+        Cancel
+      </Button>
+      {err ? (
+        <span role="alert" className="basis-full">
+          {err}
+        </span>
+      ) : null}
+    </div>
   );
 }

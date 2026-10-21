@@ -1,5 +1,4 @@
 //src/app/(protected)/admin/adminHelpers.ts
-import { PlayerBattingStats } from "@/lib/roster";
 import { newCareerPlayerId } from "@/lib/playerIdentity";
 
 export type GameResult = "W" | "L" | "T";
@@ -85,47 +84,19 @@ export function todayISO() {
 
 export type AdminTab = "stats" | "players" | "season" | "lineup";
 
+// A brand-new player typed into the roster builder. The permanent id is
+// minted when the row is created, so re-submitting the same row is
+// idempotent.
 export type DraftPlayer = {
   key: string;
-  careerPlayerId?: string;
+  careerPlayerId: string;
   name: string;
   number: string; // optional input
   primaryPos: string; // optional input
-  returningPlayer: boolean;
+  shirtSize: string; // optional input
 };
 
-export const EMPTY_STATS: PlayerBattingStats = {
-  games: 0,
-  plateAppearances: 0,
-  atBats: 0,
-  hits: 0,
-  currentHitStreak: 0,
-  longestHitStreak: 0,
-  doubles: 0,
-  triples: 0,
-  homeRuns: 0,
-  runs: 0,
-  rbi: 0,
-  walks: 0,
-  pitchingStrikeouts: 0,
-  hitByPitch: 0,
-  putOuts: 0,
-  assists: 0,
-  stolenBases: 0,
-  pitchingSaves: 0,
-  flyBallCatches: 0,
-  charlieHustleAwards: 0,
-  mostImprovedAwards: 0,
-  bestPitcherAwards: 0,
-  bestCatcherAwards: 0,
-  bestFirstBasemanAwards: 0,
-  bestSecondBasemanAwards: 0,
-  bestThirdBasemanAwards: 0,
-  bestShortstopAwards: 0,
-  bestLeftFielderAwards: 0,
-  bestCenterFielderAwards: 0,
-  bestRightFielderAwards: 0,
-};
+export { EMPTY_STATS } from "@/lib/roster";
 
 export function newDraftPlayer(): DraftPlayer {
   return {
@@ -134,18 +105,8 @@ export function newDraftPlayer(): DraftPlayer {
     name: "",
     number: "",
     primaryPos: "",
-    returningPlayer: false,
+    shirtSize: "",
   };
-}
-
-export function slugify(s: string): string {
-  return s
-    .toLowerCase()
-    .trim()
-    .replace(/['"]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/-+/g, "-")
-    .replace(/^-|-$/g, "");
 }
 
 export function parseOptionalInt(s: string): number {
@@ -154,13 +115,6 @@ export function parseOptionalInt(s: string): number {
   const n = Number(raw);
   if (!Number.isFinite(n)) return 0;
   return Math.max(0, Math.floor(n));
-}
-
-export function playerDocIdFromDraft(d: DraftPlayer, idx: number): string {
-  const nameSlug = slugify(d.name) || `player-${idx + 1}`;
-  const n = parseOptionalInt(d.number);
-  if (n > 0) return `${String(n).padStart(2, "0")}-${nameSlug}`;
-  return `p${String(idx + 1).padStart(2, "0")}-${nameSlug}`;
 }
 
 export function toastStyle(kind: "err" | "ok") {

@@ -1,6 +1,5 @@
 "use client";
 
-// Add orderBy to the firestore import
 import {
   collection,
   doc,
@@ -8,6 +7,7 @@ import {
   getDocs,
   query,
   orderBy,
+  runTransaction,
   writeBatch,
   serverTimestamp,
   type Firestore,
@@ -17,20 +17,20 @@ import type { Player } from "@/lib/roster";
 import type {
   GameResult,
   LineState,
-  DraftPlayer,
   CoachPicks,
   CoachPickKey,
 } from "../adminHelpers";
+import { num, parseOptionalInt, EMPTY_STATS } from "../adminHelpers";
+import { careerPlayerIdForEdit } from "@/lib/playerIdentity";
 import {
-  num,
-  parseOptionalInt,
-  playerDocIdFromDraft,
-  EMPTY_STATS,
-} from "../adminHelpers";
-import {
-  findHistoricalCareerPlayerId,
-  newCareerPlayerId,
-} from "@/lib/playerIdentity";
+  planRosterAdditions,
+  rosterRemovalBlocker,
+  validateNewSeasonId,
+  type ImportSelection,
+  type NewPlayerDraft,
+  type RosterAdditionPlan,
+} from "@/lib/rosterPlanning";
+import { normalizeLinkedFrom } from "@/lib/careerHistory";
 import { loadCurrentLineup } from "@/lib/lineupStore";
 import type { GameLineupSnapshot } from "@/lib/lineup";
 import {
@@ -63,58 +63,82 @@ export async function checkAllowlist(opts: {
   return snap.exists();
 }
 
-export async function switchSeason(opts: {
+/**
+ * Creates a new season. Refuses any id that already exists (checked inside a
+ * transaction), so an existing season's record, gamesPlayed, createdAt, and
+ * other history can never be reset from here. Does not change the current
+ * season; use makeCurrentSeason for that.
+ */
+export async function createSeason(opts: {
   db: Firestore;
-  nextSeasonId: string;
+  uid: string;
+  seasonId: string;
+  existingSeasonIds: string[];
   teamName: string;
+  teamId: string;
   seasonLabel: string;
   usesGamesPlayedRecord: boolean;
   scheduledGames: number;
   fallbackTeamName: string;
-}): Promise<void> {
-  const {
-    db,
-    nextSeasonId,
-    teamName,
-    seasonLabel,
-    usesGamesPlayedRecord,
-    scheduledGames,
-    fallbackTeamName,
-  } = opts;
+}): Promise<{ seasonId: string }> {
+  const { db, uid } = opts;
+  const checked = validateNewSeasonId(opts.seasonId, opts.existingSeasonIds);
+  if (!checked.ok) throw new Error(checked.error);
+  const seasonId = checked.seasonId;
+  const seasonRef = doc(db, "seasons", seasonId);
 
-  const nextId = nextSeasonId.trim();
-  if (!nextId) throw new Error("Season id is required.");
-
-  const seasonRef = doc(db, "seasons", nextId);
-  const cfgRef = doc(db, "app", "config");
-  const batch = writeBatch(db);
-
-  batch.set(
-    seasonRef,
-    {
-      teamName: teamName.trim() || fallbackTeamName || "Team",
-      seasonLabel: seasonLabel.trim() || "Season",
+  await runTransaction(db, async (tx) => {
+    const existing = await tx.get(seasonRef);
+    if (existing.exists()) {
+      throw new Error(
+        `Season "${seasonId}" already exists. Choose it under Make current season instead.`,
+      );
+    }
+    const teamName = opts.teamName.trim() || opts.fallbackTeamName || "Team";
+    const teamId = opts.teamId.trim().toLowerCase();
+    tx.set(seasonRef, {
+      teamName,
+      ...(teamId ? { teamId } : {}),
+      seasonLabel: opts.seasonLabel.trim() || "Season",
       record: { wins: 0, losses: 0, ties: 0 },
-      usesGamesPlayedRecord: usesGamesPlayedRecord === true,
-      scheduledGames: Math.max(0, Math.floor(scheduledGames)),
+      usesGamesPlayedRecord: opts.usesGamesPlayedRecord === true,
+      scheduledGames: Math.max(0, Math.floor(opts.scheduledGames)),
       gamesPlayed: 0,
-      updatedAt: serverTimestamp(),
+      ...(uid ? { coachUids: [uid] } : {}),
       createdAt: serverTimestamp(),
-    },
-    { merge: true },
-  );
+      updatedAt: serverTimestamp(),
+    });
+  });
 
-  batch.set(
-    cfgRef,
-    { currentSeasonId: nextId, updatedAt: serverTimestamp() },
-    { merge: true },
-  );
+  return { seasonId };
+}
 
-  await batch.commit();
+/** Points app/config at an existing season. Writes nothing to any season doc. */
+export async function makeCurrentSeason(opts: {
+  db: Firestore;
+  seasonId: string;
+}): Promise<void> {
+  const { db } = opts;
+  const seasonId = opts.seasonId.trim();
+  if (!seasonId) throw new Error("Choose a season.");
+  const seasonRef = doc(db, "seasons", seasonId);
+  const cfgRef = doc(db, "app", "config");
+
+  await runTransaction(db, async (tx) => {
+    const season = await tx.get(seasonRef);
+    if (!season.exists()) {
+      throw new Error(`Season "${seasonId}" does not exist.`);
+    }
+    tx.set(
+      cfgRef,
+      { currentSeasonId: seasonId, updatedAt: serverTimestamp() },
+      { merge: true },
+    );
+  });
 }
 
 // Edits the official schedule size for an existing season without touching
-// games, record, or gamesPlayed (unlike switchSeason, which resets them).
+// games, record, or gamesPlayed.
 export async function updateScheduledGames(opts: {
   db: Firestore;
   seasonId: string;
@@ -149,7 +173,6 @@ export async function savePlayerEdits(opts: {
       shirtSize: string;
       leaderboardHidden: boolean;
       returningPlayer: boolean;
-      careerPlayerId?: string;
       dirty: boolean;
     }
   >;
@@ -170,15 +193,10 @@ export async function savePlayerEdits(opts: {
 
     const n = parseOptionalInt(edit.number);
     const shirtSize = edit.shirtSize.trim();
-    const historicalCareerPlayerId = edit.returningPlayer
-      ? await findHistoricalCareerPlayerId({
-          db,
-          playerName: name,
-          currentSeasonId: seasonId,
-        })
-      : null;
-    const careerPlayerId =
-      historicalCareerPlayerId ?? edit.careerPlayerId ?? newCareerPlayerId();
+    // Editing a name, number, or flag never changes who the player is: the
+    // stored careerPlayerId is kept (one is minted only if a legacy doc has
+    // none), and the doc id is unchanged, so game lines stay attached.
+    const { careerPlayerId } = careerPlayerIdForEdit(p.careerPlayerId);
     const playerRef = doc(db, "seasons", seasonId, "players", p.id);
 
     batch.set(
@@ -204,73 +222,158 @@ export async function savePlayerEdits(opts: {
   return { wrote };
 }
 
-export async function rebuildRoster(opts: {
+/**
+ * Adds returning and new players to a season roster. Additive only: never
+ * deletes or overwrites a roster doc, never touches the season record, and
+ * never copies stats (new entries start at zero). Re-submitting the same
+ * selection skips players already on the roster.
+ */
+export async function addPlayersToRoster(opts: {
   db: Firestore;
   seasonId: string;
-  draft: DraftPlayer[];
-}): Promise<{ playerCount: number }> {
-  const { db, seasonId, draft } = opts;
+  imports: ImportSelection[];
+  newPlayers: NewPlayerDraft[];
+}): Promise<RosterAdditionPlan> {
+  const { db, seasonId } = opts;
+  if (!seasonId.trim()) throw new Error("Choose a season.");
 
-  const cleaned = draft
-    .map((d) => ({
-      ...d,
-      name: d.name.trim(),
-      number: d.number.trim(),
-      primaryPos: d.primaryPos.trim(),
-    }))
-    .filter((d) => d.name.length > 0);
-
-  if (cleaned.length === 0) throw new Error("Add at least one player name.");
-
-  const playersCol = collection(db, "seasons", seasonId, "players");
-  const snap = await getDocs(query(playersCol));
-
-  const batch = writeBatch(db);
-
-  snap.forEach((docSnap) => batch.delete(docSnap.ref));
-
-  for (let i = 0; i < cleaned.length; i++) {
-    const d = cleaned[i];
-    const id = playerDocIdFromDraft(d, i);
-    const careerPlayerId = d.returningPlayer
-      ? ((await findHistoricalCareerPlayerId({
-          db,
-          playerName: d.name,
-          currentSeasonId: seasonId,
-        })) ??
-        d.careerPlayerId ??
-        newCareerPlayerId())
-      : (d.careerPlayerId ?? newCareerPlayerId());
-
-    const player: Player = {
-      id,
-      careerPlayerId,
-      name: d.name,
-      number: parseOptionalInt(d.number),
-      returningPlayer: d.returningPlayer === true,
-      stats: { ...EMPTY_STATS },
-    };
-
-    if (d.primaryPos) player.primaryPos = d.primaryPos;
-
-    const pref = doc(db, "seasons", seasonId, "players", id);
-
-    batch.set(
-      pref,
-      { ...player, updatedAt: serverTimestamp(), createdAt: serverTimestamp() },
-      { merge: false },
-    );
+  const seasonSnap = await getDoc(doc(db, "seasons", seasonId));
+  if (!seasonSnap.exists()) {
+    throw new Error(`Season "${seasonId}" does not exist. Create it first.`);
   }
 
-  const seasonRef = doc(db, "seasons", seasonId);
-  batch.set(
-    seasonRef,
-    { updatedAt: serverTimestamp(), record: { wins: 0, losses: 0, ties: 0 } },
-    { merge: true },
+  const playersCol = collection(db, "seasons", seasonId, "players");
+  const existingSnap = await getDocs(playersCol);
+  const plan = planRosterAdditions({
+    existing: existingSnap.docs.map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        name: typeof data.name === "string" ? data.name : "",
+        number: typeof data.number === "number" ? data.number : 0,
+        careerPlayerId:
+          typeof data.careerPlayerId === "string"
+            ? data.careerPlayerId
+            : undefined,
+        linkedFrom: normalizeLinkedFrom(data.linkedFrom),
+      };
+    }),
+    imports: opts.imports,
+    newPlayers: opts.newPlayers,
+  });
+
+  if (plan.writes.length === 0) return plan;
+
+  let written: typeof plan.writes = [];
+  await runTransaction(db, async (tx) => {
+    const refs = plan.writes.map((w) => doc(playersCol, w.seasonPlayerId));
+    const snaps = await Promise.all(refs.map((r) => tx.get(r)));
+    written = [];
+    plan.writes.forEach((w, i) => {
+      if (snaps[i].exists()) return; // added concurrently; keep what is there
+      tx.set(refs[i], {
+        ...w.data,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      written.push(w);
+    });
+  });
+
+  const skippedNow = plan.writes
+    .filter((w) => !written.includes(w))
+    .map((w) => ({ name: w.data.name, reason: "already-on-roster" as const }));
+
+  return {
+    writes: written,
+    skipped: [...plan.skipped, ...skippedNow],
+    warnings: plan.warnings,
+  };
+}
+
+/** Collects every place a season references its roster doc ids. */
+async function scanSeasonReferences(db: Firestore, seasonId: string) {
+  const lineIds = new Set<string>();
+  const gameAwardIds = new Set<string>();
+  const games = await getDocs(collection(db, "seasons", seasonId, "games"));
+  for (const g of games.docs) {
+    const data = g.data() as {
+      coachAwards?: Record<string, { playerId?: unknown }>;
+      gameBall?: { playerId?: unknown } | null;
+    };
+    for (const award of Object.values(data.coachAwards ?? {})) {
+      if (typeof award?.playerId === "string") gameAwardIds.add(award.playerId);
+    }
+    if (typeof data.gameBall?.playerId === "string") {
+      gameAwardIds.add(data.gameBall.playerId);
+    }
+    const lines = await getDocs(
+      collection(db, "seasons", seasonId, "games", g.id, "lines"),
+    );
+    lines.forEach((l) => {
+      lineIds.add(l.id);
+      const pid = l.data().playerId;
+      if (typeof pid === "string") lineIds.add(pid);
+    });
+  }
+
+  const season = (await getDoc(doc(db, "seasons", seasonId))).data() ?? {};
+  const finalAwardIds = new Set<string>(
+    Object.values((season.finalAwards ?? {}) as Record<string, unknown>).filter(
+      (v): v is string => typeof v === "string",
+    ),
+  );
+  const layoutIds = new Set<string>(
+    Object.keys((season.recognitionLayouts ?? {}) as Record<string, unknown>),
   );
 
-  await batch.commit();
-  return { playerCount: cleaned.length };
+  return { lineIds, gameAwardIds, finalAwardIds, layoutIds };
+}
+
+/**
+ * Removes a roster entry added by mistake. Permitted only when the player
+ * has no history in this season (no game lines, no game or season
+ * recognition, no saved layout) and no other season links to it.
+ * `confirmName` must equal the player's name as an explicit confirmation.
+ */
+export async function removeRosterPlayer(opts: {
+  db: Firestore;
+  seasonId: string;
+  seasonPlayerId: string;
+  confirmName: string;
+}): Promise<void> {
+  const { db, seasonId, seasonPlayerId } = opts;
+  const ref = doc(db, "seasons", seasonId, "players", seasonPlayerId);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) throw new Error("That player is not on this roster.");
+
+  const name = String(snap.data().name ?? "").trim();
+  if (opts.confirmName.trim() !== name) {
+    throw new Error(`Type ${name} exactly to confirm removal.`);
+  }
+
+  const scan = await scanSeasonReferences(db, seasonId);
+  const linkedFromIds = new Set<string>();
+  const seasons = await getDocs(collection(db, "seasons"));
+  for (const s of seasons.docs) {
+    if (s.id === seasonId) continue;
+    const ps = await getDocs(collection(db, "seasons", s.id, "players"));
+    ps.forEach((p) => {
+      for (const r of normalizeLinkedFrom(p.data().linkedFrom)) {
+        if (r.seasonId === seasonId) linkedFromIds.add(r.seasonPlayerId);
+      }
+    });
+  }
+
+  const blocker = rosterRemovalBlocker(seasonPlayerId, {
+    ...scan,
+    linkedFromIds,
+  });
+  if (blocker) {
+    throw new Error(`${name} ${blocker}, so they stay on the roster.`);
+  }
+
+  await writeBatch(db).delete(ref).commit();
 }
 
 export async function saveGameAndApplyDeltas(opts: {

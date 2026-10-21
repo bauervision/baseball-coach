@@ -2,8 +2,9 @@
 "use client";
 
 import { initializeApp, getApp, getApps, type FirebaseApp } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
+import { connectAuthEmulator, getAuth, type Auth } from "firebase/auth";
 import {
+  connectFirestoreEmulator,
   initializeFirestore,
   memoryLocalCache,
   type Firestore,
@@ -67,11 +68,33 @@ function getFirebaseApp(): FirebaseApp {
   return getApps().length ? getApp() : initializeApp(firebaseConfig);
 }
 
+// Local fixture testing only: NEXT_PUBLIC_FIREBASE_EMULATORS=1 connects to
+// the Firestore (8085) and Auth (9099) emulators from firebase.json. It is
+// refused unless the project id is a "demo-" project, so a build can never
+// mix emulator mode with a real project.
+function emulatorsEnabled(): boolean {
+  if (process.env.NEXT_PUBLIC_FIREBASE_EMULATORS !== "1") return false;
+  if (!firebaseConfig.projectId.startsWith("demo-")) {
+    throw new Error("Firebase emulators require a demo- project id.");
+  }
+  return true;
+}
+
 function createFirestore(app: FirebaseApp): Firestore {
-  return initializeFirestore(app, {
+  const db = initializeFirestore(app, {
     localCache: memoryLocalCache(),
     experimentalForceLongPolling: true,
   });
+  if (emulatorsEnabled()) connectFirestoreEmulator(db, "127.0.0.1", 8085);
+  return db;
+}
+
+function createAuth(app: FirebaseApp): Auth {
+  const auth = getAuth(app);
+  if (emulatorsEnabled()) {
+    connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+  }
+  return auth;
 }
 
 export function getFirebaseAuth(): Auth {
@@ -81,7 +104,7 @@ export function getFirebaseAuth(): Auth {
   assertClientConfig();
 
   const app = getFirebaseApp();
-  const auth = getAuth(app);
+  const auth = createAuth(app);
   const db = createFirestore(app);
 
   setGlobalCache({ app, auth, db });
@@ -95,7 +118,7 @@ export function getFirestoreDb(): Firestore {
   assertClientConfig();
 
   const app = getFirebaseApp();
-  const auth = getAuth(app);
+  const auth = createAuth(app);
   const db = createFirestore(app);
 
   setGlobalCache({ app, auth, db });

@@ -2,9 +2,11 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 
 import { getFirebaseAuth, getFirestoreDb } from "@/lib/firebase.client";
 import { useRosterPlayers, DEFAULT_SEASON_ID } from "@/lib/rosterStore";
+import { PLAYER_REGISTRY_ENABLED } from "@/lib/features";
 
 import {
   Card,
@@ -78,15 +80,26 @@ export default function AdminClient() {
 
   const seasonSwitch = useSeasonSwitch({
     db,
+    uid,
     canEdit,
+    currentSeasonId: effectiveSeasonId,
     fallbackTeamName: meta.teamName || "Team",
   });
 
   const rosterDraft = useRosterDraft({
     db,
-    seasonId: effectiveSeasonId,
+    uid,
+    seasons: seasonSwitch.seasons,
+    defaultSeasonId: effectiveSeasonId,
     canEdit,
   });
+
+  // After creating a season, point the roster builder at it.
+  const { lastCreatedSeasonId } = seasonSwitch;
+  const { setTargetSeasonId } = rosterDraft;
+  React.useEffect(() => {
+    if (lastCreatedSeasonId) setTargetSeasonId(lastCreatedSeasonId);
+  }, [lastCreatedSeasonId, setTargetSeasonId]);
 
   return (
     <div className="grid gap-5">
@@ -102,6 +115,14 @@ export default function AdminClient() {
             <span style={{ color: "var(--foreground)", fontWeight: 700 }}>
               {effectiveSeasonId}
             </span>
+            {PLAYER_REGISTRY_ENABLED ? (
+              <>
+                {" · "}
+                <Link href="/profile" className="underline">
+                  My Players
+                </Link>
+              </>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap gap-2">
@@ -254,6 +275,7 @@ export default function AdminClient() {
           playerMsg={playerEdits.playerMsg}
           playerErr={playerEdits.playerErr}
           onSavePlayerEditsAction={playerEdits.onSavePlayerEditsAction}
+          onRemovePlayerAction={playerEdits.onRemovePlayerAction}
         />
       ) : tab === "lineup" ? (
         <LineupBuilderTab
@@ -274,12 +296,15 @@ export default function AdminClient() {
             gamesPlayed={meta.gamesPlayed}
           />
           <SeasonTab
-
             canEdit={canEdit}
+            currentSeasonId={effectiveSeasonId}
+            seasons={seasonSwitch.seasons}
             seasonEditId={seasonSwitch.seasonEditId}
             setSeasonEditIdAction={seasonSwitch.setSeasonEditId}
             seasonTeamName={seasonSwitch.seasonTeamName}
             setSeasonTeamNameAction={seasonSwitch.setSeasonTeamName}
+            seasonTeamId={seasonSwitch.seasonTeamId}
+            setSeasonTeamIdAction={seasonSwitch.setSeasonTeamId}
             seasonLabel={seasonSwitch.seasonLabel}
             setSeasonLabelAction={seasonSwitch.setSeasonLabel}
             usesGamesPlayedRecord={seasonSwitch.usesGamesPlayedRecord}
@@ -288,11 +313,18 @@ export default function AdminClient() {
             }
             scheduledGames={seasonSwitch.scheduledGames}
             setScheduledGamesAction={seasonSwitch.setScheduledGames}
+            makeCurrentAfterCreate={seasonSwitch.makeCurrentAfterCreate}
+            setMakeCurrentAfterCreateAction={
+              seasonSwitch.setMakeCurrentAfterCreate
+            }
+            selectedCurrentId={seasonSwitch.selectedCurrentId}
+            setSelectedCurrentIdAction={seasonSwitch.setSelectedCurrentId}
             teamNamePlaceholder={meta.teamName || "Team"}
             seasonBusy={seasonSwitch.seasonBusy}
             seasonMsg={seasonSwitch.seasonMsg}
             seasonErr={seasonSwitch.seasonErr}
-            onSwitchSeasonAction={seasonSwitch.onSwitchSeasonAction}
+            onCreateSeasonAction={seasonSwitch.onCreateSeasonAction}
+            onMakeCurrentAction={seasonSwitch.onMakeCurrentAction}
           />
           <FinalSeasonAwardsPanel
             db={db}
@@ -304,16 +336,8 @@ export default function AdminClient() {
           />
           <RosterBuilderTab
             canEdit={canEdit}
-            seasonId={effectiveSeasonId}
-            draft={rosterDraft.draft}
-            setDraftAction={rosterDraft.setDraft}
-            updateDraftRowAction={rosterDraft.updateDraftRow}
-            insertRowAfterAction={rosterDraft.insertRowAfter}
-            removeRowAction={rosterDraft.removeRow}
-            rosterBusy={rosterDraft.rosterBusy}
-            rosterMsg={rosterDraft.rosterMsg}
-            rosterErr={rosterDraft.rosterErr}
-            onRebuildRosterAction={rosterDraft.onRebuildRosterAction}
+            seasons={seasonSwitch.seasons}
+            roster={rosterDraft}
           />
         </div>
       )}
