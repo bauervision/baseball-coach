@@ -6,6 +6,9 @@
 //   FIRESTORE_EMULATOR_HOST=127.0.0.1:8085 \
 //     node tools/export-firestore.mjs --project demo-baseball-coach --out <dir>/backup.json
 //
+// --database <id> exports a named database instead of "(default)", e.g. an
+// isolated restore-rehearsal database.
+//
 // Production (read-only) additionally requires --allow-production-read and
 // Application Default Credentials. The file must be written outside this
 // repository, is never overwritten, and gets a .sha256 alongside it. After
@@ -31,11 +34,14 @@ try {
   assertOutsideRepo(outAbs);
   if (fs.existsSync(outAbs)) throw new Error(`${outAbs} already exists; choose a new file.`);
 
-  const { db, projectId, emulator } = connect({ productionFlag: "--allow-production-read" });
+  const { db, projectId, databaseId, emulator } = connect({
+    productionFlag: "--allow-production-read",
+  });
   const raw = await loadSnapshot(db);
   const verification = await verifyCounts(db, raw);
   const snapshot = toJson(raw);
   snapshot.projectId = projectId;
+  snapshot.databaseId = databaseId;
   snapshot.source = emulator ? "emulator" : "production";
   snapshot.verification = verification;
 
@@ -48,7 +54,7 @@ try {
   // Counts only; never names or other child data.
   const counts = treeCounts(snapshot.raw);
   const missing = snapshot.seasons.filter((s) => s.parentMissing).map((s) => s.seasonId);
-  console.log(`Exported ${projectId} (${snapshot.source}) → ${outAbs}`);
+  console.log(`Exported ${projectId}/${databaseId} (${snapshot.source}) → ${outAbs}`);
   console.log(`sha256 ${sha}`);
   for (const [p, n] of Object.entries(counts).sort()) console.log(`  ${p}: ${n}`);
   if (missing.length) console.log(`Season docs missing but with data beneath: ${missing.join(", ")}`);

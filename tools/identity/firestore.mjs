@@ -55,8 +55,12 @@ export function connect({ productionFlag }) {
     );
   }
 
-  initializeApp({ projectId });
-  return { db: getFirestore(), projectId, emulator: !!emulator };
+  // --database targets a named database (e.g. an isolated restore test
+  // database). Default is the app's "(default)" database.
+  const databaseId = arg("--database") ?? "(default)";
+  const app = initializeApp({ projectId });
+  const db = databaseId === "(default)" ? getFirestore(app) : getFirestore(app, databaseId);
+  return { db, projectId, databaseId, emulator: !!emulator };
 }
 
 // ---------------------------------------------------------------------------

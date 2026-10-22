@@ -113,3 +113,17 @@ test("inventory and audit run from the export without touching Firestore", () =>
   assert.ok(approvals.approvals.length >= 4);
   assert.ok(approvals.approvals.every((x) => x.decision === "pending"));
 });
+
+test("export can read a named database (restore-rehearsal target) without touching (default)", async () => {
+  const { getFirestore } = await import("firebase-admin/firestore");
+  const named = getFirestore("restore-rehearsal");
+  await named.doc("seasons/s1/players/p1").set({ name: "Fixture Kid", number: 7 });
+  const res = run("export-firestore.mjs", [...P, "--database", "restore-rehearsal", "--out", "named.json"]);
+  assert.equal(res.code, 0, res.out);
+  assert.match(res.out, /demo-baseball-coach\/restore-rehearsal/);
+  const snap = read("named.json");
+  assert.equal(snap.databaseId, "restore-rehearsal");
+  assert.deepEqual(Object.keys(snap.raw), ["seasons"]);
+  assert.equal(snap.seasons[0].players.length, 1);
+  assert.equal(read("export-2.json").databaseId, "(default)");
+});

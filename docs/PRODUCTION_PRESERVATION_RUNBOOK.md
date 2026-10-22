@@ -96,3 +96,21 @@ Today this is **not needed for correct behavior**: seasons without `coachUids` a
 3. Apply the approved identity migration in the **same release** as the app build. Career history counts only confirmed seasons, so without the migration the returning players' Career toggle disappears.
 4. Build with `NEXT_PUBLIC_FEATURE_PLAYER_REGISTRY=1` and deploy.
 5. Parent reads stay public until parent authentication ships (D1).
+
+## 7. Managed-backup restore rehearsal (each step needs product-owner approval)
+
+Status as of 2026-10-22: delete protection on; PITR on (7 days); daily (7d) and weekly Sunday (14w) schedules exist; first completed backup pending.
+
+1. List completed backups (read-only):
+   `gcloud firestore backups list --location=us-east1 --project=baseball-coach-997ab`
+2. Confirm the destination does not exist (`gcloud firestore databases list --project=baseball-coach-997ab`), then restore **into a new, separately named database**. Never into `(default)`:
+   ```bash
+   gcloud firestore databases restore --project=baseball-coach-997ab \
+     --source-backup=projects/baseball-coach-997ab/locations/us-east1/backups/<BACKUP_ID> \
+     --destination-database=restore-rehearsal-<yyyymmdd>
+   ```
+3. Export the restored database read-only and compare with a production export of the same period:
+   `node tools/export-firestore.mjs --project baseball-coach-997ab --database restore-rehearsal-<yyyymmdd> --allow-production-read --out <protected>/restore-rehearsal.json`
+   Differences are only expected for writes made between the backup's `snapshotTime` and the comparison export.
+4. Delete the test database only after review (separate approval):
+   `gcloud firestore databases delete --database=restore-rehearsal-<yyyymmdd> --project=baseball-coach-997ab`
