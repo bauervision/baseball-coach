@@ -388,7 +388,17 @@ Complexity: **S** ≈ ≤1 day, **M** ≈ 2–4 days, **L** ≈ 1–2 weeks, **X
 | E6 | Legal/privacy review, consent flows, terms | External | E2 | Counsel sign-off. |
 | E7 | Billing | M–L | E1, E4, market validation | — |
 
-**Recommended sequencing:** Q1–Q5 + A1–A3 now → B1–B2 (+A4, A5, A7) before Spring 2027 → C1–C2 during Spring 2027 → D-1 → E1/E2 → D-2 photos → rest of E after customer validation.
+### Phase F — Individual Mode (deferred concept; not planned for build)
+
+*Added 2026-10-21 by product-owner decision.*
+
+Everything in Phases A–E is **Team Mode**, the core product. Team Mode covers coach-owned teams, seasons, rosters, lineups, games, stats, recognition, awards, and parent views. Player history is permanent, and ongoing tracking follows the coach's roster decisions. See [PLAYER_IDENTITY_MODEL.md](PLAYER_IDENTITY_MODEL.md).
+
+| ID | Concept | Status |
+|---|---|---|
+| F1 | **Individual Mode**: a coach or parent follows one player outside team administration (e.g. JV, varsity, college). It would reuse `careerPlayerId` and the per-game stat foundation, with team features dormant. | Distant future opportunity. Validate demand first. Nothing is designed or built: no UI, mode switching, individual game entry, parent-owned accounts, transfers, or level-specific stats. Do not add abstractions for it. |
+
+**Recommended sequencing:** Q1–Q5 + A1–A3 now → B1–B2 (+A4, A5, A7) before Spring 2027 → C1–C2 during Spring 2027 → D-1 → E1/E2 → D-2 photos → rest of E after customer validation. Phase F is not sequenced.
 
 ---
 

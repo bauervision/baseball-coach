@@ -1,4 +1,10 @@
-// Private player registry and coach-linked children.
+// Coach-managed player identities and coach-linked children.
+//
+// This is each coach's private record of the players they have managed, not
+// a universal player registry: identities are never shared, transferred, or
+// discoverable across coaches, and a player who leaves the coach's teams is
+// simply not imported again (their history stays). See
+// docs/PLAYER_IDENTITY_MODEL.md.
 //
 //   playerIdentities/{careerPlayerId}
 //     { careerPlayerId, displayName, managerUids[], createdByUid, createdAt,

@@ -23,7 +23,9 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------
-    // Private player registry (permanent identities). NOT publicly
+    // Coach-managed player identities: each coach's private record of the
+    // players they have managed, not a universal registry. No transfer or
+    // cross-coach discovery. NOT publicly
     // readable. Only coaches listed in managerUids may read or update an
     // identity. Reading a missing doc is allowed so a coach can tell
     // "absent" from "someone else's" (ids are random UUIDs).
