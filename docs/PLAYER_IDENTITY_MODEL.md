@@ -1,10 +1,10 @@
 # Player Identity & Ownership Model
 
-*Approved product principle · 2026-10-21 · applies to Team Mode (the current product)*
+*Approved product principle · 2026-10-21, scope revised 2026-10-22 · single-head-coach Team Mode*
 
 Baseball Coach is a **coach-owned team management and player recognition product**. It is not a universal baseball player registry.
 
-A coach manages the players who take part on that coach's teams. Player **history is permanent**. **Ongoing tracking** follows only the coach's roster decisions.
+Each workspace belongs to **one head coach or team manager**, who manages the players who take part on that coach's teams. Co-coaches, shared administration, and multiple managers per workspace are out of scope. Player **history is permanent**. **Ongoing tracking** follows only the coach's roster decisions.
 
 ## Three distinct concepts
 
@@ -40,7 +40,7 @@ Removing a roster entry is only allowed for a mistaken entry with **no** history
 ### Scope across coaches
 
 - The returning-player picker lists only seasons the coach manages (`coachUids`).
-- `playerIdentities` are readable only by the coaches listed in `managerUids`. That list is fixed when the identity is created, so there is no transfer workflow.
+- `playerIdentities` are readable only by the coaches listed in `managerUids`. That list is fixed when the identity is created, so there is no transfer workflow. Under the single-head-coach model it always holds exactly one uid, the head coach. The array shape is kept as is; no refactor is planned.
 - A linked child must be an identity the coach manages.
 - If another coach separately rosters the same child, that child has an independent identity in that coach's record. The two are never discovered or merged automatically.
 
@@ -53,10 +53,6 @@ The following are **not** part of the product model and must not be built:
 - Cross-coach transfers or claims.
 - Following a player's career after they leave.
 
-## Future: Individual Mode (deferred concept only)
+## Historical note
 
-**Team Mode** is the current product: teams, seasons, rosters, lineups, games, stats, recognition, awards, and parent views.
-
-**Individual Mode** is a possible future experience in which a coach or parent follows one player without running a team. For example, a parent keeps recording Luke's stats through JV, varsity, or college. It would reuse the permanent identity and the per-game stat foundation, and leave most team-management features dormant.
-
-Status: **not designed and not implemented.** There is no UI, no mode switch, no individual game entry, no parent-owned accounts, and no transfer, ownership, or level-specific stats. No abstraction exists in the code to support it, and none should be added before the opportunity is validated. See the roadmap (assessment §11, Phase F).
+"Individual Mode", where one player is followed outside team administration, was discussed on 2026-10-21. It is not on the roadmap. Do not design or build for it.

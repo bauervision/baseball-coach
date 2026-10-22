@@ -322,6 +322,44 @@ export function statsDigest(snapshot) {
   return createHash("sha256").update(rows.sort().join("\n")).digest("hex");
 }
 
+const IDENTITY_FIELDS = new Set(["careerPlayerId", "identityStatus", "identityMigration"]);
+
+/**
+ * Digest of the entire raw export tree with only the identity fields on
+ * season roster docs removed. Equal before/after a migration proves that
+ * nothing else changed: stats, games, lines, awards, layouts, lineups,
+ * config, and every other collection.
+ */
+export function identityNeutralDigest(raw) {
+  const strip = (docs, path) =>
+    (docs ?? []).map((d) => {
+      const isRosterDoc = /^seasons\/[^/]+\/players$/.test(path);
+      const data =
+        d.data && isRosterDoc
+          ? Object.fromEntries(Object.entries(d.data).filter(([k]) => !IDENTITY_FIELDS.has(k)))
+          : d.data;
+      const collections = Object.fromEntries(
+        Object.entries(d.collections ?? {}).map(([n, sub]) => [n, strip(sub, `${path}/${d.id}/${n}`)]),
+      );
+      return { id: d.id, exists: d.exists, data, collections };
+    });
+  const tree = Object.fromEntries(
+    Object.entries(raw ?? {}).map(([name, docs]) => [name, strip(docs, name)]),
+  );
+  return createHash("sha256").update(canonical(tree)).digest("hex");
+}
+
+function canonical(v) {
+  if (Array.isArray(v)) return `[${v.map(canonical).join(",")}]`;
+  if (v && typeof v === "object") {
+    return `{${Object.keys(v)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${canonical(v[k])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(v);
+}
+
 function sortKeys(o) {
   return Object.fromEntries(Object.keys(o).sort().map((k) => [k, o[k]]));
 }

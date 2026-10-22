@@ -260,9 +260,9 @@ Under today's rules (D1), anything Coach's Corner stores in Firestore or Storage
 
 ### Architectural blockers (must be resolved before other coaches onboard)
 
-1. **Tenant isolation:** today there is one global `app/config`, one global admin set, and public reads. Product scale needs `organizations → teams → seasons` ownership, with rules that check **membership** (`memberships/{teamId}_{uid}` with role `owner|coach|parent`).
+1. **Tenant isolation:** today there is one global `app/config`, one global admin set, and public reads. Product scale needs one isolated **workspace per head coach** (workspace → teams → seasons), with rules that check the workspace owner and that workspace's parents. *(Revised 2026-10-22: single-head-coach workspaces; no organizations or multi-coach memberships.)*
 2. **Parent identity:** parents need real accounts (email-link or Google sign-in) bound to a team via invite. Optionally bind them to specific players for privacy controls.
-3. **Admin model:** replace the console-managed `admins` collection and the build-time email list with invitation-based coach roles.
+3. **Admin model:** replace the console-managed `admins` collection and the build-time email list with self-service sign-up, where the head coach owns their workspace. *(Revised 2026-10-22: no co-coach or assistant roles.)*
 4. **Player identity:** stable player IDs independent of jersey number, and explicit cross-season linking instead of name matching (D3, D12).
 5. **Query scaling:** career stats and identity lookup scan every season and every player. At multi-tenant scale this must become a per-player history index or be scoped to the team.
 
@@ -312,7 +312,7 @@ The four workstreams share **three foundations**. Build these once:
 
 1. **Team entity + branding snapshot** (C1). Unlocks Bronco, historical branding, Coach's Corner ownership (`teams/{id}/posts`), and tenant boundaries later.
 2. **Season status + season-aware routing** (B1/B2). Unlocks history for parents, finalize/lock, safe transitions, and season-scoped Coach's Corner posts.
-3. **Membership-based access** (E1/E2). Unlocks real parent privacy, photos, multiple coaches, invites, and commercialization. Rules evolve from `isAdmin()` to `hasRole(teamId, role)`.
+3. **Workspace-owner + parent access** (E1/E2). Unlocks real parent privacy, photos, parent invites, and commercialization. Rules evolve from `isAdmin()` to "owner of this workspace" or "parent in this workspace". *(Revised 2026-10-22: one head coach per workspace.)*
 
 Media storage (Firebase Storage with team-prefixed paths and mirrored rules) is a fourth, smaller shared capability, needed first by Coach's Corner photos and later by team logos.
 
@@ -325,6 +325,29 @@ Avoid in the near term:
 ---
 
 ## 11. Prioritized roadmap
+
+### Product scope and priorities (authoritative, 2026-10-22)
+
+**Core product: single-head-coach Team Mode.** One head coach or team manager runs an isolated workspace and tracks their players, stats, teams, and seasons over time. That covers:
+
+- multiple teams across seasons and divisions, with a different roster each season;
+- returning-player import and coach-linked children;
+- permanent player history, game stats, lineups, recognition, awards, and plaques;
+- parent viewing, team branding and season history, and Coach's Corner.
+
+Commercialization means independent head coaches, each with their own isolated workspace.
+
+**Immediate priorities, in order:**
+
+1. Production data preservation: verified export, backups/PITR confirmed, restore rehearsed (A1).
+2. Historical player identity confirmation: audit and product-owner approval.
+3. Controlled identity migration and registry activation: rules deploy, `coachUids` backfill, migration, flag.
+4. Season finalization and historical season viewing (B1, B2).
+5. Team identity and customizable branding (C1, C2, C4).
+6. Coach's Corner (D-1, then D-2).
+7. Independent coach workspace onboarding and parent authentication (E1, E2, E4).
+
+**Excluded from planned work:** co-coach or assistant-coach accounts, shared team administration, multiple managers per workspace, coach-to-coach player transfers, universal player registries, and league or organization administration. Rows below that implied these have been revised or removed.
 
 Complexity: **S** ≈ ≤1 day, **M** ≈ 2–4 days, **L** ≈ 1–2 weeks, **XL** ≈ multi-week.
 
@@ -366,7 +389,7 @@ Complexity: **S** ≈ ≤1 day, **M** ≈ 2–4 days, **L** ≈ 1–2 weeks, **X
 |---|---|---|---|---|---|---|
 | C1 | Tigers hardcoded | `teams/{teamId}` doc; seasons get `teamId` + `branding` snapshot; one migration script tags existing seasons. | M | B1 | All existing seasons render identically after migration. | Before Fall 2027 |
 | C2 | Theme/logo hardcoded | `BrandingProvider` sets CSS variables and logo URLs from the viewed season's snapshot; replace `TigersLogo` references and copy. | M–L | C1 | A test team with different colors/logo renders without code changes; Tigers history unchanged. | Before Fall 2027 |
-| C3 | Admin management needs console | Simple team-admin list in app (still admin-only). | M | C1 (E1 later supersedes) | Add/remove a coach without console or redeploy. | Before Fall 2027 |
+| ~~C3~~ | ~~Admin management needs console~~ | **Removed 2026-10-22:** adding or removing coaches is out of scope (single head coach). Moving the head coach off the console allowlist is covered by E1. | — | — | — | — |
 | C4 | Team-specific awards | Optional per-team award art overrides; generic default art without team text. | M | C1 | New team prints sheets with no Tigers marks. | Before Fall 2027 |
 
 ### Phase D — Coach's Corner
@@ -380,7 +403,7 @@ Complexity: **S** ≈ ≤1 day, **M** ≈ 2–4 days, **L** ≈ 1–2 weeks, **X
 
 | ID | Approach | Cx | Depends | Acceptance criteria |
 |---|---|---|---|---|
-| E1 | Memberships + role rules (`owner/coach/parent`), invitations | L | C1 | Rules tests prove cross-team reads/writes are denied. |
+| E1 | Workspace ownership (one head coach) + parent role rules, parent invitations | L | C1 | Rules tests prove cross-workspace reads/writes are denied. |
 | E2 | Parent accounts (email link) bound to teams; remove public reads | L | E1 | Unauthenticated users can read nothing but the sign-in page. |
 | E3 | Data placement decision (top-level + `teamId` vs nested), migration with dry-run | L | E1 | Migration rehearsed on a copy; zero data diff. |
 | E4 | Onboarding: create team, logo/colors, first season, CSV roster import | L | C2, E1 | A new coach goes from sign-up to first game with no developer help. |
@@ -388,17 +411,9 @@ Complexity: **S** ≈ ≤1 day, **M** ≈ 2–4 days, **L** ≈ 1–2 weeks, **X
 | E6 | Legal/privacy review, consent flows, terms | External | E2 | Counsel sign-off. |
 | E7 | Billing | M–L | E1, E4, market validation | — |
 
-### Phase F — Individual Mode (deferred concept; not planned for build)
+*Historical note:* "Individual Mode", where one player is followed outside team administration, was discussed on 2026-10-21. It is not on the roadmap and should not be designed for.
 
-*Added 2026-10-21 by product-owner decision.*
-
-Everything in Phases A–E is **Team Mode**, the core product. Team Mode covers coach-owned teams, seasons, rosters, lineups, games, stats, recognition, awards, and parent views. Player history is permanent, and ongoing tracking follows the coach's roster decisions. See [PLAYER_IDENTITY_MODEL.md](PLAYER_IDENTITY_MODEL.md).
-
-| ID | Concept | Status |
-|---|---|---|
-| F1 | **Individual Mode**: a coach or parent follows one player outside team administration (e.g. JV, varsity, college). It would reuse `careerPlayerId` and the per-game stat foundation, with team features dormant. | Distant future opportunity. Validate demand first. Nothing is designed or built: no UI, mode switching, individual game entry, parent-owned accounts, transfers, or level-specific stats. Do not add abstractions for it. |
-
-**Recommended sequencing:** Q1–Q5 + A1–A3 now → B1–B2 (+A4, A5, A7) before Spring 2027 → C1–C2 during Spring 2027 → D-1 → E1/E2 → D-2 photos → rest of E after customer validation. Phase F is not sequenced.
+**Recommended sequencing:** Q1–Q5 + A1–A3 now → B1–B2 (+A4, A5, A7) before Spring 2027 → C1–C2 during Spring 2027 → D-1 → E1/E2 → D-2 photos → rest of E after customer validation. The priority list at the top of this section takes precedence.
 
 ---
 

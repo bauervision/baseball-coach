@@ -2,19 +2,20 @@
 // writes to Firestore.
 //
 //   node tools/identity-audit.mjs --from-json backup.json --out-dir audit/
-//   FIRESTORE_EMULATOR_HOST=127.0.0.1:8080 \
+//   FIRESTORE_EMULATOR_HOST=127.0.0.1:8085 \
 //     node tools/identity-audit.mjs --project demo-baseball-coach --out-dir audit/
 //
 // Reading production requires --allow-production-read (prefer auditing an
 // export made with tools/export-firestore.mjs).
 import fs from "node:fs";
 import path from "node:path";
-import { arg, connect, loadSnapshot, toJson } from "./identity/firestore.mjs";
+import { arg, assertOutsideRepo, connect, loadSnapshot, toJson } from "./identity/firestore.mjs";
 import { approvalTemplate, auditIdentities } from "./identity/audit.mjs";
 
 try {
   const outDir = arg("--out-dir");
   if (!outDir) throw new Error("Pass --out-dir <directory>.");
+  assertOutsideRepo(outDir);
 
   const fromJson = arg("--from-json");
   const snapshot = fromJson

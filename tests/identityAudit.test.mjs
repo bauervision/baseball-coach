@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   approvalTemplate,
   auditIdentities,
+  identityNeutralDigest,
   planMigration,
   statsDigest,
 } from "../tools/identity/audit.mjs";
@@ -122,4 +123,34 @@ test("stats digest changes only when stats or game lines change", () => {
   assert.equal(statsDigest(a), statsDigest(b));
   b.seasons[0].players[0].data.stats.hits += 1;
   assert.notEqual(statsDigest(a), statsDigest(b));
+});
+
+test("identity-neutral digest ignores only identity fields on roster docs", () => {
+  const tree = () => ({
+    seasons: [
+      {
+        id: "s1",
+        exists: true,
+        data: { finalAwards: { mvp: "p1" }, recognitionLayouts: { p1: { order: ["a"] } } },
+        collections: {
+          players: [{ id: "p1", exists: true, data: { name: "A", careerPlayerId: "x", stats: { hits: 1 } }, collections: {} }],
+        },
+      },
+    ],
+  });
+  const a = tree();
+  const b = tree();
+  b.seasons[0].collections.players[0].data.identityStatus = "confirmed";
+  b.seasons[0].collections.players[0].data.careerPlayerId = "y";
+  assert.equal(identityNeutralDigest(a), identityNeutralDigest(b));
+
+  const c = tree();
+  c.seasons[0].data.finalAwards.mvp = "p2";
+  assert.notEqual(identityNeutralDigest(a), identityNeutralDigest(c), "awards change detected");
+  const d = tree();
+  d.seasons[0].data.recognitionLayouts.p1.order = ["b"];
+  assert.notEqual(identityNeutralDigest(a), identityNeutralDigest(d), "layout change detected");
+  const e = tree();
+  e.seasons[0].collections.players[0].data.name = "B";
+  assert.notEqual(identityNeutralDigest(a), identityNeutralDigest(e), "other roster fields detected");
 });

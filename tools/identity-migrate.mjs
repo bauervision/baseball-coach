@@ -13,9 +13,14 @@
 // verified unchanged after apply. Real projects additionally require
 // --allow-production.
 import fs from "node:fs";
+import path from "node:path";
 import { FieldValue } from "firebase-admin/firestore";
 import { arg, connect, flag, loadSnapshot, toJson } from "./identity/firestore.mjs";
-import { planMigration, statsDigest } from "./identity/audit.mjs";
+import {
+  identityNeutralDigest,
+  planMigration,
+  statsDigest,
+} from "./identity/audit.mjs";
 
 const BATCH = 400;
 
@@ -89,9 +94,13 @@ try {
       `Backup must be an export of ${projectId} from the last 24h covering every season (missing: ${missing.join(", ") || "none"}).`,
     );
   }
+  if (backup.verification?.ok !== true || !backup.raw) {
+    throw new Error("Backup must be a complete export whose count verification passed.");
+  }
 
   const migrationId = `identity-${new Date().toISOString().replace(/[:.]/g, "-")}`;
-  const rollbackPath = `${migrationId}-rollback.json`;
+  // Next to the protected backup (outside the repo): paths embed child names.
+  const rollbackPath = path.join(path.dirname(path.resolve(backupFile)), `${migrationId}-rollback.json`);
   fs.writeFileSync(
     rollbackPath,
     JSON.stringify({ migrationId, projectId, ops: plan.ops }, null, 2),
@@ -110,13 +119,17 @@ try {
   const after = toJson(await loadSnapshot(db));
   const recheck = planMigration(after, approvals);
   const statsSame = statsDigest(before) === statsDigest(after);
-  if (!recheck.ok || recheck.ops.length !== 0 || !statsSame) {
+  const restSame = identityNeutralDigest(before.raw) === identityNeutralDigest(after.raw);
+  if (!recheck.ok || recheck.ops.length !== 0 || !statsSame || !restSame) {
     console.error(
-      `VERIFY FAILED (remaining ops ${recheck.ops.length}, stats unchanged ${statsSame}). Roll back with --rollback ${rollbackPath}`,
+      `VERIFY FAILED (remaining ops ${recheck.ops.length}, stats unchanged ${statsSame}, all other data unchanged ${restSame}). ` +
+        `If the app was used during the migration this is expected; otherwise roll back with --rollback ${rollbackPath}`,
     );
     process.exit(4);
   }
-  console.log(`Applied ${plan.ops.length} links (${migrationId}). Verified: stats and games unchanged.`);
+  console.log(
+    `Applied ${plan.ops.length} links (${migrationId}). Verified: stats and games unchanged; all other data unchanged except identity fields.`,
+  );
 } catch (e) {
   console.error(e instanceof Error ? e.message : e);
   process.exit(2);
