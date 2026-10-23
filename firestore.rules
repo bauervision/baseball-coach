@@ -17,9 +17,26 @@ service cloud.firestore {
 }
 
     // Public app configuration reads; only allowlisted admins may update it.
+    // The current season must exist and be eligible once the request is
+    // applied: never a draft (activate it in the same transaction) and
+    // never finalized (reopen it first). Legacy seasons without status are
+    // eligible. Rewriting config with the same current season is always
+    // allowed, so a finalized current season never blocks other writes.
     match /app/config {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create, update: if isAdmin() && (
+        (resource != null
+          && request.resource.data.get('currentSeasonId', null) == resource.data.get('currentSeasonId', null))
+        || eligibleCurrentSeason(request.resource.data.get('currentSeasonId', null))
+      );
+      allow delete: if false;
+    }
+
+    function eligibleCurrentSeason(id) {
+      return id is string && id.size() > 0
+          && existsAfter(/databases/$(database)/documents/seasons/$(id))
+          && !(getAfter(/databases/$(database)/documents/seasons/$(id)).data.get('status', '')
+               in ['draft', 'finalized']);
     }
 
     // ------------------------------------------------------------------

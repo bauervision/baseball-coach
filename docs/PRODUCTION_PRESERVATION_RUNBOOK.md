@@ -183,7 +183,7 @@ Coach actions afterwards (in the app, ordinary use): finalize Spring 2026 when r
 ### Mixed versions (old and new app on one database)
 
 - Browsers may keep the old app until refreshed. Under the new rules the old app keeps working on open seasons; it cannot change a finalized season (shows its generic save error).
-- The old app's season switcher writes `teamName`/`seasonLabel` onto the target season and can point `app/config` at a draft (no activation). Low risk with a single coach; avoid by hard-refreshing after step 6.
+- The old app's season switcher writes `teamName`/`seasonLabel` onto the target season. The proposed rules only accept `app/config.currentSeasonId` pointing at an existing season that is not a draft or finalized after the write, so a stale session can no longer make a draft current (activation is required) or a finalized one current (reopen first); its switches between legacy seasons still work (`tests/emulator/currentSeasonSafety.test.mjs`).
 - Never revert rules (step 5) while the new app is live: Team Designer and lifecycle protection would break. Roll back the app first.
 
 ### Recovery

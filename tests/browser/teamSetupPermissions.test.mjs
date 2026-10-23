@@ -160,7 +160,7 @@ for (const [tag, viewport, mobile] of [
   ["1440", { width: 1440, height: 900 }, false],
   ["390", { width: 390, height: 844 }, true],
 ]) {
-  test(`V: Blank → Falcons softball, Original Tigers look, existing team — all reach Season (${tag})`, { skip: SKIP }, async () => {
+  test(`V: Blank → Falcons softball + colors, Original Tigers look, existing team — all reach Season (${tag})`, { skip: SKIP }, async () => {
     const page = await coachPage(viewport, mobile);
     await startSetup(page);
     const body = await page.locator("body").innerText();
@@ -168,6 +168,11 @@ for (const [tag, viewport, mobile] of [
     assert.doesNotMatch(body, GENERIC);
 
     await fillBlankFalcons(page);
+    await page.getByRole("tab", { name: "Appearance" }).click();
+    await page.locator("#color-dark-primary").fill("#2563eb");
+    await page.locator("#color-dark-secondary").fill("#14b8a6");
+    await page.getByRole("tablist", { name: "Editing theme" }).getByRole("tab", { name: "Light" }).click();
+    await page.locator("#color-light-primary").fill("#1d4ed8");
     await noOverflow(page, `${tag} blank`);
     await page.getByRole("button", { name: "Create team" }).first().click();
     await page.waitForURL(/step=season&team=falcons-/, { timeout: 20000 });
@@ -175,6 +180,7 @@ for (const [tag, viewport, mobile] of [
     assert.equal(falcons.teamName, "Falcons");
     assert.equal(falcons.sport, "softball");
     assert.deepEqual(falcons.logo, { kind: "bundled", id: "tigers" });
+    assert.deepEqual([falcons.palettes.dark.primary, falcons.palettes.dark.secondary, falcons.palettes.light.primary], ["#2563eb", "#14b8a6", "#1d4ed8"]);
     await noOverflow(page, `${tag} season`);
 
     await page.goto(`${BASE}/admin/?setup=1&step=team`);
