@@ -7,9 +7,12 @@ import { Navbar } from "./Navbar";
 import { Footer } from "./Footer";
 import { BackToTop } from "../ui/BackToTop";
 import { useRosterPlayers } from "@/lib/rosterStore";
+import { useViewedSeasonId } from "@/lib/viewedSeason";
 
 export function ShellLayout(props: { children: React.ReactNode }) {
-  const { meta, error } = useRosterPlayers();
+  // Shell shows the viewed season (?season=), else the active season.
+  const viewedSeasonId = useViewedSeasonId();
+  const { meta, error } = useRosterPlayers(viewedSeasonId);
   const pathname = usePathname();
 
   const normalizedPathname = pathname.replace(/\/+$/, "");
@@ -39,7 +42,11 @@ export function ShellLayout(props: { children: React.ReactNode }) {
           paddingTop: "env(safe-area-inset-top, 0px)",
         }}
       >
-        <Navbar title={navTitle} seasonLabel={seasonLabel} />
+        <Navbar
+          title={navTitle}
+          seasonLabel={seasonLabel}
+          viewedSeasonId={viewedSeasonId}
+        />
       </div>
 
       <main className="flex-1">

@@ -5,6 +5,7 @@ import * as React from "react";
 import type { Firestore } from "firebase/firestore";
 import { createSeason, makeCurrentSeason } from "./adminActions";
 import { listSeasons, type SeasonSummary } from "@/lib/seasonStore";
+import { invalidateSeasonList } from "@/components/season/SeasonSelector";
 
 function errorText(e: unknown, fallback: string): string {
   return e && typeof e === "object" && "message" in e
@@ -59,10 +60,10 @@ export function useSeasonSwitch(opts: {
     };
   }, [db, seasonsVersion]);
 
-  const refreshSeasons = React.useCallback(
-    () => setSeasonsVersion((v) => v + 1),
-    [],
-  );
+  const refreshSeasons = React.useCallback(() => {
+    invalidateSeasonList();
+    setSeasonsVersion((v) => v + 1);
+  }, []);
 
   const onCreateSeasonAction = React.useCallback(async () => {
     if (!canEdit || seasonBusy) return;
@@ -86,7 +87,7 @@ export function useSeasonSwitch(opts: {
       });
 
       if (makeCurrentAfterCreate) {
-        await makeCurrentSeason({ db, seasonId });
+        await makeCurrentSeason({ db, seasonId, uid: uid ?? undefined });
       }
 
       setLastCreatedSeasonId(seasonId);
@@ -129,16 +130,25 @@ export function useSeasonSwitch(opts: {
     setSeasonMsg(null);
     setSeasonErr(null);
     try {
-      await makeCurrentSeason({ db, seasonId: target });
+      await makeCurrentSeason({ db, seasonId: target, uid: uid ?? undefined });
       setSeasonMsg(
-        `Current season set to ${target}. No season data was changed.`,
+        `Current season set to ${target}. Its games, stats, and awards were not changed.`,
       );
+      refreshSeasons();
     } catch (e: unknown) {
       setSeasonErr(errorText(e, "Failed to change the current season."));
     } finally {
       setSeasonBusy(false);
     }
-  }, [canEdit, seasonBusy, selectedCurrentId, currentSeasonId, db]);
+  }, [
+    canEdit,
+    seasonBusy,
+    selectedCurrentId,
+    currentSeasonId,
+    db,
+    uid,
+    refreshSeasons,
+  ]);
 
   return {
     seasons,

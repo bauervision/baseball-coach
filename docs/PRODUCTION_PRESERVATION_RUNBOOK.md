@@ -114,3 +114,15 @@ Status as of 2026-10-22: delete protection on; PITR on (7 days); daily (7d) and 
    Differences are only expected for writes made between the backup's `snapshotTime` and the comparison export.
 4. Delete the test database only after review (separate approval):
    `gcloud firestore databases delete --database=restore-rehearsal-<yyyymmdd> --project=baseball-coach-997ab`
+
+## 8. Season lifecycle rollout (not executed; each step needs approval)
+
+The app now supports `status: draft | active | finalized` on season docs, enforced by `firestore.rules`. Production seasons have **no status** today (legacy). That is compatible: legacy seasons stay open and editable, and the old `endSeasonMode` flag is shown as "Ended", never treated as finalized. No data migration is required; finalizing is a coach action in the app.
+
+Recommended order:
+1. **Identity migration and Spring 2026 metadata first.** They update historical roster/season docs, which is simplest while the seasons are still open. The migration tool uses the Admin SDK, which bypasses security rules; never run it against a finalized season without reopening it first.
+2. **Rules before app.** Deploy the reviewed `firestore.rules` (`firebase deploy --only firestore:rules`), then the app build. Old rules would accept but not enforce lifecycle writes, so the app must not ship first. Legacy seasons behave the same under the new rules (verified on emulator).
+3. **Finalize in the app.** The coach opens Admin → Season Update → Season Lifecycle and finalizes Spring 2026 (and Fall 2026 when review is complete), using the checklist. This writes only `status`, `finalizedAt`, `finalizedByUid`, `lifecycleHistory`, `updatedAt`.
+4. **Spring 2027.** Create the season (draft) → build the roster → Make current (activates it). A finalized season cannot be made current until it is reopened.
+
+Note: until the Spring 2026 metadata write, the app labels that season from legacy defaults ("Tigers", "Spring 2026"), which happen to be correct for the one legacy doc that lacks them.

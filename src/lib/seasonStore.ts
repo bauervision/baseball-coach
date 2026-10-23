@@ -7,6 +7,8 @@ import {
 import type { RosterSeasonInput } from "@/lib/playerSearch";
 import { normalizeLinkedFrom } from "@/lib/careerHistory";
 import { seasonSortKey } from "@/lib/seasonOrder";
+import { normalizeSeasonMeta } from "@/lib/rosterStore";
+import type { LifecycleEvent, SeasonStatus } from "@/lib/seasonLifecycle";
 
 export type SeasonSummary = {
   seasonId: string;
@@ -16,12 +18,26 @@ export type SeasonSummary = {
   coachUids?: string[];
   createdAtMs?: number;
   gamesPlayed: number;
+  /** Lifecycle status; null for seasons created before lifecycle support. */
+  status: SeasonStatus | null;
+  endSeasonMode: boolean;
+  record: { wins: number; losses: number; ties?: number };
+  finalAwardsChosen: number;
+  layoutsSaved: number;
+  /** Append-only audit of finalize/reopen/activate, oldest first. */
+  lifecycleHistory: LifecycleEvent[];
 };
 
+/**
+ * Season doc -> summary. Team name and label use the same normalization as
+ * the season views (normalizeSeasonMeta), so selectors, admin, and pages
+ * always agree, including for legacy docs saved without those fields.
+ */
 export function seasonSummaryFromData(
   seasonId: string,
   data: DocumentData,
 ): SeasonSummary {
+  const meta = normalizeSeasonMeta(data);
   const createdAt = data.createdAt as { toMillis?: () => number } | undefined;
   const coachUids = Array.isArray(data.coachUids)
     ? (data.coachUids as unknown[]).filter(
@@ -30,20 +46,21 @@ export function seasonSummaryFromData(
     : undefined;
   return {
     seasonId,
-    teamName:
-      typeof data.teamName === "string" && data.teamName.trim()
-        ? data.teamName.trim()
-        : "Team",
-    seasonLabel:
-      typeof data.seasonLabel === "string" && data.seasonLabel.trim()
-        ? data.seasonLabel.trim()
-        : seasonId,
+    teamName: meta.teamName,
+    seasonLabel: meta.seasonLabel,
     teamId: typeof data.teamId === "string" ? data.teamId : undefined,
     coachUids,
     createdAtMs:
       typeof createdAt?.toMillis === "function" ? createdAt.toMillis() : undefined,
-    gamesPlayed:
-      typeof data.gamesPlayed === "number" ? Math.max(0, data.gamesPlayed) : 0,
+    gamesPlayed: meta.gamesPlayed,
+    status: meta.status,
+    endSeasonMode: meta.endSeasonMode,
+    record: meta.record,
+    finalAwardsChosen: Object.values(meta.finalAwards).filter(Boolean).length,
+    layoutsSaved: Object.keys(meta.recognitionLayouts).length,
+    lifecycleHistory: Array.isArray(data.lifecycleHistory)
+      ? (data.lifecycleHistory as LifecycleEvent[])
+      : [],
   };
 }
 

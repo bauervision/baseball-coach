@@ -19,6 +19,7 @@ import type { Player, PlayerBattingStats } from "@/lib/roster";
 import { normalizeSavedOrder } from "@/lib/recognitionLayout";
 import { asIdentityStatus } from "@/lib/playerIdentity";
 import { normalizeLinkedFrom } from "@/lib/careerHistory";
+import { asSeasonStatus, type SeasonStatus } from "@/lib/seasonLifecycle";
 
 /**
  * Fallback if app/config is missing.
@@ -46,6 +47,8 @@ export type RosterMeta = {
   finalAwards: RosterFinalAwards;
   /** Coach-saved recognition sheet award order, keyed by player id. */
   recognitionLayouts: Record<string, string[]>;
+  /** Lifecycle status; null for seasons created before lifecycle support. */
+  status: SeasonStatus | null;
 };
 
 const DEFAULT_META: RosterMeta = {
@@ -59,6 +62,7 @@ const DEFAULT_META: RosterMeta = {
   endSeasonMode: false,
   finalAwards: {},
   recognitionLayouts: {},
+  status: null,
 };
 
 function asNum(v: unknown): number {
@@ -122,6 +126,11 @@ function normalizeRecord(v: unknown): RosterMeta["record"] {
   return typeof ties === "number" ? { wins, losses, ties } : { wins, losses };
 }
 
+/** Season doc -> display metadata (shared by every season view). */
+export function normalizeSeasonMeta(v: unknown): RosterMeta {
+  return normalizeMeta(v);
+}
+
 function normalizeMeta(v: unknown): RosterMeta {
   const d =
     v && typeof v === "object"
@@ -139,6 +148,7 @@ function normalizeMeta(v: unknown): RosterMeta {
     endSeasonMode: d.endSeasonMode === true,
     finalAwards: normalizeFinalAwards(d.finalAwards),
     recognitionLayouts: normalizeRecognitionLayouts(d.recognitionLayouts),
+    status: asSeasonStatus(d.status),
   };
 }
 
@@ -259,235 +269,251 @@ function playersQuery(db: Firestore, seasonId: string) {
 }
 
 type RosterSnapshot = {
+  /** The season this snapshot shows (viewed season, or the active one). */
   seasonId: string;
+  /** app/config.currentSeasonId: the coach's administrative season. */
+  activeSeasonId: string;
   meta: RosterMeta;
   players: Player[] | null;
   error: string | null;
 };
 
-type Subscriber = (snap: RosterSnapshot) => void;
+type Subscriber = {
+  /** Requested season, or null to follow the active season. */
+  requested: string | null;
+  cb: (snap: RosterSnapshot) => void;
+  sid: string | null;
+};
+
+type SeasonWatch = {
+  meta: RosterMeta;
+  players: Player[] | null;
+  error: string | null;
+  unsubs: Unsubscribe[];
+  subs: Set<Subscriber>;
+  teardownTimer: ReturnType<typeof setTimeout> | null;
+};
+
+const TEARDOWN_MS = 300;
 
 /**
- * A single shared Firestore watcher that survives route transitions.
- * This prevents rapid subscribe/unsubscribe churn that can trigger
- * Firestore internal assertion crashes (ca9/b815) in some SDK versions.
+ * Shared Firestore watchers that survive route transitions.
+ *
+ * One config watcher tracks the active season. Each season being shown
+ * (active or historical) has its own refcounted watcher, so a historical
+ * page and the active-season shell never mix data, and two views of the
+ * same season share one subscription. Teardown is delayed slightly so
+ * navigation does not thrash listeners (which can trigger Firestore
+ * internal assertion crashes in some SDK versions).
  */
 class RosterWatchManager {
   private db: Firestore | null = null;
 
-  private seasonId: string = DEFAULT_SEASON_ID;
-  private meta: RosterMeta = DEFAULT_META;
-  private players: Player[] | null = null;
-  private error: string | null = null;
-
-  private started = false;
+  private activeSeasonId: string | null = null;
+  private configError: string | null = null;
   private configUnsub: Unsubscribe | null = null;
-  private seasonUnsub: Unsubscribe | null = null;
-  private playersUnsub: Unsubscribe | null = null;
+  private configTeardown: ReturnType<typeof setTimeout> | null = null;
 
   private subscribers = new Set<Subscriber>();
-
-  private teardownTimer: ReturnType<typeof setTimeout> | null = null;
-
-  subscribe(cb: Subscriber): Unsubscribe {
-    this.subscribers.add(cb);
-
-    // Cancel pending teardown if we’re re-attaching during navigation.
-    if (this.teardownTimer) {
-      clearTimeout(this.teardownTimer);
-      this.teardownTimer = null;
-    }
-
-    // Start watchers lazily (first subscriber).
-    if (!this.started) {
-      void this.start().catch((e: unknown) => {
-        this.error =
-          e instanceof Error ? e.message : "Failed to start roster watcher.";
-        this.meta = DEFAULT_META;
-        this.players = [];
-        this.emit();
-      });
-    }
-
-    // Push current snapshot immediately.
-    cb(this.snapshot());
-
-    return () => {
-      this.subscribers.delete(cb);
-
-      // If no one is listening, delay teardown slightly so route transitions
-      // (home->admin->home) don’t thrash the watch stream.
-      if (this.subscribers.size === 0) {
-        this.scheduleTeardown();
-      }
-    };
-  }
-
-  private snapshot(): RosterSnapshot {
-    return {
-      seasonId: this.seasonId,
-      meta: this.meta,
-      players: this.players,
-      error: this.error,
-    };
-  }
-
-  private emit(): void {
-    const snap = this.snapshot();
-    for (const cb of this.subscribers) cb(snap);
-  }
+  private seasons = new Map<string, SeasonWatch>();
 
   private ensureDb(): Firestore {
     if (!this.db) this.db = getFirestoreDb();
     return this.db;
   }
 
-  private scheduleTeardown(): void {
-    if (this.teardownTimer) return;
+  subscribe(
+    requested: string | null,
+    cb: (snap: RosterSnapshot) => void,
+  ): Unsubscribe {
+    const sub: Subscriber = { requested, cb, sid: null };
+    this.subscribers.add(sub);
+    this.ensureConfig();
+    this.route(sub);
+    this.push(sub);
 
-    this.teardownTimer = setTimeout(() => {
-      this.teardownTimer = null;
-
-      // Only teardown if nobody re-subscribed.
-      if (this.subscribers.size > 0) return;
-      this.stop();
-    }, 300);
+    return () => {
+      this.subscribers.delete(sub);
+      if (sub.sid) this.release(sub.sid, sub);
+      if (this.subscribers.size === 0) this.scheduleConfigTeardown();
+    };
   }
 
-  private stop(): void {
-    this.started = false;
-
-    if (this.configUnsub) {
-      this.configUnsub();
-      this.configUnsub = null;
-    }
-    if (this.seasonUnsub) {
-      this.seasonUnsub();
-      this.seasonUnsub = null;
-    }
-    if (this.playersUnsub) {
-      this.playersUnsub();
-      this.playersUnsub = null;
-    }
+  private route(sub: Subscriber): void {
+    const next = sub.requested ?? this.activeSeasonId;
+    if (next === sub.sid) return;
+    if (sub.sid) this.release(sub.sid, sub);
+    sub.sid = next;
+    if (next) this.acquire(next, sub);
   }
 
-  private async start(): Promise<void> {
-    this.started = true;
+  private push(sub: Subscriber): void {
+    const w = sub.sid ? this.seasons.get(sub.sid) : undefined;
+    sub.cb({
+      seasonId: sub.sid ?? "",
+      activeSeasonId: this.activeSeasonId ?? "",
+      meta: w?.meta ?? DEFAULT_META,
+      players: w?.players ?? null,
+      error: w?.error ?? this.configError,
+    });
+  }
 
-    const db = this.ensureDb();
+  private emitSeason(seasonId: string): void {
+    for (const sub of this.seasons.get(seasonId)?.subs ?? []) this.push(sub);
+  }
+
+  private ensureConfig(): void {
+    if (this.configTeardown) {
+      clearTimeout(this.configTeardown);
+      this.configTeardown = null;
+    }
+    if (this.configUnsub) return;
 
     this.configUnsub = onSnapshot(
-      configDoc(db),
+      configDoc(this.ensureDb()),
       (cfgSnap) => {
         const sid =
           (cfgSnap.exists()
             ? readCurrentSeasonIdFromConfigData(cfgSnap.data())
             : null) ?? DEFAULT_SEASON_ID;
-
-        this.wireSeason(db, sid);
+        this.setActive(sid, null);
       },
-      (e) => {
-        this.error = e?.message ?? "Failed to load app config.";
-        this.meta = DEFAULT_META;
-        this.players = [];
-        this.emit();
-        this.wireSeason(db, DEFAULT_SEASON_ID);
-      },
+      (e) =>
+        this.setActive(DEFAULT_SEASON_ID, e?.message ?? "Failed to load app config."),
     );
   }
 
-  private wireSeason(db: Firestore, nextSeasonId: string): void {
-    const sid = nextSeasonId?.trim() ? nextSeasonId.trim() : DEFAULT_SEASON_ID;
-    if (sid === this.seasonId && this.seasonUnsub && this.playersUnsub) return;
-
-    // Tear down existing listeners immediately when switching seasons.
-    if (this.seasonUnsub) {
-      this.seasonUnsub();
-      this.seasonUnsub = null;
+  private setActive(sid: string, error: string | null): void {
+    this.configError = error;
+    const changed = sid !== this.activeSeasonId;
+    this.activeSeasonId = sid;
+    for (const sub of this.subscribers) {
+      if (changed && sub.requested === null) this.route(sub);
+      this.push(sub);
     }
-    if (this.playersUnsub) {
-      this.playersUnsub();
-      this.playersUnsub = null;
+  }
+
+  private scheduleConfigTeardown(): void {
+    if (this.configTeardown) return;
+    this.configTeardown = setTimeout(() => {
+      this.configTeardown = null;
+      if (this.subscribers.size > 0) return;
+      this.configUnsub?.();
+      this.configUnsub = null;
+      this.activeSeasonId = null;
+    }, TEARDOWN_MS);
+  }
+
+  private acquire(seasonId: string, sub: Subscriber): void {
+    let w = this.seasons.get(seasonId);
+    if (!w) {
+      w = {
+        meta: DEFAULT_META,
+        players: null,
+        error: null,
+        unsubs: [],
+        subs: new Set(),
+        teardownTimer: null,
+      };
+      this.seasons.set(seasonId, w);
+      this.wire(seasonId, w);
     }
+    if (w.teardownTimer) {
+      clearTimeout(w.teardownTimer);
+      w.teardownTimer = null;
+    }
+    w.subs.add(sub);
+  }
 
-    this.seasonId = sid;
-    this.meta = DEFAULT_META;
-    this.players = null;
-    this.error = null;
-    this.emit();
+  private release(seasonId: string, sub: Subscriber): void {
+    const w = this.seasons.get(seasonId);
+    if (!w) return;
+    w.subs.delete(sub);
+    if (w.subs.size > 0 || w.teardownTimer) return;
+    w.teardownTimer = setTimeout(() => {
+      w.teardownTimer = null;
+      if (w.subs.size > 0) return;
+      w.unsubs.forEach((u) => u());
+      this.seasons.delete(seasonId);
+    }, TEARDOWN_MS);
+  }
 
-    this.seasonUnsub = onSnapshot(
-      seasonDoc(db, sid),
-      (seasonSnap) => {
-        if (!seasonSnap.exists()) {
-          this.meta = DEFAULT_META;
-        } else {
-          this.meta = normalizeMeta(seasonSnap.data());
-        }
-        this.error = null;
-        this.emit();
-      },
-      (e) => {
-        this.meta = DEFAULT_META;
-        this.error = e?.message ?? "Failed to load season.";
-        this.emit();
-      },
-    );
-
-    this.playersUnsub = onSnapshot(
-      playersQuery(db, sid),
-      (psnap: QuerySnapshot<DocumentData>) => {
-        const out: Player[] = [];
-        psnap.forEach((docSnap) => {
-          const p = normalizePlayer(docSnap.data(), docSnap.id);
-          if (p) out.push(p);
-        });
-
-        this.players = out;
-        this.error = null;
-        this.emit();
-      },
-      (e) => {
-        this.error = e?.message ?? "Failed to load roster.";
-        this.players = [];
-        this.emit();
-      },
+  private wire(seasonId: string, w: SeasonWatch): void {
+    const db = this.ensureDb();
+    w.unsubs.push(
+      onSnapshot(
+        seasonDoc(db, seasonId),
+        (seasonSnap) => {
+          w.meta = seasonSnap.exists()
+            ? normalizeMeta(seasonSnap.data())
+            : DEFAULT_META;
+          w.error = null;
+          this.emitSeason(seasonId);
+        },
+        (e) => {
+          w.meta = DEFAULT_META;
+          w.error = e?.message ?? "Failed to load season.";
+          this.emitSeason(seasonId);
+        },
+      ),
+      onSnapshot(
+        playersQuery(db, seasonId),
+        (psnap: QuerySnapshot<DocumentData>) => {
+          const out: Player[] = [];
+          psnap.forEach((docSnap) => {
+            const p = normalizePlayer(docSnap.data(), docSnap.id);
+            if (p) out.push(p);
+          });
+          w.players = out;
+          w.error = null;
+          this.emitSeason(seasonId);
+        },
+        (e) => {
+          w.error = e?.message ?? "Failed to load roster.";
+          w.players = [];
+          this.emitSeason(seasonId);
+        },
+      ),
     );
   }
 }
 
-// Module singleton (one watcher per tab)
+// Module singleton (one manager per tab)
 const rosterWatch = new RosterWatchManager();
 
-export function useRosterPlayers(): {
+/**
+ * Season data for the requested season, or for the active season when
+ * `seasonId` is null/undefined. Parent-facing pages pass the viewed season
+ * (useViewedSeasonId); admin pages omit it to follow the active season.
+ */
+export function useRosterPlayers(seasonId?: string | null): {
   seasonId: string;
+  activeSeasonId: string;
   meta: RosterMeta;
   players: Player[] | null;
   error: string | null;
 } {
-  const [seasonId, setSeasonId] = React.useState<string>(DEFAULT_SEASON_ID);
-  const [meta, setMeta] = React.useState<RosterMeta>(DEFAULT_META);
-  const [players, setPlayers] = React.useState<Player[] | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
+  const requested = seasonId?.trim() || null;
+  const [snap, setSnap] = React.useState<RosterSnapshot>({
+    seasonId: requested ?? "",
+    activeSeasonId: "",
+    meta: DEFAULT_META,
+    players: null,
+    error: null,
+  });
 
   React.useEffect(() => {
     let active = true;
-
-    const unsub = rosterWatch.subscribe((snap) => {
-      if (!active) return;
-      setSeasonId(snap.seasonId);
-      setMeta(snap.meta);
-      setPlayers(snap.players);
-      setError(snap.error);
+    const unsub = rosterWatch.subscribe(requested, (next) => {
+      if (active) setSnap(next);
     });
-
     return () => {
       active = false;
       unsub();
     };
-  }, []);
+  }, [requested]);
 
-  return { seasonId, meta, players, error };
+  return snap;
 }
 
 export async function fetchPlayers(seasonId: string): Promise<Player[]> {

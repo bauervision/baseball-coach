@@ -36,6 +36,8 @@ import { PlayersTab } from "./_parts/PlayersTab";
 import { SeasonTab } from "./_parts/SeasonTab";
 import { SeasonScheduleCard } from "./_parts/SeasonScheduleCard";
 import { RosterBuilderTab } from "./_parts/RosterBuilderTab";
+import { SeasonLifecycleCard } from "./_parts/SeasonLifecycleCard";
+import { isFinalized } from "@/lib/seasonLifecycle";
 import { LineupBuilderTab } from "./_parts/LineupBuilderTab";
 
 export default function AdminClient() {
@@ -60,6 +62,12 @@ export default function AdminClient() {
     signInAction,
   } = useAdminAuth({ auth, db });
 
+  // The current season may be finalized (read-only, enforced by rules).
+  // Season-specific editing uses this; lifecycle and season management
+  // still use canEdit.
+  const currentFinalized = isFinalized(meta);
+  const canEditSeason = canEdit && !currentFinalized;
+
   const onSignInAction = React.useCallback(async () => {
     await signInAction(email, password, () => setPassword(""));
   }, [signInAction, email, password]);
@@ -68,14 +76,14 @@ export default function AdminClient() {
     db,
     seasonId: effectiveSeasonId,
     players,
-    canEdit,
+    canEdit: canEditSeason,
   });
 
   const playerEdits = usePlayerEdits({
     db,
     seasonId: effectiveSeasonId,
     players,
-    canEdit,
+    canEdit: canEditSeason,
   });
 
   const seasonSwitch = useSeasonSwitch({
@@ -147,6 +155,14 @@ export default function AdminClient() {
               onClickAction={() => setTab("season")}
             />
           </div>
+
+          {currentFinalized ? (
+            <div className="rounded-xl border px-3 py-2 text-xs" role="status" style={toastStyle("err")}>
+              {meta.seasonLabel} is finalized, so its games, roster, lineup,
+              and awards are read-only. Reopen it under Season Update, or
+              make another season current.
+            </div>
+          ) : null}
 
           {!authReady ? (
             <div className="text-sm" style={{ color: "var(--muted)" }}>
@@ -224,7 +240,7 @@ export default function AdminClient() {
 
       {tab === "stats" ? (
         <StatsTab
-          canEdit={canEdit}
+          canEdit={canEditSeason}
           rosterError={rosterError}
           players={players}
           orderedPlayers={game.orderedPlayers}
@@ -266,7 +282,7 @@ export default function AdminClient() {
         />
       ) : tab === "players" ? (
         <PlayersTab
-          canEdit={canEdit}
+          canEdit={canEditSeason}
           players={players}
           playerEdits={playerEdits.playerEdits}
           setPlayerEditValueAction={playerEdits.setPlayerEditValue}
@@ -282,7 +298,7 @@ export default function AdminClient() {
           db={db}
           seasonId={effectiveSeasonId}
           players={players}
-          canEdit={canEdit}
+          canEdit={canEditSeason}
           teamName={meta.teamName}
           seasonLabel={meta.seasonLabel}
         />
@@ -291,7 +307,7 @@ export default function AdminClient() {
           <SeasonScheduleCard
             db={db}
             seasonId={effectiveSeasonId}
-            canEdit={canEdit}
+            canEdit={canEditSeason}
             scheduledGames={meta.scheduledGames}
             gamesPlayed={meta.gamesPlayed}
           />
@@ -326,10 +342,18 @@ export default function AdminClient() {
             onCreateSeasonAction={seasonSwitch.onCreateSeasonAction}
             onMakeCurrentAction={seasonSwitch.onMakeCurrentAction}
           />
+          <SeasonLifecycleCard
+            db={db}
+            uid={uid}
+            canEdit={canEdit}
+            seasons={seasonSwitch.seasons}
+            currentSeasonId={effectiveSeasonId}
+            onChangedAction={seasonSwitch.refreshSeasons}
+          />
           <FinalSeasonAwardsPanel
             db={db}
             seasonId={effectiveSeasonId}
-            canEdit={canEdit}
+            canEdit={canEditSeason}
             players={players}
             endSeasonMode={seasonFinalState.endSeasonMode}
             finalAwards={seasonFinalState.finalAwards}

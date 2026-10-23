@@ -6,6 +6,8 @@ import Image from "next/image";
 import { Trophy } from "lucide-react";
 
 import { useRosterPlayers } from "@/lib/rosterStore";
+import { useViewedSeasonId, withSeason } from "@/lib/viewedSeason";
+import { SeasonSelector } from "@/components/season/SeasonSelector";
 import { TROPHY_ART } from "@/lib/trophyArtwork";
 import {
   getTrophyDefinitions,
@@ -43,7 +45,10 @@ function toneVar(tone?: TrophyDef["tone"]) {
 }
 
 export default function TrophiesClient() {
-  const { meta, players, error } = useRosterPlayers();
+  const viewedSeasonParam = useViewedSeasonId();
+  const { seasonId, activeSeasonId, meta, players, error } =
+    useRosterPlayers(viewedSeasonParam);
+  const homeHref = withSeason("/", viewedSeasonParam);
   const [openHow, setOpenHow] = React.useState(false);
   const isEndSeason = meta.endSeasonMode === true;
   const trophies = React.useMemo(() => getTrophyDefinitions(), []);
@@ -76,7 +81,7 @@ export default function TrophiesClient() {
             {error}
           </div>
           <Link
-            href="/"
+            href={homeHref}
             className="text-sm font-semibold underline underline-offset-4"
             style={{ color: "var(--muted)" }}
           >
@@ -96,7 +101,7 @@ export default function TrophiesClient() {
         </CardHeader>
         <CardContent>
           <Link
-            href="/"
+            href={homeHref}
             className="text-sm font-semibold underline underline-offset-4"
             style={{ color: "var(--muted)" }}
           >
@@ -111,14 +116,15 @@ export default function TrophiesClient() {
     <div className="grid gap-5">
       <div className="flex items-center justify-between gap-3">
         <Link
-          href="/"
+          href={homeHref}
           className="text-sm font-semibold underline underline-offset-4"
           style={{ color: "var(--muted)" }}
         >
           Back
         </Link>
 
-        <div className="text-right">
+        <div className="flex flex-wrap items-center justify-end gap-3 text-right">
+          <SeasonSelector viewedSeasonId={seasonId} activeSeasonId={activeSeasonId} />
           <div className="text-xs" style={{ color: "var(--muted)" }}>
             {meta.teamName} • {meta.seasonLabel}
           </div>

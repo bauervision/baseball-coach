@@ -100,28 +100,108 @@ service cloud.firestore {
     // KNOWN EXPOSURE (assessment D1): every season, player, game, line, and
     // lineup is readable by anyone. Do not store private data under
     // /seasons. Removing public reads requires real parent auth (Phase E).
+    // ------------------------------------------------------------------
+    // Season lifecycle: draft -> active -> finalized (-> reopened = active).
+    // A finalized season is read-only for everyone, including the coach:
+    // the season doc and every subcollection reject writes. The only
+    // permitted write to a finalized season is an explicit reopen.
+    // Seasons without `status` (created before lifecycle support) are open.
+    // lifecycleHistory is append-only and attributed to the acting coach.
+    // ------------------------------------------------------------------
+    function seasonDoc(seasonId) {
+      return /databases/$(database)/documents/seasons/$(seasonId);
+    }
+
+    // Finalized before or after this request (covers batches/transactions
+    // that try to finalize and edit, or reopen and edit, together).
+    function seasonOpen(seasonId) {
+      return !(exists(seasonDoc(seasonId))
+               && get(seasonDoc(seasonId)).data.get('status', '') == 'finalized')
+          && !(existsAfter(seasonDoc(seasonId))
+               && getAfter(seasonDoc(seasonId)).data.get('status', '') == 'finalized');
+    }
+
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function historyAppended(action) {
+      let before = resource.data.get('lifecycleHistory', []);
+      let after = request.resource.data.get('lifecycleHistory', []);
+      return after.size() == before.size() + 1
+          && (before.size() == 0 || after[0:before.size()] == before)
+          && after[after.size() - 1].action == action
+          && after[after.size() - 1].byUid == request.auth.uid;
+    }
+
+    function isActivation() {
+      return resource.data.get('status', '') == 'draft'
+          && request.resource.data.get('status', '') == 'active'
+          && changedKeys().hasOnly(['status', 'activatedAt', 'lifecycleHistory', 'updatedAt'])
+          && historyAppended('activated');
+    }
+
+    function isFinalization() {
+      return request.resource.data.get('status', '') == 'finalized'
+          && changedKeys().hasOnly(['status', 'finalizedAt', 'finalizedByUid', 'lifecycleHistory', 'updatedAt'])
+          && request.resource.data.finalizedByUid == request.auth.uid
+          && historyAppended('finalized');
+    }
+
+    function isReopen() {
+      return request.resource.data.get('status', '') == 'active'
+          && changedKeys().hasOnly(['status', 'reopenedAt', 'reopenedByUid', 'lifecycleHistory', 'updatedAt'])
+          && request.resource.data.reopenedByUid == request.auth.uid
+          && historyAppended('reopened');
+    }
+
+    // Ordinary edits on an open season: no status or audit-field changes.
+    function isOrdinaryEdit() {
+      return request.resource.data.get('status', '') != 'finalized'
+          && !changedKeys().hasAny(['status', 'lifecycleHistory', 'finalizedAt', 'finalizedByUid',
+                                    'reopenedAt', 'reopenedByUid', 'activatedAt']);
+    }
+
+    // Public season reads
+    // KNOWN EXPOSURE (assessment D1): every season, player, game, line, and
+    // lineup is readable by anyone. Do not store private data under
+    // /seasons. Removing public reads requires real parent auth (Phase E).
     match /seasons/{seasonId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.get('status', 'draft') in ['draft', 'active']
+        && !('lifecycleHistory' in request.resource.data);
+      allow update: if isAdmin() && (
+        resource.data.get('status', '') == 'finalized'
+          ? isReopen()
+          : (isOrdinaryEdit() || isActivation() || isFinalization())
+      );
+      allow delete: if isAdmin() && resource.data.get('status', '') != 'finalized';
 
       match /players/{playerId} {
         allow read: if true;
-        allow write: if isAdmin();
+        allow write: if isAdmin() && seasonOpen(seasonId);
       }
 
       match /games/{gameId} {
         allow read: if true;
-        allow write: if isAdmin();
+        allow write: if isAdmin() && seasonOpen(seasonId);
 
         match /lines/{playerId} {
           allow read: if true;
-          allow write: if isAdmin();
+          allow write: if isAdmin() && seasonOpen(seasonId);
         }
       }
 
       match /lineups/{lineupId} {
         allow read: if true;
-        allow write: if isAdmin();
+        allow write: if isAdmin() && seasonOpen(seasonId);
+      }
+
+      // Any other present or future season subcollection.
+      match /{subcollection}/{docId=**} {
+        allow read: if true;
+        allow write: if isAdmin() && seasonOpen(seasonId);
       }
     }
   }

@@ -31,6 +31,13 @@ import {
   type RosterAdditionPlan,
 } from "@/lib/rosterPlanning";
 import { normalizeLinkedFrom } from "@/lib/careerHistory";
+import {
+  asSeasonStatus,
+  isFinalized,
+  planFinalize,
+  planReopen,
+  type LifecycleEvent,
+} from "@/lib/seasonLifecycle";
 import { loadCurrentLineup } from "@/lib/lineupStore";
 import type { GameLineupSnapshot } from "@/lib/lineup";
 import {
@@ -104,6 +111,8 @@ export async function createSeason(opts: {
       usesGamesPlayedRecord: opts.usesGamesPlayedRecord === true,
       scheduledGames: Math.max(0, Math.floor(opts.scheduledGames)),
       gamesPlayed: 0,
+      // New seasons start as drafts: roster setup now, games once current.
+      status: "draft",
       ...(uid ? { coachUids: [uid] } : {}),
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
@@ -113,10 +122,16 @@ export async function createSeason(opts: {
   return { seasonId };
 }
 
-/** Points app/config at an existing season. Writes nothing to any season doc. */
+/**
+ * Points app/config at an existing season. A draft season becomes "active"
+ * (lifecycle fields only); a finalized season must be reopened first, so
+ * reopening and making current stay separate, deliberate actions. Never
+ * touches record, games, stats, or awards.
+ */
 export async function makeCurrentSeason(opts: {
   db: Firestore;
   seasonId: string;
+  uid?: string;
 }): Promise<void> {
   const { db } = opts;
   const seasonId = opts.seasonId.trim();
@@ -129,11 +144,99 @@ export async function makeCurrentSeason(opts: {
     if (!season.exists()) {
       throw new Error(`Season "${seasonId}" does not exist.`);
     }
+    const data = season.data();
+    if (isFinalized(data)) {
+      throw new Error(
+        `${data.seasonLabel ?? seasonId} is finalized. Reopen it first if it needs to become current again.`,
+      );
+    }
+    if (asSeasonStatus(data.status) === "draft") {
+      if (!opts.uid) throw new Error("Sign in as the head coach to activate a season.");
+      const event: LifecycleEvent = {
+        action: "activated",
+        at: new Date().toISOString(),
+        byUid: opts.uid,
+        fromStatus: "draft",
+      };
+      tx.update(seasonRef, {
+        status: "active",
+        activatedAt: serverTimestamp(),
+        lifecycleHistory: [
+          ...(Array.isArray(data.lifecycleHistory) ? data.lifecycleHistory : []),
+          event,
+        ],
+        updatedAt: serverTimestamp(),
+      });
+    }
     tx.set(
       cfgRef,
       { currentSeasonId: seasonId, updatedAt: serverTimestamp() },
       { merge: true },
     );
+  });
+}
+
+/** Clear error before Firestore rules reject a write to a finalized season. */
+export async function assertSeasonWritable(db: Firestore, seasonId: string): Promise<void> {
+  const snap = await getDoc(doc(db, "seasons", seasonId));
+  if (snap.exists() && isFinalized(snap.data())) {
+    const label = String(snap.data().seasonLabel ?? seasonId);
+    throw new Error(`${label} is finalized and read-only. Reopen it to make changes.`);
+  }
+}
+
+/**
+ * Finalizes a season: marks it read-only (enforced by Firestore rules).
+ * Writes only lifecycle fields (status, finalizedAt, finalizedByUid,
+ * lifecycleHistory, updatedAt); never recalculates stats or resets the
+ * record, games played, or awards. Idempotent.
+ */
+export async function finalizeSeason(opts: {
+  db: Firestore;
+  uid: string;
+  seasonId: string;
+}): Promise<{ alreadyFinalized: boolean }> {
+  const { db, uid, seasonId } = opts;
+  const ref = doc(db, "seasons", seasonId);
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error(`Season "${seasonId}" does not exist.`);
+    const plan = planFinalize(snap.data(), uid, new Date().toISOString());
+    if (plan.alreadyFinalized) return { alreadyFinalized: true };
+    tx.update(ref, {
+      status: "finalized",
+      finalizedAt: serverTimestamp(),
+      finalizedByUid: uid,
+      lifecycleHistory: plan.history,
+      updatedAt: serverTimestamp(),
+    });
+    return { alreadyFinalized: false };
+  });
+}
+
+/**
+ * Reopens a finalized season so it is editable again ("active"). Does not
+ * make it the current season. The finalization is kept in
+ * lifecycleHistory; records, stats, and awards are untouched.
+ */
+export async function reopenSeason(opts: {
+  db: Firestore;
+  uid: string;
+  seasonId: string;
+}): Promise<void> {
+  const { db, uid, seasonId } = opts;
+  const ref = doc(db, "seasons", seasonId);
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error(`Season "${seasonId}" does not exist.`);
+    const plan = planReopen(snap.data(), uid, new Date().toISOString());
+    tx.update(ref, {
+      status: "active",
+      reopenedAt: serverTimestamp(),
+      reopenedByUid: uid,
+      lifecycleHistory: plan.history,
+      updatedAt: serverTimestamp(),
+    });
   });
 }
 
@@ -145,6 +248,7 @@ export async function updateScheduledGames(opts: {
   scheduledGames: number;
 }): Promise<void> {
   const { db, seasonId, scheduledGames } = opts;
+  await assertSeasonWritable(db, seasonId);
   if (!Number.isFinite(scheduledGames) || scheduledGames < 0) {
     throw new Error("Scheduled games must be a whole number, 0 or more.");
   }
@@ -180,6 +284,7 @@ export async function savePlayerEdits(opts: {
   const { db, seasonId, players, edits } = opts;
 
   if (players.length === 0) throw new Error("No players in roster.");
+  await assertSeasonWritable(db, seasonId);
 
   const batch = writeBatch(db);
   let wrote = 0;
@@ -241,6 +346,7 @@ export async function addPlayersToRoster(opts: {
   if (!seasonSnap.exists()) {
     throw new Error(`Season "${seasonId}" does not exist. Create it first.`);
   }
+  await assertSeasonWritable(db, seasonId);
 
   const playersCol = collection(db, "seasons", seasonId, "players");
   const existingSnap = await getDocs(playersCol);
@@ -343,6 +449,7 @@ export async function removeRosterPlayer(opts: {
   confirmName: string;
 }): Promise<void> {
   const { db, seasonId, seasonPlayerId } = opts;
+  await assertSeasonWritable(db, seasonId);
   const ref = doc(db, "seasons", seasonId, "players", seasonPlayerId);
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new Error("That player is not on this roster.");
@@ -409,6 +516,7 @@ export async function saveGameAndApplyDeltas(opts: {
 
   const opp = opponent.trim();
   if (!opp) throw new Error("Opponent is required.");
+  await assertSeasonWritable(db, seasonId);
 
   const slug = opp
     .toLowerCase()

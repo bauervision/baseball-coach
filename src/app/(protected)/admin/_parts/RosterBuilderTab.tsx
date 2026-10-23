@@ -60,7 +60,9 @@ export function RosterBuilderTab(props: {
   roster: ReturnType<typeof useRosterDraft>;
 }) {
   const { canEdit, seasons, roster } = props;
-  const disabled = !canEdit || roster.rosterBusy;
+  const targetFinalized =
+    seasons?.find((s) => s.seasonId === roster.targetSeasonId)?.status === "finalized";
+  const disabled = !canEdit || roster.rosterBusy || targetFinalized;
   const target = seasons?.find((s) => s.seasonId === roster.targetSeasonId);
   const picks = Object.values(roster.picks);
   const rosterCount = roster.targetRoster?.players.length ?? 0;
@@ -100,8 +102,13 @@ export function RosterBuilderTab(props: {
               <option value={roster.targetSeasonId}>Loading seasons…</option>
             ) : null}
             {(seasons ?? []).map((s) => (
-              <option key={s.seasonId} value={s.seasonId}>
+              <option
+                key={s.seasonId}
+                value={s.seasonId}
+                disabled={s.status === "finalized"}
+              >
                 {seasonOptionLabel(s)}
+                {s.status === "finalized" ? " — final" : s.status === "draft" ? " — draft" : ""}
               </option>
             ))}
           </select>

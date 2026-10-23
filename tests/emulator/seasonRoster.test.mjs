@@ -102,9 +102,9 @@ test("create season does not switch seasons; make current changes only app/confi
   assert.deepEqual(created.record, { wins: 0, losses: 0, ties: 0 });
 
   const fallBefore = await getData(`seasons/${FALL}`);
-  await makeCurrentSeason({ db, seasonId: NEXT });
+  await makeCurrentSeason({ db, seasonId: NEXT, uid: COACH_UID });
   assert.equal((await getData("app/config")).currentSeasonId, NEXT);
-  await makeCurrentSeason({ db, seasonId: FALL });
+  await makeCurrentSeason({ db, seasonId: FALL, uid: COACH_UID });
   assert.equal((await getData("app/config")).currentSeasonId, FALL);
   assert.deepEqual(await getData(`seasons/${FALL}`), fallBefore, "switching back changes nothing");
 

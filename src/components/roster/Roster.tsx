@@ -11,6 +11,8 @@ import {
   computeLeaders,
 } from "@/lib/roster";
 import { useRosterPlayers } from "@/lib/rosterStore";
+import { useViewedSeasonId, withSeason } from "@/lib/viewedSeason";
+import { SeasonSelector } from "@/components/season/SeasonSelector";
 import {
   Card,
   CardContent,
@@ -279,7 +281,9 @@ function rosterStatsForPlayer(args: {
 }
 
 export function Roster() {
-  const { seasonId, meta, players, error } = useRosterPlayers();
+  const viewedSeasonParam = useViewedSeasonId();
+  const { seasonId, activeSeasonId, meta, players, error } =
+    useRosterPlayers(viewedSeasonParam);
 
   const anyStatsExist = React.useMemo(() => {
     const src = players ?? [];
@@ -327,6 +331,11 @@ export function Roster() {
 
   return (
     <div className="rosterPage grid min-w-0 max-w-full gap-5 overflow-hidden">
+      <SeasonSelector
+        viewedSeasonId={seasonId}
+        activeSeasonId={activeSeasonId}
+        className="justify-end"
+      />
       <div className="min-w-0 max-w-full overflow-hidden">
         <div className="rosterHeroWrapper">
           <div className="rosterHero">
@@ -405,7 +414,7 @@ export function Roster() {
       ) : null}
 
       <Link
-        href="/trophies"
+        href={withSeason("/trophies", viewedSeasonParam)}
         className="group block min-w-0 max-w-full overflow-hidden rounded-2xl border p-4 transition-opacity hover:opacity-95 sm:p-5"
         style={{
           borderColor: "color-mix(in oklab, var(--stroke) 92%, transparent)",
@@ -500,7 +509,10 @@ export function Roster() {
               return (
                 <Link
                   key={p.id}
-                  href={`/player?id=${encodeURIComponent(p.id)}`}
+                  href={withSeason(
+                    `/player?id=${encodeURIComponent(p.id)}`,
+                    viewedSeasonParam,
+                  )}
                   className="playerRow min-w-0 max-w-full overflow-hidden"
                   aria-label={`Open ${p.name}`}
                 >

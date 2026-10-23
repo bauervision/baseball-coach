@@ -117,9 +117,19 @@ export function SeasonTab(props: {
                   <option value={currentSeasonId}>Loading seasons…</option>
                 ) : null}
                 {(seasons ?? []).map((s) => (
-                  <option key={s.seasonId} value={s.seasonId}>
+                  <option
+                    key={s.seasonId}
+                    value={s.seasonId}
+                    disabled={s.status === "finalized" && s.seasonId !== currentSeasonId}
+                  >
                     {seasonOptionLabel(s)}
-                    {s.seasonId === currentSeasonId ? " — current" : ""}
+                    {s.seasonId === currentSeasonId
+                      ? " — current"
+                      : s.status === "finalized"
+                        ? " — final (reopen to use)"
+                        : s.status === "draft"
+                          ? " — draft"
+                          : ""}
                   </option>
                 ))}
               </select>

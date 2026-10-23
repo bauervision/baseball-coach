@@ -11,6 +11,7 @@ import {
 } from "@/components/layout/AuthOverlayHost";
 
 import { ThemeModeToggle } from "./ThemeModeToggle";
+import { withSeason } from "@/lib/viewedSeason";
 
 const LOGOUT_OVERLAY_MS = 2000;
 
@@ -66,7 +67,14 @@ function PillLink(props: {
   );
 }
 
-export function Navbar(props: { title: string; seasonLabel?: string }) {
+export function Navbar(props: {
+  title: string;
+  seasonLabel?: string;
+  /** Viewer pages keep the browsed season when navigating home/trophies. */
+  viewedSeasonId?: string | null;
+}) {
+  const homeHref = withSeason("/", props.viewedSeasonId);
+  const trophiesHref = withSeason("/trophies", props.viewedSeasonId);
   const session = React.useMemo(() => readSession(), []);
   const isAdmin = session?.role === "admin";
 
@@ -120,7 +128,7 @@ export function Navbar(props: { title: string; seasonLabel?: string }) {
       <div className="mx-auto h-14 max-w-6xl px-4">
         <div className="flex h-full items-center justify-between gap-3 sm:hidden">
           <Link
-            href="/"
+            href={homeHref}
             className="flex items-center gap-3 min-w-0 transition-opacity hover:opacity-90"
             aria-label="Go to home"
           >
@@ -156,7 +164,7 @@ export function Navbar(props: { title: string; seasonLabel?: string }) {
               </PillLink>
             ) : null}
 
-<PillLink href="/trophies" title="Trophy Case" disabled={loggingOut}>
+<PillLink href={trophiesHref} title="Trophy Case" disabled={loggingOut}>
   <Trophy
     className="h-4 w-4"
     style={{ color: "var(--secondary)" }}
@@ -184,7 +192,7 @@ export function Navbar(props: { title: string; seasonLabel?: string }) {
           {/* Left */}
           <div className="min-w-0">
             <Link
-              href="/"
+              href={homeHref}
               className="flex items-center gap-3 min-w-0 transition-opacity hover:opacity-90"
               aria-label="Go to home"
             >
@@ -237,7 +245,7 @@ export function Navbar(props: { title: string; seasonLabel?: string }) {
               </PillLink>
             ) : null}
 
-<PillLink href="/trophies" title="Trophy Case" disabled={loggingOut}>
+<PillLink href={trophiesHref} title="Trophy Case" disabled={loggingOut}>
   <Trophy
     className="h-4 w-4"
     style={{ color: "var(--secondary)" }}

@@ -15,6 +15,9 @@ import {
   type StatKey as LeaderStatKey,
 } from "@/lib/roster";
 import { useRosterPlayers } from "@/lib/rosterStore";
+import { useViewedSeasonId, withSeason } from "@/lib/viewedSeason";
+import { isFinalized } from "@/lib/seasonLifecycle";
+import { SeasonSelector } from "@/components/season/SeasonSelector";
 import { getFirebaseAuth, getFirestoreDb } from "@/lib/firebase.client";
 import { loadCareerSummary, type CareerSummary } from "@/lib/playerCareerStats";
 import { ArrowLeft } from "lucide-react";
@@ -108,7 +111,12 @@ export default function PlayerPageClient() {
   const sp = useSearchParams();
   const id = (sp.get("id") ?? "").trim();
 
-  const { seasonId, meta, players, error } = useRosterPlayers();
+  // The viewed season (?season=) drives everything on this page: stats,
+  // game log, awards, saved arrangement, recognition sheet, and PDF.
+  const viewedSeasonParam = useViewedSeasonId();
+  const { seasonId, activeSeasonId, meta, players, error } =
+    useRosterPlayers(viewedSeasonParam);
+  const homeHref = withSeason("/", viewedSeasonParam);
 
   const [activeStat, setActiveStat] = React.useState<StatKey | null>(null);
   const [viewMode, setViewMode] = React.useState<"plaque" | "season">("season");
@@ -122,7 +130,9 @@ export default function PlayerPageClient() {
 
   const auth = React.useMemo(() => getFirebaseAuth(), []);
   const db = React.useMemo(() => getFirestoreDb(), []);
-  const { canEdit } = useAdminAuth({ auth, db });
+  const { canEdit: isCoach } = useAdminAuth({ auth, db });
+  // Finalized seasons are read-only (also enforced by Firestore rules).
+  const canEdit = isCoach && !isFinalized(meta);
 
   // Recognition sheet arrangement: `draftOrder` is non-null while editing.
   const [draftOrder, setDraftOrder] = React.useState<string[] | null>(null);
@@ -177,6 +187,19 @@ export default function PlayerPageClient() {
       active = false;
     };
   }, [player, seasonId, teamName, seasonLabel, endSeasonMode, finalAwards]);
+
+  const playerHrefForSeason = React.useCallback(
+    (targetSeasonId: string) => {
+      const row = career?.history.find((h) => h.seasonId === targetSeasonId);
+      if (targetSeasonId === seasonId && player) {
+        return withSeason(`/player?id=${encodeURIComponent(player.id)}`, targetSeasonId, activeSeasonId);
+      }
+      return row
+        ? withSeason(`/player?id=${encodeURIComponent(row.seasonPlayerId)}`, targetSeasonId, activeSeasonId)
+        : withSeason("/", targetSeasonId, activeSeasonId);
+    },
+    [career, seasonId, player, activeSeasonId],
+  );
 
   const leaders = React.useMemo(() => computeLeaders(players ?? []), [players]);
 
@@ -333,7 +356,7 @@ export default function PlayerPageClient() {
         </CardHeader>
         <CardContent>
           <Link
-            href="/"
+            href={homeHref}
             className="text-sm underline"
             style={{ color: "var(--muted)" }}
           >
@@ -356,7 +379,7 @@ export default function PlayerPageClient() {
             {error}
           </div>
           <Link
-            href="/"
+            href={homeHref}
             className="text-sm underline"
             style={{ color: "var(--muted)" }}
           >
@@ -376,7 +399,7 @@ export default function PlayerPageClient() {
         </CardHeader>
         <CardContent>
           <Link
-            href="/"
+            href={homeHref}
             className="text-sm underline"
             style={{ color: "var(--muted)" }}
           >
@@ -400,7 +423,7 @@ export default function PlayerPageClient() {
             <span style={{ color: "var(--foreground)" }}>{id}</span>
           </div>
           <Link
-            href="/"
+            href={homeHref}
             className="text-sm underline"
             style={{ color: "var(--muted)" }}
           >
@@ -441,7 +464,7 @@ export default function PlayerPageClient() {
       <div className="relative z-10 grid gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Link
-            href="/"
+            href={homeHref}
             className="inline-flex items-center gap-2 text-sm font-semibold"
             style={{ color: "var(--muted)" }}
             aria-label="Back to roster"
@@ -618,6 +641,12 @@ export default function PlayerPageClient() {
                 {pdfBusy ? "Creating PDF…" : "Print PDF"}
               </button>
             ) : null}
+
+            <SeasonSelector
+              viewedSeasonId={seasonId}
+              activeSeasonId={activeSeasonId}
+              hrefFor={playerHrefForSeason}
+            />
 
             <div className="text-right">
               <div className="text-xs" style={{ color: "var(--muted)" }}>

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthOverlayWrapper } from "@/components/auth/AuthOverlayWrapper";
+import { ViewedSeasonProvider } from "@/lib/viewedSeason";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,7 +23,9 @@ export default function RootLayout(props: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <AuthOverlayWrapper>{props.children}</AuthOverlayWrapper>
+        <ViewedSeasonProvider>
+          <AuthOverlayWrapper>{props.children}</AuthOverlayWrapper>
+        </ViewedSeasonProvider>
       </body>
     </html>
   );

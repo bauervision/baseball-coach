@@ -1,0 +1,46 @@
+"use client";
+
+// The *viewed* season is a viewer preference carried in the URL
+// (?season=<seasonId>), so historical pages can be bookmarked, shared,
+// refreshed, and navigated with back/forward. It never writes
+// app/config.currentSeasonId, which stays the coach's administrative
+// (active) season. No ?season= means "show the active season".
+
+import * as React from "react";
+import { useSearchParams } from "next/navigation";
+
+const ViewedSeasonContext = React.createContext<string | null>(null);
+
+function FromSearchParams(props: { children: React.ReactNode }) {
+  const sp = useSearchParams();
+  const season = sp.get("season")?.trim() || null;
+  return (
+    <ViewedSeasonContext.Provider value={season}>
+      {props.children}
+    </ViewedSeasonContext.Provider>
+  );
+}
+
+export function ViewedSeasonProvider(props: { children: React.ReactNode }) {
+  // useSearchParams needs a Suspense boundary in a static export. The
+  // fallback renders the same tree for the active season until the URL is
+  // read on the client.
+  return (
+    <React.Suspense
+      fallback={
+        <ViewedSeasonContext.Provider value={null}>
+          {props.children}
+        </ViewedSeasonContext.Provider>
+      }
+    >
+      <FromSearchParams>{props.children}</FromSearchParams>
+    </React.Suspense>
+  );
+}
+
+/** The season id from the URL, or null for "the active season". */
+export function useViewedSeasonId(): string | null {
+  return React.useContext(ViewedSeasonContext);
+}
+
+export { withSeason } from "@/lib/seasonHref";
