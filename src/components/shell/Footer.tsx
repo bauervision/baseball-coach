@@ -1,4 +1,3 @@
-import packageJson from "../../../package.json";
 import { MobileResponsive } from "./MobileResponsive";
 
 export function Footer(props: {
@@ -15,7 +14,7 @@ export function Footer(props: {
     >
       <MobileResponsive className="flex h-12 items-center gap-3 text-xs sm:justify-between">
         <span className="shrink-0 order-1 text-white/50">
-          v{packageJson.version}
+          v{process.env.APP_VERSION}
         </span>
         <span className="truncate order-2 text-[var(--primary)]">
           {props.teamName} {props.league} {props.seasonLabel}

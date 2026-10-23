@@ -18,13 +18,15 @@ import {
   type CareerHistoryRow,
   type ParticipationDoc,
 } from "@/lib/careerHistory";
+import { normalizeSeasonMeta } from "@/lib/rosterStore";
 
 type SeasonInfo = ParticipationDoc["season"];
 
 function seasonInfo(data: DocumentData | undefined): SeasonInfo {
   const d = (data ?? {}) as Record<string, unknown>;
-  const str = (v: unknown, fallback: string) =>
-    typeof v === "string" && v.trim() ? v.trim() : fallback;
+  // Same labels as the season views: the original Spring 2026 doc has no
+  // teamName/seasonLabel and must read "Tigers Spring 2026", not "Team Season".
+  const meta = normalizeSeasonMeta(data ?? {});
   const createdAt = d.createdAt as { toMillis?: () => number } | undefined;
   const finalAwards =
     d.finalAwards && typeof d.finalAwards === "object"
@@ -35,8 +37,8 @@ function seasonInfo(data: DocumentData | undefined): SeasonInfo {
       ? (d.branding as { primary?: string; secondary?: string })
       : undefined;
   return {
-    teamName: str(d.teamName, "Team"),
-    seasonLabel: str(d.seasonLabel, "Season"),
+    teamName: meta.teamName,
+    seasonLabel: meta.seasonLabel,
     teamId: typeof d.teamId === "string" ? d.teamId : undefined,
     createdAtMs:
       typeof createdAt?.toMillis === "function" ? createdAt.toMillis() : undefined,

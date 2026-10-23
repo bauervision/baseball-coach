@@ -81,11 +81,17 @@ function emulatorsEnabled(): boolean {
 }
 
 function createFirestore(app: FirebaseApp): Firestore {
+  const emulators = emulatorsEnabled();
   const db = initializeFirestore(app, {
     localCache: memoryLocalCache(),
-    experimentalForceLongPolling: true,
+    // Deployed builds keep forced long polling. The local emulator forwards
+    // each long-poll request over a fresh internal socket, and on Windows
+    // that forward intermittently fails (BindException) without answering
+    // the browser, leaving reads pending forever; auto-detected streaming
+    // makes far fewer requests and avoids it.
+    experimentalForceLongPolling: !emulators,
   });
-  if (emulatorsEnabled()) connectFirestoreEmulator(db, "127.0.0.1", 8085);
+  if (emulators) connectFirestoreEmulator(db, "127.0.0.1", 8085);
   return db;
 }
 

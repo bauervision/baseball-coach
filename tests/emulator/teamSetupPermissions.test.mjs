@@ -1,8 +1,8 @@
 // New Season Setup → Team step permissions (emulator, fixtures only).
 //
-// Reproduces the "Missing or insufficient permissions." failure: a database
-// whose deployed rules predate teams (no /teams match) denies the setup's
-// team list and team creation. Then checks the repo's rules give the head
+// Reproduces the "Missing or insufficient permissions." failure: production's
+// deployed rules predate teams (no /teams match) and deny the setup's team
+// list and team creation. Then checks the repo's rules give the head
 // coach exactly the access the setup needs, and nobody else any more.
 import { after, beforeEach, test } from "node:test";
 import assert from "node:assert/strict";
@@ -17,12 +17,10 @@ import { loadSnapshot, toJson } from "../../tools/identity/firestore.mjs";
 import { COACH_UID, legacySnapshot } from "../support/fixtures.mjs";
 
 const REPO_RULES = fs.readFileSync("firestore.rules", "utf8");
-// The repo rules minus the teams block: the shape of any deployment made
-// before team support was added.
-const RULES_WITHOUT_TEAMS = REPO_RULES.replace(
-  /    match \/teams\/\{teamId\} \{[\s\S]*?allow delete: if false;\n    \}\n/,
-  "",
-);
+// Production's deployed ruleset (released 2026-08-16; read via the Rules
+// API 2026-10-23, identical to firestore.rules at 09d0f60). It has no
+// /teams match, so every team read and write is denied.
+const DEPLOYED_RULES = fs.readFileSync("tests/support/deployed-2026-08-16.firestore.rules", "utf8");
 
 async function loadRules(content) {
   const res = await fetch(
@@ -55,9 +53,9 @@ async function tigersHistory() {
   return statsDigest(s) + JSON.stringify(s.seasons.map((x) => [x.data, x.players])) + JSON.stringify(s.config);
 }
 
-test("reproduction: rules without /teams deny the setup's team list and creation", async () => {
-  assert.ok(!/match \/teams/.test(RULES_WITHOUT_TEAMS), "teams block removed");
-  await loadRules(RULES_WITHOUT_TEAMS);
+test("reproduction: production's deployed rules deny the setup's team list and creation", async () => {
+  assert.ok(!/match \/teams/.test(DEPLOYED_RULES), "deployed rules predate teams");
+  await loadRules(DEPLOYED_RULES);
   try {
     const denials = [];
     for (const op of [() => listTeams(db), () => createTeamIdempotent(db, blankFalcons()), () => createTeamIdempotent(db, tigersLook())]) {

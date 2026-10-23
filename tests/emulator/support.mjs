@@ -73,6 +73,7 @@ export async function seed(snapshot, adminUids = []) {
       batch.set(gref, g.data);
       for (const l of g.lines ?? []) batch.set(gref.collection("lines").doc(l.id), l.data);
     }
+    for (const l of s.lineups ?? []) batch.set(sref.collection("lineups").doc(l.id), l.data);
   }
   await batch.commit();
 }

@@ -2,7 +2,7 @@
 // Season Setup → Team step. Same emulator build as seasonSetup.test.mjs
 // (see its header); skipped when BROWSER_BASE_URL is not set.
 //
-// P: rules without /teams (an outdated deployment) — the Team step says
+// P: production's deployed rules (no /teams) — the Team step says
 //    why teams are unavailable instead of a silent empty list, and a failed
 //    Create shows an actionable message, not the SDK's generic text.
 // V: repo rules — Blank and Original Tigers look both create and reach the
@@ -24,10 +24,10 @@ const GENERIC = /Missing or insufficient permissions/;
 const ACTIONABLE = /security rules do not allow this account to read or save teams/;
 
 const REPO_RULES = fs.readFileSync("firestore.rules", "utf8");
-const RULES_WITHOUT_TEAMS = REPO_RULES.replace(
-  /    match \/teams\/\{teamId\} \{[\s\S]*?allow delete: if false;\n    \}\n/,
-  "",
-);
+// Production's deployed ruleset (released 2026-08-16; read via the Rules
+// API 2026-10-23, identical to firestore.rules at 09d0f60). It has no
+// /teams match, so every team read and write is denied.
+const DEPLOYED_RULES = fs.readFileSync("tests/support/deployed-2026-08-16.firestore.rules", "utf8");
 
 let browser;
 let db;
@@ -134,8 +134,8 @@ async function fillBlankFalcons(page) {
 const teamDoc = async (id) => (await db.doc(`teams/${id}`).get()).data();
 const urlTeam = (page) => new URL(page.url()).searchParams.get("team");
 
-test("P: rules without /teams → actionable message on load and on Create; nothing written (1366)", { skip: SKIP }, async () => {
-  await loadRules(RULES_WITHOUT_TEAMS);
+test("P: deployed production rules → actionable message on load and on Create; nothing written (1366)", { skip: SKIP }, async () => {
+  await loadRules(DEPLOYED_RULES);
   try {
     const page = await coachPage({ width: 1366, height: 768 });
     await startSetup(page);

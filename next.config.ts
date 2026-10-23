@@ -1,11 +1,17 @@
 import type { NextConfig } from "next";
 
+import packageJson from "./package.json";
+
 const nextConfig: NextConfig = {
   output: "export",
   trailingSlash: true,
   turbopack: {
     root: __dirname,
   },
+
+  // Only the version string reaches the client bundle, never package.json
+  // (scripts, account names, dependencies).
+  env: { APP_VERSION: packageJson.version },
 
   // Optional, but helps avoid surprises with static export.
   images: { unoptimized: true },

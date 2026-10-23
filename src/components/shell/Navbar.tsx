@@ -159,6 +159,7 @@ export function Navbar(props: {
             </div>
           </Link>
 
+          {/* Icon-only pills on phones so the team name has room (labels stay for screen readers). */}
           <div className="flex items-center gap-2 shrink-0">
             {isAdmin ? (
               <PillLink href="/admin" title="Go to admin" disabled={loggingOut}>
@@ -167,7 +168,7 @@ export function Navbar(props: {
                   style={{ color: "var(--secondary)" }}
                   aria-hidden="true"
                 />
-                <span className="text-[13px]">Admin</span>
+                <span className="sr-only">Admin</span>
               </PillLink>
             ) : null}
 
@@ -177,7 +178,7 @@ export function Navbar(props: {
     style={{ color: "var(--secondary)" }}
     aria-hidden="true"
   />
-  <span>Trophies</span>
+  <span className="sr-only">Trophies</span>
 </PillLink>
             <ThemeModeToggle disabled={loggingOut} />
 

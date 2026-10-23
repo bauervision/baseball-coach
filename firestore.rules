@@ -296,9 +296,12 @@ service cloud.firestore {
         allow write: if isAdmin() && seasonOpen(seasonId);
       }
 
-      // Any other present or future season subcollection.
+      // Any other present or future season subcollection: finalized seasons
+      // stay read-only. Reads are head-coach only, as under the deployed
+      // rules (unknown paths were unreadable); public reads stay limited
+      // to the collections above.
       match /{subcollection}/{docId=**} {
-        allow read: if true;
+        allow read: if isAdmin();
         allow write: if isAdmin() && seasonOpen(seasonId);
       }
     }

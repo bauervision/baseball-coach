@@ -91,7 +91,7 @@ Today this is **not needed for correct behavior**: seasons without `coachUids` a
 
 ## 6. Requirements before activating the private player registry
 
-1. Product-owner review of the `firestore.rules` diff. It adds `playerIdentities` and `coachProfiles/{uid}/linkedPlayers`, and leaves `/seasons` unchanged. Note that whether the deployed rules match the repo is **unverified**; check in the console.
+1. Product-owner review of the `firestore.rules` diff. It adds `playerIdentities` and `coachProfiles/{uid}/linkedPlayers`. The deployed ruleset was read on 2026-10-23: it is `firestore.rules` as of commit 09d0f60 (released 2026-08-16). See section 10 for the full comparison.
 2. Deploy the rules on their own (`firebase deploy --only firestore:rules`) after the emulator rules tests pass (`npm run test:emulator`).
 3. Apply the approved identity migration in the **same release** as the app build. Career history counts only confirmed seasons, so without the migration the returning players' Career toggle disappears.
 4. Build with `NEXT_PUBLIC_FEATURE_PLAYER_REGISTRY=1` and deploy.
@@ -99,7 +99,7 @@ Today this is **not needed for correct behavior**: seasons without `coachUids` a
 
 ## 7. Managed-backup restore rehearsal (each step needs product-owner approval)
 
-Status as of 2026-10-22: delete protection on; PITR on (7 days); daily (7d) and weekly Sunday (14w) schedules exist; first completed backup pending.
+Status as of 2026-10-23: delete protection on; PITR on (7 days); daily (7d) and weekly Sunday (14w) schedules exist; first managed backup `READY` (daily, snapshot 2026-10-23 18:23 UTC). A completed backup is not a verified restore; this rehearsal has not been run.
 
 1. List completed backups (read-only):
    `gcloud firestore backups list --location=us-east1 --project=baseball-coach-997ab`
@@ -140,3 +140,54 @@ Rollout order:
 3. Optional, separately approved: create a "Tigers" team in Team Designer from the original colors. Linking the two 2026 seasons to it (writing `teamId` + `branding` snapshots onto historical season docs) is a data migration; do it before finalizing those seasons, or not at all — the legacy path already reproduces their appearance.
 
 Limitations (current phase): bundled logos are the Tigers mark or team initials only; Girl Power, Boys of Summer, and Cyberball award collections are listed as Coming Soon (no artwork); softball uses the baseball stat model and terminology (see Team Designer report).
+
+## 10. Controlled activation (prepared 2026-10-23; nothing executed, every write step needs approval)
+
+### Verified production state (read-only, 2026-10-23)
+
+- Credentials: isolated gcloud config (`CLOUDSDK_CONFIG=C:\Users\mikec\BaseballCoachProtected\gcloud-config`), account and ADC `mikecbauervision@gmail.com`, project and quota project `baseball-coach-997ab`.
+- **Firebase CLI default login is a work account** (`firebase login:list`). Every `firebase deploy` below must pass `--account mikecbauervision@gmail.com`, or run `firebase login:use mikecbauervision@gmail.com` first.
+- Protection: delete protection on; PITR on (7 days); daily (7d) and weekly Sunday (14w) schedules; one managed backup `READY` (2026-10-23 18:23 UTC), restore not yet rehearsed.
+- Deployed rules: release `cloud.firestore` → ruleset created 2026-08-16, byte-identical to `firestore.rules` at 09d0f60 (copy: `tests/support/deployed-2026-08-16.firestore.rules`). No `teams`, `playerIdentities`, `coachProfiles`, lifecycle, or snapshot rules. That is the cause of "Missing or insufficient permissions" in Team Designer.
+- Deployed app: Hosting site `bauer-baseball`, version `d83d27b0637b9138` released 2026-10-21 16:32 UTC (v1.3.0, code of ~2f129d2).
+- Data: export `2026-10-23/prod-export.json` (sha256 `56ecd1bff9e28fac0ccbc71fec4faf379b1eba0f8aa97d7922568c3f8749a4c4`, counts verified: 1 admin, 1 config, 2 seasons, 23 players, 22 games, 217 lines, 2 lineups), identical document-for-document to the 2026-10-22 export.
+
+### Compatibility (emulator)
+
+| Direction | Result |
+|---|---|
+| Live app (2f129d2 code) writes under proposed rules, restored production copy | All 13 write calls (11 distinct paths) allowed; writes to a season the new app finalized are denied |
+| New app under deployed rules | Team list/create denied (the observed bug); lifecycle **not enforced** (a "finalized" season stays writable) |
+| New app under proposed rules, production-shaped fixture | Legacy seasons read with legacy labels and branding; stat entry, player edits, layouts, teams, draft setup, activation, finalize/reopen all work |
+| Public read surface | Identical under deployed and proposed rules (config, seasons, players, games, lines, lineups); teams, identities, admins, and unknown season subcollections are not public |
+| Live app reading migrated player docs | Reads all 23 |
+
+**Order: data corrections → rules → app.** Rules-first is safe for the live app; app-first is not (Team Designer fails, lifecycle unenforced).
+
+### Release sequence
+
+| # | Step | Prod access | Reversible | Verify | Stop if |
+|---|---|---|---|---|---|
+| 0 | Preflight: `gcloud config list`, ADC tokeninfo email, `firebase login:list`, `echo $FIRESTORE_EMULATOR_HOST` (empty), §1 commands, Rules API release still the 2026-08-16 ruleset, Hosting still `d83d27b0637b9138` | Read | — | All match this section | Any identity, project, protection, ruleset, or version differs |
+| 1 | Freeze: coach does not use the live site or localhost (same database) until step 7. Never finalize or use Team Designer/setup on localhost before step 5 | — | — | — | — |
+| 2 | Fresh export: §2 command into a new protected folder; diff against 2026-10-23 export | Read | — | `Count verification passed`; diff shows only known coach activity | Unexplained differences |
+| 3 | Identity migration: dry run must show **exactly 8** ops (4 Spring links, 4 Fall confirmations, ids `254afa52…`, `c2aebfcb…`, `ef3b786c…`, `35b9ace9…`); then `--backup <step-2 export> --apply --allow-production` | Write (8 player docs, 3 fields max each; Admin SDK) | Yes: `--rollback <file>` | Tool prints `Verified`; re-dry-run `Planned updates: 0`; export diff = identity fields on 8 docs only | Any other op count, plan errors, VERIFY FAILED |
+| 4 | Spring 2026 metadata: `node tools/spring-2026-metadata.mjs --project baseball-coach-997ab --allow-production` (dry run prints token), then `--backup <export> --expect-update-time <token> --apply` | Write (`seasons/tigers-2026` teamName, seasonLabel only) | Yes: `--rollback <file>` | Tool prints `only teamName and seasonLabel were added` | Precondition failed (fields present with other values), stale token |
+| 5 | Rules: `npx firebase deploy --only firestore:rules --project baseball-coach-997ab --account mikecbauervision@gmail.com` | Write (security rules) | Yes: redeploy the 2026-08-16 copy (only while the old app is live) | Rules API shows the new ruleset; public pages and the live admin still load and save | Deploy error, any public page or live-admin save failing |
+| 6 | App: `npm run deploy` (registry flag **off**) | Write (Hosting) | Yes: Hosting rollback to `d83d27b0637b9138` | Footer version, Spring 2026 label, Team Designer lists (no permission error), career toggle for the 4 returning players, sheets print one 8×10 page | Any permission or loading error |
+| 7 | Post-release check by the coach, then unfreeze | Read (+ intended coach use) | — | As step 6 | — |
+| 8 | Registry flag (`NEXT_PUBLIC_FEATURE_PLAYER_REGISTRY=1`) | Write (Hosting) | Yes: redeploy without flag | My Players links | Separate approval, not part of this release |
+
+Coach actions afterwards (in the app, ordinary use): finalize Spring 2026 when reviewed; create Spring 2027 through New Season Setup (draft until "Make this the current season").
+
+### Mixed versions (old and new app on one database)
+
+- Browsers may keep the old app until refreshed. Under the new rules the old app keeps working on open seasons; it cannot change a finalized season (shows its generic save error).
+- The old app's season switcher writes `teamName`/`seasonLabel` onto the target season and can point `app/config` at a draft (no activation). Low risk with a single coach; avoid by hard-refreshing after step 6.
+- Never revert rules (step 5) while the new app is live: Team Designer and lifecycle protection would break. Roll back the app first.
+
+### Recovery
+
+- Data: identity and Spring rollback files (written next to the backup export); protected exports; PITR (7 days) or managed-backup restore **into a new database** (§7), then repair from the comparison. Never restore into `(default)`.
+- Rules: redeploy `tests/support/deployed-2026-08-16.firestore.rules` (app rolled back first).
+- App: Hosting rollback to the previous version.
