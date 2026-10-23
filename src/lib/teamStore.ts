@@ -7,6 +7,7 @@
 import {
   collection,
   doc,
+  getDoc,
   getDocs,
   runTransaction,
   serverTimestamp,
@@ -17,6 +18,7 @@ import {
   isSupportedSport,
   isValidLogoRef,
   isValidPalette,
+  sameBranding,
   snapshotFromTeam,
   validateBranding,
   type LogoRef,
@@ -84,6 +86,30 @@ export async function createTeam(db: Firestore, team: Team): Promise<void> {
     }
     tx.set(ref, { ...teamFields(team), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
   });
+}
+
+/**
+ * Creates a team, safely retryable: if the id already exists and holds
+ * exactly this team (e.g. an earlier attempt succeeded but its response was
+ * lost), it is recovered instead of duplicated. A different team on the
+ * same id is refused.
+ */
+export async function createTeamIdempotent(
+  db: Firestore,
+  team: Team,
+): Promise<"created" | "recovered"> {
+  try {
+    await createTeam(db, team);
+    return "created";
+  } catch (e: unknown) {
+    if (!/already exists/.test(e instanceof Error ? e.message : String(e))) throw e;
+    const snap = await getDoc(doc(db, "teams", team.teamId));
+    const existing = snap.exists() ? teamFromData(snap.id, snap.data()) : null;
+    if (existing && sameBranding(snapshotFromTeam(existing), snapshotFromTeam(team))) {
+      return "recovered";
+    }
+    throw new Error("A different team already uses this id.");
+  }
 }
 
 /** Saves a team's identity and both palettes together. */

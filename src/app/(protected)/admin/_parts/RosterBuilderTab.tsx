@@ -58,8 +58,10 @@ export function RosterBuilderTab(props: {
   canEdit: boolean;
   seasons: SeasonSummary[] | null;
   roster: ReturnType<typeof useRosterDraft>;
+  /** Guided setup: the roster is for one fixed season (no season picker). */
+  lockedSeason?: boolean;
 }) {
-  const { canEdit, seasons, roster } = props;
+  const { canEdit, seasons, roster, lockedSeason } = props;
   const targetFinalized =
     seasons?.find((s) => s.seasonId === roster.targetSeasonId)?.status === "finalized";
   const disabled = !canEdit || roster.rosterBusy || targetFinalized;
@@ -86,7 +88,7 @@ export function RosterBuilderTab(props: {
           </div>
         ) : null}
 
-        <label className="grid gap-1 sm:max-w-md">
+        <label className="grid gap-1 sm:max-w-md" hidden={lockedSeason}>
           <span className="text-xs font-semibold" style={{ color: "var(--muted)" }}>
             Season roster
           </span>

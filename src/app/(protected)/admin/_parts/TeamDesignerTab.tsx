@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/Button";
 import {
   BUNDLED_LOGOS,
+  LEGACY_TIGERS_BRANDING,
   PALETTE_LABELS,
   SPORTS,
   contrastWarnings,
@@ -27,12 +28,19 @@ import {
   validateBranding,
   type Team,
 } from "@/lib/branding";
-import { AWARD_COLLECTIONS, isCollectionSelectable } from "@/lib/awardCollections";
-import { TOKEN_KEYS, type ThemeMode, type ThemeTokens } from "@/lib/themeTokens";
+import {
+  AWARD_COLLECTIONS,
+  isCollectionSelectable,
+} from "@/lib/awardCollections";
+import {
+  TOKEN_KEYS,
+  type ThemeMode,
+  type ThemeTokens,
+} from "@/lib/themeTokens";
 import type { SeasonSummary } from "@/lib/seasonStore";
 import {
   applyTeamBrandingToSeason,
-  createTeam,
+  createTeamIdempotent,
   updateTeam,
 } from "@/lib/teamStore";
 import { toastStyle } from "../adminHelpers";
@@ -69,7 +77,12 @@ function Segmented<T extends string>(props: {
   onChangeAction: (v: T) => void;
 }) {
   const group = (
-    <div role="tablist" aria-label={props.label} className="inline-flex rounded-xl border p-0.5" style={{ borderColor: "var(--stroke)" }}>
+    <div
+      role="tablist"
+      aria-label={props.label}
+      className="inline-flex rounded-xl border p-0.5"
+      style={{ borderColor: "var(--stroke)" }}
+    >
       {props.options.map(([v, text]) => {
         const on = v === props.value;
         return (
@@ -81,7 +94,9 @@ function Segmented<T extends string>(props: {
             onClick={() => props.onChangeAction(v)}
             className="rounded-lg px-3 py-1.5 text-xs font-semibold"
             style={{
-              background: on ? "linear-gradient(90deg, var(--primary), var(--secondary))" : "transparent",
+              background: on
+                ? "linear-gradient(90deg, var(--primary), var(--secondary))"
+                : "transparent",
               color: on ? "rgba(0,0,0,0.92)" : "var(--muted)",
             }}
           >
@@ -94,7 +109,11 @@ function Segmented<T extends string>(props: {
   if (!props.caption) return group;
   return (
     <div className="inline-flex items-center gap-2">
-      <span className="text-xs font-semibold" style={{ color: "var(--muted)" }} aria-hidden="true">
+      <span
+        className="text-xs font-semibold"
+        style={{ color: "var(--muted)" }}
+        aria-hidden="true"
+      >
         {props.caption}
       </span>
       {group}
@@ -118,7 +137,9 @@ function MenuButton(props: {
   const itemRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
   const menuId = React.useId();
 
-  const enabled = props.items.map((it, i) => (it.disabled ? -1 : i)).filter((i) => i >= 0);
+  const enabled = props.items
+    .map((it, i) => (it.disabled ? -1 : i))
+    .filter((i) => i >= 0);
   const focusItem = (i: number) => itemRefs.current[i]?.focus();
 
   React.useEffect(() => {
@@ -139,7 +160,9 @@ function MenuButton(props: {
   }
 
   function onMenuKey(e: React.KeyboardEvent) {
-    const current = itemRefs.current.findIndex((el) => el === document.activeElement);
+    const current = itemRefs.current.findIndex(
+      (el) => el === document.activeElement,
+    );
     const pos = enabled.indexOf(current);
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
@@ -241,7 +264,10 @@ function Tile(props: {
       {props.children}
       <span>{props.label}</span>
       {props.note ? (
-        <span className="text-[10px] font-medium" style={{ color: "var(--muted)" }}>
+        <span
+          className="text-[10px] font-medium"
+          style={{ color: "var(--muted)" }}
+        >
           {props.note}
         </span>
       ) : null}
@@ -257,17 +283,41 @@ export function TeamDesignerTab(props: {
   onTeamsChangedAction: () => void;
   onSeasonsChangedAction: () => void;
   onDirtyChangeAction: (dirty: boolean) => void;
+  /**
+   * Guided setup: always a new team from the given template, no team picker
+   * or Seasons section; the saved team is handed back.
+   */
+  setup?: { template: "blank" | "tigers"; onSavedAction: (team: Team) => void };
 }) {
-  const { db, canEdit, teams, seasons, onTeamsChangedAction, onSeasonsChangedAction, onDirtyChangeAction } = props;
+  const {
+    db,
+    canEdit,
+    teams,
+    seasons,
+    onTeamsChangedAction,
+    onSeasonsChangedAction,
+    onDirtyChangeAction,
+    setup,
+  } = props;
 
-  const [selectedId, setSelectedId] = React.useState<string>("");
-  const [saved, setSaved] = React.useState<Draft>(() => newTeamTemplate());
-  const [draft, setDraft] = React.useState<Draft>(() => newTeamTemplate());
+  const initial = (): Draft =>
+    setup?.template === "tigers"
+      ? { ...structuredClone(LEGACY_TIGERS_BRANDING), teamId: "" }
+      : newTeamTemplate();
+  const [selectedId, setSelectedId] = React.useState<string>(
+    setup ? "new" : "",
+  );
+  const [saved, setSaved] = React.useState<Draft>(initial);
+  const [draft, setDraft] = React.useState<Draft>(initial);
+  // A new team keeps one id across retries, so a retry after a lost
+  // response recovers the saved team instead of creating a second one.
+  const pendingIdRef = React.useRef<string | null>(null);
+  const savingRef = React.useRef(false);
   const [section, setSection] = React.useState<Section>("identity");
-  // Which palette is being edited, and which one the preview shows. They
-  // are independent: e.g. edit light while checking the dark preview.
+  // One theme selection shared by the editor and the live preview: either
+  // switch changes both, so the preview always shows the palette being
+  // edited. Unsaved edits to both palettes live in `draft`.
   const [mode, setMode] = React.useState<ThemeMode>("dark");
-  const [previewMode, setPreviewMode] = React.useState<ThemeMode>("dark");
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
@@ -278,7 +328,10 @@ export function TeamDesignerTab(props: {
   const isNew = !draft.teamId;
   const disabled = !canEdit || busy;
 
-  React.useEffect(() => onDirtyChangeAction(dirty), [dirty, onDirtyChangeAction]);
+  React.useEffect(
+    () => onDirtyChangeAction(dirty),
+    [dirty, onDirtyChangeAction],
+  );
   React.useEffect(() => {
     if (!dirty) return;
     const warn = (e: BeforeUnloadEvent) => {
@@ -290,16 +343,17 @@ export function TeamDesignerTab(props: {
 
   // First load: open the first team, or a new-team draft when none exist.
   React.useEffect(() => {
-    if (teams === null || selectedId) return;
+    if (setup || teams === null || selectedId) return;
     const first = teams[0];
     const start = first ? structuredClone(first) : newTeamTemplate();
     setSelectedId(first ? first.teamId : "new");
     setSaved(start);
     setDraft(structuredClone(start));
-  }, [teams, selectedId]);
+  }, [setup, teams, selectedId]);
 
   function select(id: string) {
     if (id === selectedId) return;
+    pendingIdRef.current = null;
     if (dirty && !window.confirm(DISCARD_TEAM_PROMPT)) return;
     const team = teams?.find((t) => t.teamId === id);
     const start = team ? structuredClone(team) : newTeamTemplate();
@@ -317,7 +371,10 @@ export function TeamDesignerTab(props: {
   function setColor(key: keyof ThemeTokens, value: string) {
     setDraft((d) => ({
       ...d,
-      palettes: { ...d.palettes, [mode]: { ...d.palettes[mode], [key]: value } },
+      palettes: {
+        ...d.palettes,
+        [mode]: { ...d.palettes[mode], [key]: value },
+      },
     }));
   }
 
@@ -332,19 +389,29 @@ export function TeamDesignerTab(props: {
     !sameBranding(draft.palettes[which], saved.palettes[which]);
 
   function confirmReset(which: ThemeMode[], what: string) {
-    if (which.some(paletteDirty) && !window.confirm(`Discard unsaved changes to ${what}?`)) return;
+    if (
+      which.some(paletteDirty) &&
+      !window.confirm(`Discard unsaved changes to ${what}?`)
+    )
+      return;
     which.forEach(resetPalette);
   }
 
   async function save() {
-    if (!valid || busy) return;
+    if (!valid || busy || savingRef.current) return;
+    savingRef.current = true; // blocks a double click before re-render
     setBusy(true);
     setErr(null);
     setMsg(null);
     try {
-      const team: Team = { ...draft, teamId: draft.teamId || newTeamId(draft.teamName) };
-      if (isNew) await createTeam(db, team);
+      if (isNew) pendingIdRef.current ??= newTeamId(draft.teamName);
+      const team: Team = {
+        ...draft,
+        teamId: draft.teamId || pendingIdRef.current!,
+      };
+      if (isNew) await createTeamIdempotent(db, team);
       else await updateTeam(db, team);
+      pendingIdRef.current = null;
       setSaved(structuredClone(team));
       setDraft(structuredClone(team));
       setSelectedId(team.teamId);
@@ -354,9 +421,11 @@ export function TeamDesignerTab(props: {
           : `${team.teamName} saved. Existing seasons keep their own branding until you apply it.`,
       );
       onTeamsChangedAction();
+      if (isNew) setup?.onSavedAction(team);
     } catch (e: unknown) {
       setErr(errorText(e, "Could not save the team."));
     } finally {
+      savingRef.current = false;
       setBusy(false);
     }
   }
@@ -379,7 +448,9 @@ export function TeamDesignerTab(props: {
 
   const palette = draft.palettes[mode];
   const warnings = contrastWarnings(palette);
-  const teamSeasons = (seasons ?? []).filter((s) => s.teamId && s.teamId === draft.teamId);
+  const teamSeasons = (seasons ?? []).filter(
+    (s) => s.teamId && s.teamId === draft.teamId,
+  );
   const legacySeasons = (seasons ?? []).filter((s) => !s.branding);
   const savedSnapshot = isNew ? null : snapshotFromTeam(saved);
 
@@ -388,31 +459,35 @@ export function TeamDesignerTab(props: {
       <CardHeader>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <CardTitle>Team Designer</CardTitle>
+            <CardTitle>{setup ? "New team" : "Team Designer"}</CardTitle>
             <CardSubtitle>
               Team identity, colors, logo, and award artwork. Seasons keep the
               branding they were created with.
             </CardSubtitle>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="sr-only" htmlFor="team-designer-select">
-              Team
-            </label>
-            <select
-              id="team-designer-select"
-              className={`${SELECT_CLASS.replace("w-full", "")} w-auto min-w-44 max-w-64`}
-              style={SELECT_STYLE}
-              value={selectedId || "new"}
-              onChange={(e) => select(e.target.value)}
-              disabled={disabled || teams === null}
-            >
-              {(teams ?? []).map((t) => (
-                <option key={t.teamId} value={t.teamId}>
-                  {t.teamName}
-                </option>
-              ))}
-              <option value="new">+ New team</option>
-            </select>
+            {setup ? null : (
+              <>
+                <label className="sr-only" htmlFor="team-designer-select">
+                  Team
+                </label>
+                <select
+                  id="team-designer-select"
+                  className={`${SELECT_CLASS.replace("w-full", "")} w-auto min-w-44 max-w-64`}
+                  style={SELECT_STYLE}
+                  value={selectedId || "new"}
+                  onChange={(e) => select(e.target.value)}
+                  disabled={disabled || teams === null}
+                >
+                  {(teams ?? []).map((t) => (
+                    <option key={t.teamId} value={t.teamId}>
+                      {t.teamName}
+                    </option>
+                  ))}
+                  <option value="new">+ New team</option>
+                </select>
+              </>
+            )}
             <span
               role="status"
               className="text-xs font-semibold"
@@ -432,7 +507,11 @@ export function TeamDesignerTab(props: {
             >
               Cancel
             </Button>
-            <Button size="sm" disabled={disabled || !dirty || !valid} onClick={save}>
+            <Button
+              size="sm"
+              disabled={disabled || (!dirty && !isNew) || !valid}
+              onClick={save}
+            >
               {busy ? "Saving…" : isNew ? "Create team" : "Save team"}
             </Button>
           </div>
@@ -454,11 +533,18 @@ export function TeamDesignerTab(props: {
             label="Team Designer sections"
             value={section}
             onChangeAction={setSection}
-            options={[
-              ["identity", "Identity"],
-              ["appearance", "Appearance"],
-              ["seasons", "Seasons"],
-            ]}
+            options={
+              setup
+                ? [
+                    ["identity", "Identity"],
+                    ["appearance", "Appearance"],
+                  ]
+                : [
+                    ["identity", "Identity"],
+                    ["appearance", "Appearance"],
+                    ["seasons", "Seasons"],
+                  ]
+            }
           />
 
           {section === "identity" ? (
@@ -468,31 +554,54 @@ export function TeamDesignerTab(props: {
                   [
                     ["teamName", "Team name", "Falcons", errors.teamName],
                     ["shortName", "Short name", "FAL", errors.shortName],
-                    ["division", "Division / age group", "10U", errors.division],
+                    [
+                      "division",
+                      "Division / age group",
+                      "10U",
+                      errors.division,
+                    ],
                   ] as const
                 ).map(([key, label, placeholder, error]) => (
                   <label key={key} className="grid gap-1">
-                    <span className="text-xs font-semibold" style={{ color: "var(--muted)" }}>
+                    <span
+                      className="text-xs font-semibold"
+                      style={{ color: "var(--muted)" }}
+                    >
                       {label}
                     </span>
                     <input
                       className={INPUT_CLASS}
-                      style={{ ...SELECT_STYLE, borderColor: error ? "#fb7185" : SELECT_STYLE.borderColor }}
+                      style={{
+                        ...SELECT_STYLE,
+                        borderColor: error
+                          ? "#fb7185"
+                          : SELECT_STYLE.borderColor,
+                      }}
                       value={draft[key]}
                       placeholder={placeholder}
-                      onChange={(e) => patch({ [key]: e.target.value } as Partial<Draft>)}
+                      onChange={(e) =>
+                        patch({ [key]: e.target.value } as Partial<Draft>)
+                      }
                       disabled={disabled}
                       aria-invalid={!!error}
                     />
                     {error && draft[key] !== "" ? (
-                      <span className="text-[11px]" style={{ color: "#fb7185" }}>{error}</span>
+                      <span
+                        className="text-[11px]"
+                        style={{ color: "#fb7185" }}
+                      >
+                        {error}
+                      </span>
                     ) : null}
                   </label>
                 ))}
               </div>
 
               <fieldset className="grid gap-1">
-                <legend className="mb-1 text-xs font-semibold" style={{ color: "var(--muted)" }}>
+                <legend
+                  className="mb-1 text-xs font-semibold"
+                  style={{ color: "var(--muted)" }}
+                >
                   Sport
                 </legend>
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
@@ -517,7 +626,10 @@ export function TeamDesignerTab(props: {
 
               <div className="grid gap-3 sm:grid-cols-2">
                 <fieldset className="grid gap-1">
-                  <legend className="mb-1 text-xs font-semibold" style={{ color: "var(--muted)" }}>
+                  <legend
+                    className="mb-1 text-xs font-semibold"
+                    style={{ color: "var(--muted)" }}
+                  >
                     Logo
                   </legend>
                   <div className="grid grid-cols-2 gap-2">
@@ -527,13 +639,23 @@ export function TeamDesignerTab(props: {
                         label={l.name}
                         selected={draft.logo?.id === l.id}
                         disabled={disabled}
-                        onClickAction={() => patch({ logo: { kind: "bundled", id: l.id } })}
+                        onClickAction={() =>
+                          patch({ logo: { kind: "bundled", id: l.id } })
+                        }
                       >
                         <span className="flex gap-1" aria-hidden="true">
                           {(["#0c0e12", "#f7f8fb"] as const).map((bg) => (
-                            <span key={bg} className="grid h-9 w-9 place-items-center rounded-lg" style={{ background: bg }}>
+                            <span
+                              key={bg}
+                              className="grid h-9 w-9 place-items-center rounded-lg"
+                              style={{ background: bg }}
+                            >
                               {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={l.color} alt="" className="h-7 w-7 object-contain" />
+                              <img
+                                src={l.color}
+                                alt=""
+                                className="h-7 w-7 object-contain"
+                              />
                             </span>
                           ))}
                         </span>
@@ -550,7 +672,10 @@ export function TeamDesignerTab(props: {
                 </fieldset>
 
                 <fieldset className="grid gap-1">
-                  <legend className="mb-1 text-xs font-semibold" style={{ color: "var(--muted)" }}>
+                  <legend
+                    className="mb-1 text-xs font-semibold"
+                    style={{ color: "var(--muted)" }}
+                  >
                     Award collection
                   </legend>
                   <div className="grid grid-cols-2 gap-2">
@@ -567,7 +692,11 @@ export function TeamDesignerTab(props: {
                         >
                           {c.preview ? (
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={c.preview} alt="" className="h-9 w-9 rounded-lg object-cover" />
+                            <img
+                              src={c.preview}
+                              alt=""
+                              className="h-9 w-9 rounded-lg object-cover"
+                            />
                           ) : null}
                         </Tile>
                       );
@@ -603,18 +732,23 @@ export function TeamDesignerTab(props: {
                     {
                       label: "Reset Light Theme",
                       disabled: !paletteDirty("light"),
-                      onSelect: () => confirmReset(["light"], "the light theme"),
+                      onSelect: () =>
+                        confirmReset(["light"], "the light theme"),
                     },
                     {
                       label: "Reset All to Team Defaults",
                       disabled: !paletteDirty("dark") && !paletteDirty("light"),
-                      onSelect: () => confirmReset(["dark", "light"], "both themes"),
+                      onSelect: () =>
+                        confirmReset(["dark", "light"], "both themes"),
                     },
                   ]}
                 />
               </div>
 
-              <ul className="grid gap-1" aria-label={`${mode === "dark" ? "Dark" : "Light"} theme colors`}>
+              <ul
+                className="grid gap-1"
+                aria-label={`${mode === "dark" ? "Dark" : "Light"} theme colors`}
+              >
                 {TOKEN_KEYS.map((key) => {
                   const value = palette[key];
                   const ok = isValidColor(value);
@@ -645,7 +779,12 @@ export function TeamDesignerTab(props: {
                       <input
                         id={id}
                         className="h-8 w-full min-w-0 rounded-lg border px-1.5 font-mono text-[11px] sm:px-2"
-                        style={{ ...SELECT_STYLE, borderColor: ok ? SELECT_STYLE.borderColor : "#fb7185" }}
+                        style={{
+                          ...SELECT_STYLE,
+                          borderColor: ok
+                            ? SELECT_STYLE.borderColor
+                            : "#fb7185",
+                        }}
                         value={value}
                         onChange={(e) => setColor(key, e.target.value.trim())}
                         disabled={disabled}
@@ -662,12 +801,21 @@ export function TeamDesignerTab(props: {
                 </div>
               ) : null}
 
-              <div role="status" aria-live="polite" className="rounded-xl border px-3 py-2 text-xs" style={warnings.length ? toastStyle("err") : toastStyle("ok")}>
+              <div
+                role="status"
+                aria-live="polite"
+                className="rounded-xl border px-3 py-2 text-xs"
+                style={warnings.length ? toastStyle("err") : toastStyle("ok")}
+              >
                 {warnings.length === 0 ? (
-                  <>Contrast check ({mode}): all representative text, button, navigation, and card pairs pass.</>
+                  <>
+                    Contrast check ({mode}): all representative text, button,
+                    navigation, and card pairs pass.
+                  </>
                 ) : (
                   <>
-                    <strong>Low contrast ({mode} theme)</strong> — your colors are kept; consider adjusting:
+                    <strong>Low contrast ({mode} theme)</strong> — your colors
+                    are kept; consider adjusting:
                     <ul className="mt-1 list-disc pl-4">
                       {warnings.map((w) => (
                         <li key={w.label}>
@@ -684,10 +832,14 @@ export function TeamDesignerTab(props: {
           {section === "seasons" ? (
             <div className="grid gap-2 text-sm">
               {isNew ? (
-                <div style={{ color: "var(--muted)" }}>Save the team first, then create seasons for it under Season Update.</div>
+                <div style={{ color: "var(--muted)" }}>
+                  Save the team first, then create seasons for it under Season
+                  Update.
+                </div>
               ) : teamSeasons.length === 0 ? (
                 <div style={{ color: "var(--muted)" }}>
-                  No seasons use {saved.teamName} yet. Create one under Season Update → Create season and pick this team.
+                  No seasons use {saved.teamName} yet. Create one under Season
+                  Update → Create season and pick this team.
                 </div>
               ) : (
                 <ul className="grid gap-1.5">
@@ -702,8 +854,15 @@ export function TeamDesignerTab(props: {
                       >
                         <span>
                           <strong>{s.seasonLabel}</strong>{" "}
-                          <span className="text-xs" style={{ color: "var(--muted)" }}>
-                            {final ? "Final — branding preserved" : current ? "Uses current branding" : "Uses earlier branding"}
+                          <span
+                            className="text-xs"
+                            style={{ color: "var(--muted)" }}
+                          >
+                            {final
+                              ? "Final — branding preserved"
+                              : current
+                                ? "Uses current branding"
+                                : "Uses earlier branding"}
                           </span>
                         </span>
                         {!final && !current ? (
@@ -711,7 +870,9 @@ export function TeamDesignerTab(props: {
                             size="sm"
                             variant="secondary"
                             disabled={disabled || dirty}
-                            title={dirty ? "Save team changes first" : undefined}
+                            title={
+                              dirty ? "Save team changes first" : undefined
+                            }
                             onClick={() => applyToSeason(s.seasonId)}
                           >
                             Apply current branding
@@ -724,8 +885,8 @@ export function TeamDesignerTab(props: {
               )}
               {legacySeasons.length ? (
                 <div className="text-xs" style={{ color: "var(--muted)" }}>
-                  {legacySeasons.map((s) => s.seasonLabel).join(", ")} use the original Tigers
-                  branding and are not linked to a team.
+                  {legacySeasons.map((s) => s.seasonLabel).join(", ")} use the
+                  original Tigers branding and are not linked to a team.
                 </div>
               ) : null}
             </div>
@@ -733,31 +894,50 @@ export function TeamDesignerTab(props: {
 
           <div aria-live="polite" className="grid gap-2">
             {err ? (
-              <div className="rounded-xl border px-3 py-2 text-xs" style={toastStyle("err")}>{err}</div>
+              <div
+                className="rounded-xl border px-3 py-2 text-xs"
+                style={toastStyle("err")}
+              >
+                {err}
+              </div>
             ) : null}
             {msg ? (
-              <div className="rounded-xl border px-3 py-2 text-xs" style={toastStyle("ok")}>{msg}</div>
+              <div
+                className="rounded-xl border px-3 py-2 text-xs"
+                style={toastStyle("ok")}
+              >
+                {msg}
+              </div>
             ) : null}
           </div>
         </div>
 
-        <section aria-label="Live preview" className="grid min-w-0 gap-2 lg:sticky lg:top-4">
+        <section
+          aria-label="Live preview"
+          className="grid min-w-0 gap-2 lg:sticky lg:top-4"
+        >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-semibold" style={{ color: "var(--muted)" }}>
+            <span
+              className="text-xs font-semibold"
+              style={{ color: "var(--muted)" }}
+            >
               Live preview — not saved
             </span>
             <Segmented
               label="Preview theme"
               caption="Preview"
-              value={previewMode}
-              onChangeAction={setPreviewMode}
+              value={mode}
+              onChangeAction={setMode}
               options={[
                 ["dark", "Dark"],
                 ["light", "Light"],
               ]}
             />
           </div>
-          <TeamBrandingPreview branding={{ ...draft, teamId: draft.teamId || null }} mode={previewMode} />
+          <TeamBrandingPreview
+            branding={{ ...draft, teamId: draft.teamId || null }}
+            mode={mode}
+          />
         </section>
       </CardContent>
 
@@ -766,7 +946,10 @@ export function TeamDesignerTab(props: {
           className="sticky bottom-0 z-20 flex items-center justify-between gap-2 border-t px-4 py-2 lg:hidden"
           style={{ borderColor: "var(--stroke)", background: "var(--card)" }}
         >
-          <span className="text-xs font-semibold" style={{ color: "var(--secondary)" }}>
+          <span
+            className="text-xs font-semibold"
+            style={{ color: "var(--secondary)" }}
+          >
             Unsaved changes
           </span>
           <span className="flex gap-2">

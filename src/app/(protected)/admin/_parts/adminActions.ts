@@ -132,6 +132,49 @@ export async function createSeason(opts: {
 }
 
 /**
+ * Guided-setup season creation: creates a *draft* season for a team, or
+ * resumes it when that exact draft (same team and label) already exists,
+ * e.g. after a lost response or an interrupted setup. Anything else on the
+ * id is refused, never overwritten or merged. Never changes the current
+ * season.
+ */
+export async function createSeasonOrResume(opts: {
+  db: Firestore;
+  uid: string;
+  team: Team;
+  seasonId: string;
+  seasonLabel: string;
+  scheduledGames: number;
+  existingSeasonIds: string[];
+}): Promise<{ seasonId: string; outcome: "created" | "resumed" }> {
+  const { db, uid, team, seasonId, seasonLabel } = opts;
+  try {
+    await createSeason({
+      db,
+      uid,
+      seasonId,
+      existingSeasonIds: opts.existingSeasonIds,
+      teamName: team.teamName,
+      teamId: team.teamId,
+      seasonLabel,
+      usesGamesPlayedRecord: false,
+      scheduledGames: opts.scheduledGames,
+      fallbackTeamName: team.teamName,
+      team,
+    });
+    return { seasonId, outcome: "created" };
+  } catch (e: unknown) {
+    if (!/already exists/.test(e instanceof Error ? e.message : String(e))) throw e;
+    const snap = await getDoc(doc(db, "seasons", seasonId));
+    const d = snap.exists() ? snap.data() : null;
+    if (d && d.status === "draft" && d.teamId === team.teamId && d.seasonLabel === seasonLabel) {
+      return { seasonId, outcome: "resumed" };
+    }
+    throw e;
+  }
+}
+
+/**
  * Points app/config at an existing season. A draft season becomes "active"
  * (lifecycle fields only); a finalized season must be reopened first, so
  * reopening and making current stay separate, deliberate actions. Never

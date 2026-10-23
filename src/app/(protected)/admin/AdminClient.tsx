@@ -3,6 +3,7 @@
 
 import * as React from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 
 import { getFirebaseAuth, getFirestoreDb } from "@/lib/firebase.client";
 import { useRosterPlayers, DEFAULT_SEASON_ID } from "@/lib/rosterStore";
@@ -42,6 +43,9 @@ import { listTeams } from "@/lib/teamStore";
 import type { Team } from "@/lib/branding";
 import { isFinalized } from "@/lib/seasonLifecycle";
 import { LineupBuilderTab } from "./_parts/LineupBuilderTab";
+import { LEAVE_SETUP_PROMPT, SeasonSetupWizard } from "./_parts/SeasonSetupWizard";
+import { setupHref } from "@/lib/seasonSetup";
+import { Button } from "@/components/ui/Button";
 
 export default function AdminClient() {
   const { seasonId, meta, players, error: rosterError } = useRosterPlayers();
@@ -108,17 +112,31 @@ export default function AdminClient() {
     };
   }, [db, canEdit, teamsVersion]);
 
-  // Leaving the Team Designer with unsaved changes asks first.
+  // Guided New Season Setup lives in the URL (?setup=1&step=…), so it
+  // survives refresh and back/forward. Any Admin tab leaves it.
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const setupActive = searchParams.get("setup") === "1";
+  const [setupDirty, setSetupDirty] = React.useState(false);
+
+  // Leaving the Team Designer (or setup) with unsaved changes asks first.
   const [teamDirty, setTeamDirty] = React.useState(false);
   const goTab = React.useCallback(
     (next: AdminTab) => {
+      if (setupActive) {
+        if (setupDirty && !window.confirm(LEAVE_SETUP_PROMPT)) return;
+        setSetupDirty(false);
+        router.push("/admin/");
+        setTab(next);
+        return;
+      }
       if (tab === "team" && next !== "team" && teamDirty && !window.confirm(DISCARD_TEAM_PROMPT)) {
         return;
       }
       if (next !== "team") setTeamDirty(false);
       setTab(next);
     },
-    [tab, teamDirty],
+    [tab, teamDirty, setupActive, setupDirty, router],
   );
 
   const seasonSwitch = useSeasonSwitch({
@@ -172,27 +190,27 @@ export default function AdminClient() {
           <div className="flex flex-wrap gap-2">
             <TabButton
               label="Stat Update"
-              active={tab === "stats"}
+              active={!setupActive && tab === "stats"}
               onClickAction={() => goTab("stats")}
             />
             <TabButton
               label="Lineup"
-              active={tab === "lineup"}
+              active={!setupActive && tab === "lineup"}
               onClickAction={() => goTab("lineup")}
             />
             <TabButton
               label="Player Update"
-              active={tab === "players"}
+              active={!setupActive && tab === "players"}
               onClickAction={() => goTab("players")}
             />
             <TabButton
               label="Season Update"
-              active={tab === "season"}
+              active={!setupActive && tab === "season"}
               onClickAction={() => goTab("season")}
             />
             <TabButton
               label="Team Designer"
-              active={tab === "team"}
+              active={!setupActive && tab === "team"}
               onClickAction={() => goTab("team")}
             />
           </div>
@@ -279,7 +297,29 @@ export default function AdminClient() {
         </CardContent>
       </Card>
 
-      {tab === "stats" ? (
+      {setupActive ? (
+        <SeasonSetupWizard
+          db={db}
+          uid={uid}
+          canEdit={canEdit}
+          teams={teams}
+          seasons={seasonSwitch.seasons}
+          currentSeasonId={effectiveSeasonId}
+          onTeamsChangedAction={refreshTeams}
+          onSeasonsChangedAction={seasonSwitch.refreshSeasons}
+          onDirtyChangeAction={setSetupDirty}
+          onExitAction={() => {
+            setSetupDirty(false);
+            router.push("/admin/");
+            setTab("season");
+          }}
+          onOpenLineupAction={() => {
+            setSetupDirty(false);
+            router.push("/admin/");
+            setTab("lineup");
+          }}
+        />
+      ) : tab === "stats" ? (
         <StatsTab
           canEdit={canEditSeason}
           rosterError={rosterError}
@@ -355,6 +395,23 @@ export default function AdminClient() {
         />
       ) : (
         <div className="grid gap-5">
+          <Card>
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold">New season setup</div>
+                <div className="text-xs" style={{ color: "var(--muted)" }}>
+                  Team → Season → Roster → Ready. Creates a draft season; your
+                  current season stays current until you choose otherwise.
+                </div>
+              </div>
+              <Button
+                disabled={!canEdit}
+                onClick={() => router.push(setupHref({ step: "team" }))}
+              >
+                Start setup
+              </Button>
+            </CardContent>
+          </Card>
           <SeasonScheduleCard
             db={db}
             seasonId={effectiveSeasonId}
