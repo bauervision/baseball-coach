@@ -120,6 +120,8 @@ export function SeasonSetupWizard(props: {
   uid: string | null;
   canEdit: boolean;
   teams: Team[] | null;
+  /** Set when loading teams failed (e.g. permission denied). */
+  teamsError?: string | null;
   seasons: SeasonSummary[] | null;
   currentSeasonId: string;
   onTeamsChangedAction: () => void;
@@ -353,6 +355,11 @@ export function SeasonSetupWizard(props: {
 
           {!loading && step === "team" ? (
             <div className="grid gap-3">
+              {props.teamsError ? (
+                <div role="alert" className="rounded-xl border px-3 py-2 text-xs" style={toastStyle("err")}>
+                  {props.teamsError}
+                </div>
+              ) : null}
               <div role="radiogroup" aria-label="Team" className="flex flex-wrap gap-2">
                 {(
                   [

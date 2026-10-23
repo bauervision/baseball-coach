@@ -26,6 +26,21 @@ import {
 } from "@/lib/branding";
 import { isFinalized } from "@/lib/seasonLifecycle";
 
+/**
+ * User-facing text for a failed team read or write. A permission denial
+ * gets an actionable explanation (most often: the database's deployed
+ * security rules predate teams) instead of the SDK's generic message.
+ */
+export function teamAccessMessage(e: unknown, fallback: string): string {
+  const code = e && typeof e === "object" && "code" in e ? String((e as { code?: unknown }).code) : "";
+  if (code === "permission-denied" || code === "firestore/permission-denied") {
+    return "Teams are not available: this database's security rules do not allow this account to read or save teams. Ask the project owner to deploy the current Firestore rules.";
+  }
+  return e && typeof e === "object" && "message" in e
+    ? String((e as { message?: unknown }).message)
+    : fallback;
+}
+
 function teamFromData(id: string, d: Record<string, unknown>): Team | null {
   const palettes = d.palettes as Team["palettes"] | undefined;
   if (

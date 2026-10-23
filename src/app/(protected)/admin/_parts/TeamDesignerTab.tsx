@@ -41,6 +41,7 @@ import type { SeasonSummary } from "@/lib/seasonStore";
 import {
   applyTeamBrandingToSeason,
   createTeamIdempotent,
+  teamAccessMessage,
   updateTeam,
 } from "@/lib/teamStore";
 import { toastStyle } from "../adminHelpers";
@@ -423,7 +424,7 @@ export function TeamDesignerTab(props: {
       onTeamsChangedAction();
       if (isNew) setup?.onSavedAction(team);
     } catch (e: unknown) {
-      setErr(errorText(e, "Could not save the team."));
+      setErr(teamAccessMessage(e, "Could not save the team."));
     } finally {
       savingRef.current = false;
       setBusy(false);

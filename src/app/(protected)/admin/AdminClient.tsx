@@ -39,7 +39,7 @@ import { SeasonScheduleCard } from "./_parts/SeasonScheduleCard";
 import { RosterBuilderTab } from "./_parts/RosterBuilderTab";
 import { SeasonLifecycleCard } from "./_parts/SeasonLifecycleCard";
 import { DISCARD_TEAM_PROMPT, TeamDesignerTab } from "./_parts/TeamDesignerTab";
-import { listTeams } from "@/lib/teamStore";
+import { listTeams, teamAccessMessage } from "@/lib/teamStore";
 import type { Team } from "@/lib/branding";
 import { isFinalized } from "@/lib/seasonLifecycle";
 import { LineupBuilderTab } from "./_parts/LineupBuilderTab";
@@ -95,6 +95,8 @@ export default function AdminClient() {
 
   // Team identities (Team Designer, season creation). Head coach only.
   const [teams, setTeams] = React.useState<Team[] | null>(null);
+  // A failed load is shown, never treated as "no teams".
+  const [teamsError, setTeamsError] = React.useState<string | null>(null);
   const [teamsVersion, setTeamsVersion] = React.useState(0);
   const refreshTeams = React.useCallback(() => setTeamsVersion((v) => v + 1), []);
   React.useEffect(() => {
@@ -102,10 +104,14 @@ export default function AdminClient() {
     let active = true;
     listTeams(db)
       .then((list) => {
-        if (active) setTeams(list);
+        if (!active) return;
+        setTeams(list);
+        setTeamsError(null);
       })
-      .catch(() => {
-        if (active) setTeams([]);
+      .catch((e: unknown) => {
+        if (!active) return;
+        setTeams([]);
+        setTeamsError(teamAccessMessage(e, "Could not load teams."));
       });
     return () => {
       active = false;
@@ -303,6 +309,7 @@ export default function AdminClient() {
           uid={uid}
           canEdit={canEdit}
           teams={teams}
+          teamsError={teamsError}
           seasons={seasonSwitch.seasons}
           currentSeasonId={effectiveSeasonId}
           onTeamsChangedAction={refreshTeams}
