@@ -62,11 +62,13 @@ const INPUT_CLASS =
 
 function Segmented<T extends string>(props: {
   label: string;
+  /** Visible caption before the options. */
+  caption?: string;
   value: T;
   options: Array<[T, string]>;
   onChangeAction: (v: T) => void;
 }) {
-  return (
+  const group = (
     <div role="tablist" aria-label={props.label} className="inline-flex rounded-xl border p-0.5" style={{ borderColor: "var(--stroke)" }}>
       {props.options.map(([v, text]) => {
         const on = v === props.value;
@@ -87,6 +89,125 @@ function Segmented<T extends string>(props: {
           </button>
         );
       })}
+    </div>
+  );
+  if (!props.caption) return group;
+  return (
+    <div className="inline-flex items-center gap-2">
+      <span className="text-xs font-semibold" style={{ color: "var(--muted)" }} aria-hidden="true">
+        {props.caption}
+      </span>
+      {group}
+    </div>
+  );
+}
+
+/**
+ * Compact menu button (WAI-ARIA menu pattern): Enter/Space/ArrowDown opens
+ * and focuses the first item; arrows move; Escape or Tab closes and returns
+ * focus; clicking outside closes.
+ */
+function MenuButton(props: {
+  label: string;
+  disabled?: boolean;
+  items: Array<{ label: string; disabled?: boolean; onSelect: () => void }>;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+  const itemRefs = React.useRef<Array<HTMLButtonElement | null>>([]);
+  const menuId = React.useId();
+
+  const enabled = props.items.map((it, i) => (it.disabled ? -1 : i)).filter((i) => i >= 0);
+  const focusItem = (i: number) => itemRefs.current[i]?.focus();
+
+  React.useEffect(() => {
+    if (!open) return;
+    focusItem(enabled[0] ?? 0);
+    const onDown = (e: PointerEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+    // enabled is derived from items; only focus when opening.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  function close(refocus = true) {
+    setOpen(false);
+    if (refocus) buttonRef.current?.focus();
+  }
+
+  function onMenuKey(e: React.KeyboardEvent) {
+    const current = itemRefs.current.findIndex((el) => el === document.activeElement);
+    const pos = enabled.indexOf(current);
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const step = e.key === "ArrowDown" ? 1 : -1;
+      focusItem(enabled[(pos + step + enabled.length) % enabled.length]);
+    } else if (e.key === "Home" || e.key === "End") {
+      e.preventDefault();
+      focusItem(enabled[e.key === "Home" ? 0 : enabled.length - 1]);
+    } else if (e.key === "Escape") {
+      e.preventDefault();
+      close();
+    } else if (e.key === "Tab") {
+      close(false);
+    }
+  }
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        ref={buttonRef}
+        type="button"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={open ? menuId : undefined}
+        disabled={props.disabled}
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
+        className="inline-flex h-8 items-center gap-1 rounded-xl border px-3 text-xs font-semibold disabled:opacity-60"
+        style={{ borderColor: "var(--stroke)", color: "var(--foreground)" }}
+      >
+        {props.label}
+        <span aria-hidden="true">▾</span>
+      </button>
+      {open ? (
+        <div
+          id={menuId}
+          role="menu"
+          aria-label={props.label}
+          onKeyDown={onMenuKey}
+          className="absolute right-0 z-30 mt-1 grid min-w-56 gap-0.5 rounded-xl border p-1 shadow-lg"
+          style={{ borderColor: "var(--stroke)", background: "var(--card)" }}
+        >
+          {props.items.map((it, i) => (
+            <button
+              key={it.label}
+              ref={(el) => {
+                itemRefs.current[i] = el;
+              }}
+              type="button"
+              role="menuitem"
+              tabIndex={-1}
+              disabled={it.disabled}
+              onClick={() => {
+                close();
+                it.onSelect();
+              }}
+              className="rounded-lg px-3 py-2 text-left text-sm font-semibold hover:bg-[color-mix(in_oklab,var(--primary)_14%,transparent)] focus:bg-[color-mix(in_oklab,var(--primary)_14%,transparent)] focus:outline-none disabled:opacity-50"
+            >
+              {it.label}
+            </button>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -143,7 +264,10 @@ export function TeamDesignerTab(props: {
   const [saved, setSaved] = React.useState<Draft>(() => newTeamTemplate());
   const [draft, setDraft] = React.useState<Draft>(() => newTeamTemplate());
   const [section, setSection] = React.useState<Section>("identity");
+  // Which palette is being edited, and which one the preview shows. They
+  // are independent: e.g. edit light while checking the dark preview.
   const [mode, setMode] = React.useState<ThemeMode>("dark");
+  const [previewMode, setPreviewMode] = React.useState<ThemeMode>("dark");
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
@@ -202,6 +326,14 @@ export function TeamDesignerTab(props: {
       ...d,
       palettes: { ...d.palettes, [which]: { ...saved.palettes[which] } },
     }));
+  }
+
+  const paletteDirty = (which: ThemeMode) =>
+    !sameBranding(draft.palettes[which], saved.palettes[which]);
+
+  function confirmReset(which: ThemeMode[], what: string) {
+    if (which.some(paletteDirty) && !window.confirm(`Discard unsaved changes to ${what}?`)) return;
+    which.forEach(resetPalette);
   }
 
   async function save() {
@@ -307,7 +439,16 @@ export function TeamDesignerTab(props: {
         </div>
       </CardHeader>
 
-      <CardContent className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:items-start">
+      <CardContent
+        className={[
+          "grid gap-4 lg:items-start",
+          // Appearance: compact editor (~35%, never narrower than the longest
+          // color value needs) and a dominant live preview.
+          section === "appearance"
+            ? "lg:grid-cols-[minmax(27rem,35fr)_minmax(0,65fr)]"
+            : "lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]",
+        ].join(" ")}
+      >
         <div className="grid min-w-0 gap-3">
           <Segmented
             label="Team Designer sections"
@@ -441,70 +582,80 @@ export function TeamDesignerTab(props: {
             <div className="grid gap-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <Segmented
-                  label="Theme being edited"
+                  label="Editing theme"
+                  caption="Editing"
                   value={mode}
                   onChangeAction={setMode}
                   options={[
-                    ["dark", "Dark theme"],
-                    ["light", "Light theme"],
+                    ["dark", "Dark"],
+                    ["light", "Light"],
                   ]}
                 />
-                <div className="flex flex-wrap gap-1.5">
-                  <Button size="sm" variant="ghost" disabled={disabled} onClick={() => resetPalette("dark")}>
-                    Reset Dark Theme
-                  </Button>
-                  <Button size="sm" variant="ghost" disabled={disabled} onClick={() => resetPalette("light")}>
-                    Reset Light Theme
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={disabled}
-                    onClick={() => {
-                      resetPalette("dark");
-                      resetPalette("light");
-                    }}
-                  >
-                    Reset All to Team Defaults
-                  </Button>
-                </div>
+                <MenuButton
+                  label="Reset"
+                  disabled={disabled}
+                  items={[
+                    {
+                      label: "Reset Dark Theme",
+                      disabled: !paletteDirty("dark"),
+                      onSelect: () => confirmReset(["dark"], "the dark theme"),
+                    },
+                    {
+                      label: "Reset Light Theme",
+                      disabled: !paletteDirty("light"),
+                      onSelect: () => confirmReset(["light"], "the light theme"),
+                    },
+                    {
+                      label: "Reset All to Team Defaults",
+                      disabled: !paletteDirty("dark") && !paletteDirty("light"),
+                      onSelect: () => confirmReset(["dark", "light"], "both themes"),
+                    },
+                  ]}
+                />
               </div>
 
-              <div className="grid gap-1.5 sm:grid-cols-2">
+              <ul className="grid gap-1" aria-label={`${mode === "dark" ? "Dark" : "Light"} theme colors`}>
                 {TOKEN_KEYS.map((key) => {
                   const value = palette[key];
                   const ok = isValidColor(value);
                   const id = `color-${mode}-${key}`;
                   return (
-                    <div key={key} className="grid grid-cols-[2.25rem_minmax(0,1fr)] items-center gap-2">
+                    <li
+                      key={key}
+                      // One row on desktop: [swatch] Label [value]. On narrow
+                      // phones the value wraps under the label, never clipped.
+                      className="grid grid-cols-[2.25rem_minmax(0,1fr)] items-center gap-x-2 gap-y-1 sm:grid-cols-[2rem_5.75rem_minmax(0,1fr)]"
+                    >
                       <input
                         type="color"
                         aria-label={`${PALETTE_LABELS[key]} color picker (${mode})`}
                         value={pickerHex(value)}
                         onChange={(e) => setColor(key, e.target.value)}
                         disabled={disabled}
-                        className="h-9 w-9 cursor-pointer rounded-lg border bg-transparent p-0.5"
+                        className="h-9 w-9 cursor-pointer rounded-lg border bg-transparent p-0.5 sm:row-auto sm:h-8 sm:w-8 max-sm:row-span-2"
                         style={{ borderColor: "var(--stroke)" }}
                       />
-                      <label htmlFor={id} className="grid min-w-0 gap-0.5">
-                        <span className="text-[11px] font-semibold" style={{ color: "var(--muted)" }}>
-                          {PALETTE_LABELS[key]}
-                        </span>
-                        <input
-                          id={id}
-                          className="h-8 w-full min-w-0 rounded-lg border px-2 font-mono text-xs"
-                          style={{ ...SELECT_STYLE, borderColor: ok ? SELECT_STYLE.borderColor : "#fb7185" }}
-                          value={value}
-                          onChange={(e) => setColor(key, e.target.value.trim())}
-                          disabled={disabled}
-                          aria-invalid={!ok}
-                          spellCheck={false}
-                        />
+                      <label
+                        htmlFor={id}
+                        className="text-[11px] font-semibold leading-tight"
+                        style={{ color: "var(--muted)" }}
+                      >
+                        {PALETTE_LABELS[key]}
                       </label>
-                    </div>
+                      <input
+                        id={id}
+                        className="h-8 w-full min-w-0 rounded-lg border px-1.5 font-mono text-[11px] sm:px-2"
+                        style={{ ...SELECT_STYLE, borderColor: ok ? SELECT_STYLE.borderColor : "#fb7185" }}
+                        value={value}
+                        onChange={(e) => setColor(key, e.target.value.trim())}
+                        disabled={disabled}
+                        aria-invalid={!ok}
+                        spellCheck={false}
+                      />
+                    </li>
                   );
                 })}
-              </div>
+              </ul>
               {errors.palettes ? (
                 <div className="text-xs" style={{ color: "#fb7185" }}>
                   {errors.palettes}
@@ -597,17 +748,46 @@ export function TeamDesignerTab(props: {
             </span>
             <Segmented
               label="Preview theme"
-              value={mode}
-              onChangeAction={setMode}
+              caption="Preview"
+              value={previewMode}
+              onChangeAction={setPreviewMode}
               options={[
                 ["dark", "Dark"],
                 ["light", "Light"],
               ]}
             />
           </div>
-          <TeamBrandingPreview branding={{ ...draft, teamId: draft.teamId || null }} mode={mode} />
+          <TeamBrandingPreview branding={{ ...draft, teamId: draft.teamId || null }} mode={previewMode} />
         </section>
       </CardContent>
+
+      {dirty ? (
+        <div
+          className="sticky bottom-0 z-20 flex items-center justify-between gap-2 border-t px-4 py-2 lg:hidden"
+          style={{ borderColor: "var(--stroke)", background: "var(--card)" }}
+        >
+          <span className="text-xs font-semibold" style={{ color: "var(--secondary)" }}>
+            Unsaved changes
+          </span>
+          <span className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={disabled}
+              onClick={() => {
+                setDraft(structuredClone(saved));
+                setMsg(null);
+                setErr(null);
+              }}
+            >
+              Cancel
+            </Button>
+            <Button size="sm" disabled={disabled || !valid} onClick={save}>
+              {busy ? "Saving…" : isNew ? "Create team" : "Save team"}
+            </Button>
+          </span>
+        </div>
+      ) : null}
     </Card>
   );
 }

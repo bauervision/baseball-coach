@@ -77,7 +77,7 @@ export function TeamBrandingPreview(props: { branding: SeasonBranding; mode: The
     <ScopedBranding branding={branding}>
       <div
         data-testid="branding-preview"
-        className="grid gap-3 rounded-2xl border p-3"
+        className="@container grid gap-3 rounded-2xl border p-3"
         style={{
           ...paletteCssVars(palette),
           background: "var(--bg-base)",
@@ -111,7 +111,9 @@ export function TeamBrandingPreview(props: { branding: SeasonBranding; mode: The
           </span>
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
+        {/* When the preview is wide (Appearance tab), the player card gets
+            more room so its stat cards render at app-like widths. */}
+        <div className="grid gap-3 sm:grid-cols-2 @xl:grid-cols-[minmax(0,1.45fr)_minmax(0,1fr)]">
           {/* Player card + stats */}
           <Card>
             <CardContent className="grid gap-2 p-3">
@@ -123,7 +125,9 @@ export function TeamBrandingPreview(props: { branding: SeasonBranding; mode: The
                   12
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              {/* One stat card per row in a phone-width preview, so the shared
+                  stat card is never squeezed below its designed width. */}
+              <div className="grid grid-cols-1 gap-2 @sm:grid-cols-2">
                 <BigStat label="Batting Average" value=".450" leader tone="primary" />
                 <BigStat label="On-Base %" value=".520" tone="secondary" />
               </div>
