@@ -8,6 +8,7 @@ import { Footer } from "./Footer";
 import { BackToTop } from "../ui/BackToTop";
 import { useRosterPlayers } from "@/lib/rosterStore";
 import { useViewedSeasonId } from "@/lib/viewedSeason";
+import { BrandingProvider } from "@/components/theme/BrandingProvider";
 
 export function ShellLayout(props: { children: React.ReactNode }) {
   // Shell shows the viewed season (?season=), else the active season.
@@ -19,9 +20,9 @@ export function ShellLayout(props: { children: React.ReactNode }) {
   const isPlayerPage = normalizedPathname === "/player";
 
   const navTitle = React.useMemo(() => {
-    const league = meta.league?.trim() || "?";
+    const league = meta.league?.trim() ?? "";
     const team = meta.teamName?.trim() || "?";
-    return `${league} ${team}`;
+    return league ? `${league} ${team}` : team;
   }, [meta.league, meta.teamName]);
 
   const seasonLabel = React.useMemo(() => {
@@ -30,54 +31,56 @@ export function ShellLayout(props: { children: React.ReactNode }) {
   }, [meta.seasonLabel]);
 
   return (
-    <div
-      className="flex min-h-dvh flex-col overflow-x-hidden"
-      style={{
-        background: "var(--bg-base)",
-        color: "var(--foreground)",
-      }}
-    >
+    <BrandingProvider branding={meta.branding}>
       <div
+        className="flex min-h-dvh flex-col overflow-x-hidden"
         style={{
-          paddingTop: "env(safe-area-inset-top, 0px)",
+          background: "var(--bg-base)",
+          color: "var(--foreground)",
         }}
       >
-        <Navbar
-          title={navTitle}
-          seasonLabel={seasonLabel}
-          viewedSeasonId={viewedSeasonId}
-        />
-      </div>
-
-      <main className="flex-1">
         <div
-          className={[
-            "mx-auto w-full px-4 py-6 sm:py-10",
-            isPlayerPage ? "max-w-none 2xl:px-10" : "max-w-6xl",
-          ].join(" ")}
+          style={{
+            paddingTop: "env(safe-area-inset-top, 0px)",
+          }}
         >
-          {error ? (
-            <div className="mb-4 text-xs" style={{ color: "var(--muted)" }}>
-              {error}
-            </div>
-          ) : null}
-
-          {props.children}
+          <Navbar
+            title={navTitle}
+            seasonLabel={seasonLabel}
+            viewedSeasonId={viewedSeasonId}
+          />
         </div>
-      </main>
 
-      <div
-        style={{
-          paddingBottom: "env(safe-area-inset-bottom, 0px)",
-        }}
-      >
-        <Footer
-          teamName={meta.teamName}
-          league={meta.league}
-          seasonLabel={meta.seasonLabel}
-        />
-        <BackToTop />
+        <main className="flex-1">
+          <div
+            className={[
+              "mx-auto w-full px-4 py-6 sm:py-10",
+              isPlayerPage ? "max-w-none 2xl:px-10" : "max-w-6xl",
+            ].join(" ")}
+          >
+            {error ? (
+              <div className="mb-4 text-xs" style={{ color: "var(--muted)" }}>
+                {error}
+              </div>
+            ) : null}
+
+            {props.children}
+          </div>
+        </main>
+
+        <div
+          style={{
+            paddingBottom: "env(safe-area-inset-bottom, 0px)",
+          }}
+        >
+          <Footer
+            teamName={meta.teamName}
+            league={meta.league}
+            seasonLabel={meta.seasonLabel}
+          />
+          <BackToTop />
+        </div>
       </div>
-    </div>
+    </BrandingProvider>
   );
 }

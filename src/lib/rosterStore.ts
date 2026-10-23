@@ -20,6 +20,11 @@ import { normalizeSavedOrder } from "@/lib/recognitionLayout";
 import { asIdentityStatus } from "@/lib/playerIdentity";
 import { normalizeLinkedFrom } from "@/lib/careerHistory";
 import { asSeasonStatus, type SeasonStatus } from "@/lib/seasonLifecycle";
+import {
+  LEGACY_TIGERS_BRANDING,
+  normalizeBranding,
+  type SeasonBranding,
+} from "@/lib/branding";
 
 /**
  * Fallback if app/config is missing.
@@ -49,6 +54,12 @@ export type RosterMeta = {
   recognitionLayouts: Record<string, string[]>;
   /** Lifecycle status; null for seasons created before lifecycle support. */
   status: SeasonStatus | null;
+  /**
+   * The season's branding snapshot, or the legacy Tigers branding for
+   * seasons saved before snapshots existed (deterministic).
+   */
+  branding: SeasonBranding;
+  hasBrandingSnapshot: boolean;
 };
 
 const DEFAULT_META: RosterMeta = {
@@ -63,6 +74,8 @@ const DEFAULT_META: RosterMeta = {
   finalAwards: {},
   recognitionLayouts: {},
   status: null,
+  branding: LEGACY_TIGERS_BRANDING,
+  hasBrandingSnapshot: false,
 };
 
 function asNum(v: unknown): number {
@@ -137,10 +150,16 @@ function normalizeMeta(v: unknown): RosterMeta {
       ? (v as Record<string, unknown>)
       : ({} as Record<string, unknown>);
 
+  const snapshot = normalizeBranding(d.branding);
+
   return {
-    teamName: asNonEmptyString(d.teamName) ?? DEFAULT_META.teamName,
+    teamName:
+      asNonEmptyString(d.teamName) ?? snapshot?.teamName ?? DEFAULT_META.teamName,
     seasonLabel: asNonEmptyString(d.seasonLabel) ?? DEFAULT_META.seasonLabel,
-    league: asNonEmptyString(d.league) ?? DEFAULT_META.league,
+    // Branded seasons use their own division (possibly blank); the
+    // "Mustang" default applies only to legacy seasons.
+    league:
+      asNonEmptyString(d.league) ?? (snapshot ? snapshot.division : DEFAULT_META.league),
     record: normalizeRecord(d.record),
     usesGamesPlayedRecord: d.usesGamesPlayedRecord === true,
     scheduledGames: Math.max(0, asInt(d.scheduledGames)),
@@ -149,6 +168,8 @@ function normalizeMeta(v: unknown): RosterMeta {
     finalAwards: normalizeFinalAwards(d.finalAwards),
     recognitionLayouts: normalizeRecognitionLayouts(d.recognitionLayouts),
     status: asSeasonStatus(d.status),
+    branding: snapshot ?? LEGACY_TIGERS_BRANDING,
+    hasBrandingSnapshot: snapshot !== null,
   };
 }
 

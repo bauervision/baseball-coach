@@ -97,7 +97,7 @@
   width: 240px;
   height: 150px;
 
-  background: url("/TigersLogoColor.png") no-repeat;
+  background: var(--team-logo-color, url("/TigersLogoColor.png")) no-repeat;
   background-position: center;
   background-size: contain;
 
@@ -117,8 +117,8 @@
   background: #ffffff;
 
   /* Use the same image as a mask so the flash matches the logo shape */
-  -webkit-mask-image: url("/TigersLogoColor.png");
-  mask-image: url("/TigersLogoColor.png");
+  -webkit-mask-image: var(--team-logo-color, url("/TigersLogoColor.png"));
+  mask-image: var(--team-logo-color, url("/TigersLogoColor.png"));
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
   -webkit-mask-position: center right;

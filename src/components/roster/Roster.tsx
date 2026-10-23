@@ -13,6 +13,8 @@ import {
 import { useRosterPlayers } from "@/lib/rosterStore";
 import { useViewedSeasonId, withSeason } from "@/lib/viewedSeason";
 import { SeasonSelector } from "@/components/season/SeasonSelector";
+import { resolveLogo } from "@/lib/branding";
+import { TeamMark, useBranding } from "@/components/theme/BrandingProvider";
 import {
   Card,
   CardContent,
@@ -282,6 +284,7 @@ function rosterStatsForPlayer(args: {
 
 export function Roster() {
   const viewedSeasonParam = useViewedSeasonId();
+  const heroHasLogo = resolveLogo(useBranding().logo) !== null;
   const { seasonId, activeSeasonId, meta, players, error } =
     useRosterPlayers(viewedSeasonParam);
 
@@ -381,7 +384,15 @@ export function Roster() {
                 </div>
 
                 <div className="rosterHeroRight2" aria-hidden="true">
-                  <div className="tigersLogoGrid" />
+                  {heroHasLogo ? (
+                    <div className="tigersLogoGrid" />
+                  ) : (
+                    <div className="grid h-full w-full place-items-center">
+                      <div className="h-28 w-28 sm:h-36 sm:w-36">
+                        <TeamMark monogramStyle={{ fontSize: 44, borderRadius: 24 }} />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

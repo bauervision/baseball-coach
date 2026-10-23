@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { resolveLogo, sportLabel } from "@/lib/branding";
+import { TeamMark, useAppliedBranding } from "@/components/theme/BrandingProvider";
 
 type OverlayKind = "idle" | "logout" | "enter" | "error";
 
@@ -49,6 +51,8 @@ function readOverlayKind(): OverlayKind {
 }
 
 export default function AuthOverlayHost() {
+  const branding = useAppliedBranding();
+  const hasLogo = resolveLogo(branding.logo) !== null;
   const [kind, setKind] = React.useState<OverlayKind>(() => readOverlayKind());
 
   React.useEffect(() => {
@@ -182,14 +186,20 @@ export default function AuthOverlayHost() {
             >
               <div className="flex items-center gap-3">
                 <div className="shrink-0">
-                  {/* Theme-aware Tigers logo tint using mask */}
+                  {/* Theme-aware team logo tint using mask */}
+                  {hasLogo ? null : (
+                    <div className="h-11 w-11">
+                      <TeamMark branding={branding} />
+                    </div>
+                  )}
                   <div
+                    hidden={!hasLogo}
                     className="tigersLogoMark h-11 w-11"
                     aria-hidden="true"
                     style={{
                       background: isError ? "#fb7185" : "var(--primary)",
-                      WebkitMaskImage: 'url("/TigersLogo.png")',
-                      maskImage: 'url("/TigersLogo.png")',
+                      WebkitMaskImage: 'var(--team-logo-mark, url("/TigersLogo.png"))',
+                      maskImage: 'var(--team-logo-mark, url("/TigersLogo.png"))',
                       WebkitMaskRepeat: "no-repeat",
                       maskRepeat: "no-repeat",
                       WebkitMaskPosition: "center",
@@ -207,13 +217,13 @@ export default function AuthOverlayHost() {
                     className="teamLabel"
                     style={{ color: "var(--foreground)", opacity: 0.92 }}
                   >
-                    TIGERS BASEBALL
+                    {`${branding.teamName} ${sportLabel(branding.sport)}`.toUpperCase()}
                   </div>
                   <div
                     className="mt-1 text-xs"
                     style={{ color: "var(--muted)" }}
                   >
-                    Tigers 2026 • Parent Portal
+                    {branding.teamName} • Parent Portal
                   </div>
                 </div>
               </div>

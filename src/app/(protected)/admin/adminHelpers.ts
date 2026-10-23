@@ -82,7 +82,7 @@ export function todayISO() {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-export type AdminTab = "stats" | "players" | "season" | "lineup";
+export type AdminTab = "stats" | "players" | "season" | "lineup" | "team";
 
 // A brand-new player typed into the roster builder. The permanent id is
 // minted when the row is created, so re-submitting the same row is

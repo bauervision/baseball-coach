@@ -14,7 +14,8 @@ import {
 } from "@/lib/roster";
 import type { TrophyAward, RunnerUpAward, TrophyDef } from "@/lib/trophies";
 import { isFinalCoachAwardKey } from "@/lib/trophies";
-import { TROPHY_ART } from "@/lib/trophyArtwork";
+import { useBranding, useTrophyArt } from "@/components/theme/BrandingProvider";
+import { plaqueAccents, resolveLogo, sportLabel, teamInitials } from "@/lib/branding";
 import {
   autoCardKeys,
   earnedCardKey,
@@ -30,15 +31,17 @@ import type { PlayerBestGame } from "@/components/player/playerBestGame";
 export const SHEET_WIDTH_PX = 960;
 export const SHEET_HEIGHT_PX = 768;
 
-// Print-friendly palette: light surfaces, dark ink, Tigers orange and gold
-// as accents. Fixed values (not theme tokens) so dark mode never leaks into
-// a printed sheet.
+// Print-friendly palette: light surfaces, dark ink, and the season's team
+// accents (Tigers orange and gold for the original branding). Accents are
+// sheet-scoped CSS variables set from the season's *light* palette (see
+// plaqueAccents), so dark mode never leaks into a printed sheet and later
+// team edits never change a past season's sheet.
 const INK = "#1f1b16";
 const MUTED = "#5b5248";
-const ORANGE = "#d9480f";
-const BRAND_ORANGE = "#ff4d00";
-const GOLD = "#efa243";
-const GOLD_LINE = "#d9a35a";
+const ORANGE = "var(--plq-deep)";
+const BRAND_ORANGE = "var(--plq-brand)";
+const GOLD = "var(--plq-gold)";
+const GOLD_LINE = "var(--plq-gold-line)";
 const PAPER = "#fffdf8";
 const CARD = "#ffffff";
 
@@ -99,8 +102,8 @@ function awardStat(
 const TIGERS_ORANGE_FILTER =
   "brightness(0) saturate(100%) invert(49%) sepia(98%) saturate(1901%) hue-rotate(2deg) brightness(101%) contrast(101%)";
 
-function trophyArt(trophy: TrophyDef): string {
-  return TROPHY_ART[trophy.key] ?? "/trophies/trophy.png";
+function artSrc(art: Readonly<Record<string, string>>, trophy: TrophyDef): string {
+  return art[trophy.key] ?? "/trophies/trophy.png";
 }
 
 export type RecognitionCards = {
@@ -418,6 +421,13 @@ function CoachRecognitionPanel(props: {
   coachAward: TrophyAward | null;
 }) {
   const { seasonLabel, coachAward } = props;
+  const art = useTrophyArt();
+  const branding = useBranding();
+  const teamTitle = `${branding.teamName} ${sportLabel(branding.sport)}`;
+  const logo = resolveLogo(branding.logo);
+  // The original Tigers sheet keeps its exact logo rendering.
+  const originalTigersLogo =
+    logo?.id === "tigers" && plaqueAccents(branding.palettes.light).brand === "#ff4d00";
 
   return (
     <Panel
@@ -439,23 +449,51 @@ function CoachRecognitionPanel(props: {
         // as large as the panel allows with no caption.
         <div className="min-h-0 flex-1 pt-2.5">
           <ArtTile
-            src={trophyArt(coachAward.trophy)}
+            src={artSrc(art, coachAward.trophy)}
             alt={coachAward.trophy.title}
             radius={16}
           />
         </div>
       ) : (
         <div className="grid min-h-0 flex-1 grid-rows-[1fr_auto] gap-2.5 pt-3 text-center">
-          <ArtTile
-            src="/TigersLogo.png"
-            alt="Tigers Baseball"
-            radius={0}
-            imgStyle={{ filter: TIGERS_ORANGE_FILTER }}
-          />
+          {originalTigersLogo ? (
+            <ArtTile
+              src="/TigersLogo.png"
+              alt={teamTitle}
+              radius={0}
+              imgStyle={{ filter: TIGERS_ORANGE_FILTER }}
+            />
+          ) : logo ? (
+            <div
+              role="img"
+              aria-label={teamTitle}
+              className="min-h-0"
+              style={{
+                background: BRAND_ORANGE,
+                WebkitMaskImage: `url("${logo.mark}")`,
+                maskImage: `url("${logo.mark}")`,
+                WebkitMaskRepeat: "no-repeat",
+                maskRepeat: "no-repeat",
+                WebkitMaskPosition: "center",
+                maskPosition: "center",
+                WebkitMaskSize: "contain",
+                maskSize: "contain",
+              }}
+            />
+          ) : (
+            <div
+              role="img"
+              aria-label={teamTitle}
+              className="grid min-h-0 place-items-center text-[88px] font-black leading-none"
+              style={{ color: BRAND_ORANGE }}
+            >
+              {teamInitials(branding.shortName || branding.teamName)}
+            </div>
+          )}
 
           <div>
             <div className="text-[24px] font-black leading-none">
-              Tigers Baseball
+              {teamTitle}
             </div>
 
             <div
@@ -470,7 +508,8 @@ function CoachRecognitionPanel(props: {
               style={{ color: MUTED }}
             >
               Thank you for the energy, effort, teamwork, and heart you brought
-              to the Tigers this season. Every practice, every game, and every
+              to the {branding.teamName} this season. Every practice, every
+              game, and every
               moment helped shape this team.
             </div>
 
@@ -631,13 +670,14 @@ function AwardDetail(props: { card: PlaqueAwardCard }) {
 
 function HeroAwardCard(props: { card: PlaqueAwardCard }) {
   const { card } = props;
+  const art = useTrophyArt();
 
   return (
     <Panel
       className="grid min-h-0 grid-cols-[minmax(0,0.9fr)_minmax(0,1fr)] items-center gap-4 p-3"
       style={{ borderColor: GOLD, borderWidth: 2 }}
     >
-      <ArtTile src={trophyArt(card.trophy)} alt={card.trophy.title} radius={14} />
+      <ArtTile src={artSrc(art, card.trophy)} alt={card.trophy.title} radius={14} />
 
       <div className="min-w-0 pr-2 text-center">
         <div
@@ -683,10 +723,11 @@ function HeroAwardCard(props: { card: PlaqueAwardCard }) {
 
 function SmallAwardCard(props: { card: PlaqueAwardCard }) {
   const { card } = props;
+  const art = useTrophyArt();
 
   return (
     <Panel className="grid min-h-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)] items-center gap-3 p-2.5">
-      <ArtTile src={trophyArt(card.trophy)} alt={card.trophy.title} radius={12} />
+      <ArtTile src={artSrc(art, card.trophy)} alt={card.trophy.title} radius={12} />
 
       <div className="min-w-0 pr-1">
         <FitText
@@ -722,10 +763,11 @@ function SmallAwardCard(props: { card: PlaqueAwardCard }) {
  */
 function TallAwardCard(props: { card: PlaqueAwardCard }) {
   const { card } = props;
+  const art = useTrophyArt();
 
   return (
     <Panel className="grid min-h-0 grid-rows-[minmax(0,1fr)_auto] gap-3 p-3 text-center">
-      <ArtTile src={trophyArt(card.trophy)} alt={card.trophy.title} radius={14} />
+      <ArtTile src={artSrc(art, card.trophy)} alt={card.trophy.title} radius={14} />
 
       <div className="min-w-0 px-1">
         <FitText
@@ -791,6 +833,7 @@ function HonorsSummaryCard(props: {
   firstThumbnailSlot: number;
 }) {
   const { honorCount, thumbnails, firstThumbnailSlot } = props;
+  const art = useTrophyArt();
 
   if (thumbnails.length === 0) {
     return (
@@ -813,7 +856,7 @@ function HonorsSummaryCard(props: {
         {thumbnails.map((card, i) => (
           <Slot key={card.key} index={firstThumbnailSlot + i}>
             <div className="grid min-h-0 grid-rows-[1fr_auto] text-center">
-              <ArtTile src={trophyArt(card.trophy)} alt={card.trophy.title} radius={10} />
+              <ArtTile src={artSrc(art, card.trophy)} alt={card.trophy.title} radius={10} />
               <FitText
                 max={9}
                 min={6}
@@ -832,6 +875,7 @@ function HonorsSummaryCard(props: {
 }
 
 function TeamContributorCard() {
+  const { teamName } = useBranding();
   return (
     <Panel className="grid min-h-0 place-items-center p-8 text-center">
       <div>
@@ -841,7 +885,7 @@ function TeamContributorCard() {
           className="mx-auto mt-3 max-w-md text-[14px] font-semibold leading-relaxed"
           style={{ color: MUTED }}
         >
-          A valued part of the Tigers season — showing up, competing, and
+          A valued part of the {teamName} season — showing up, competing, and
           helping the team grow.
         </div>
       </div>
@@ -957,12 +1001,17 @@ export function PlayerSeasonPlaque(props: {
     runnerUpAwards,
     savedOrder: order,
   });
+  const accents = plaqueAccents(useBranding().palettes.light);
 
   return (
     <div
       id={id}
       className="recognition-sheet relative overflow-hidden"
       style={{
+        ["--plq-brand" as string]: accents.brand,
+        ["--plq-deep" as string]: accents.deep,
+        ["--plq-gold" as string]: accents.gold,
+        ["--plq-gold-line" as string]: accents.goldLine,
         width: SHEET_WIDTH_PX,
         height: SHEET_HEIGHT_PX,
         color: INK,

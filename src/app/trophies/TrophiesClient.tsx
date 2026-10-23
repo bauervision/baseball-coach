@@ -8,7 +8,7 @@ import { Trophy } from "lucide-react";
 import { useRosterPlayers } from "@/lib/rosterStore";
 import { useViewedSeasonId, withSeason } from "@/lib/viewedSeason";
 import { SeasonSelector } from "@/components/season/SeasonSelector";
-import { TROPHY_ART } from "@/lib/trophyArtwork";
+import { useTrophyArt } from "@/components/theme/BrandingProvider";
 import {
   getTrophyDefinitions,
   computeTrophies,
@@ -167,8 +167,8 @@ export default function TrophiesClient() {
             {isEndSeason ? (
               <>
                 The season is now complete. These awards celebrate the unique
-                strengths, growth, effort, and impact each player brought to the
-                Tigers this year.
+                strengths, growth, effort, and impact each player brought to the{" "}
+                {meta.teamName} this year.
               </>
             ) : (
               <>
@@ -292,7 +292,7 @@ function TrophyTile(props: {
   const { trophy, award, isEndSeason } = props;
 
   const tone = toneVar(trophy.tone);
-  const artworkSrc = TROPHY_ART[trophy.key];
+  const artworkSrc = useTrophyArt()[trophy.key];
 
   const isFinalAward = isFinalCoachAwardKey(trophy.key);
 

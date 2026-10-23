@@ -5,6 +5,7 @@ import * as React from "react";
 import type { Firestore } from "firebase/firestore";
 import { createSeason, makeCurrentSeason } from "./adminActions";
 import { listSeasons, type SeasonSummary } from "@/lib/seasonStore";
+import type { Team } from "@/lib/branding";
 import { invalidateSeasonList } from "@/components/season/SeasonSelector";
 
 function errorText(e: unknown, fallback: string): string {
@@ -19,8 +20,9 @@ export function useSeasonSwitch(opts: {
   canEdit: boolean;
   currentSeasonId: string;
   fallbackTeamName: string;
+  teams: Team[] | null;
 }) {
-  const { db, uid, canEdit, currentSeasonId, fallbackTeamName } = opts;
+  const { db, uid, canEdit, currentSeasonId, fallbackTeamName, teams } = opts;
 
   const [seasons, setSeasons] = React.useState<SeasonSummary[] | null>(null);
   const [seasonsVersion, setSeasonsVersion] = React.useState(0);
@@ -28,6 +30,7 @@ export function useSeasonSwitch(opts: {
   const [seasonEditId, setSeasonEditId] = React.useState("");
   const [seasonTeamName, setSeasonTeamName] = React.useState("");
   const [seasonTeamId, setSeasonTeamId] = React.useState("");
+  const [createTeamDocId, setCreateTeamDocId] = React.useState("");
   const [seasonLabel, setSeasonLabel] = React.useState("");
   const [usesGamesPlayedRecord, setUsesGamesPlayedRecord] =
     React.useState(false);
@@ -80,6 +83,7 @@ export function useSeasonSwitch(opts: {
         existingSeasonIds: (seasons ?? []).map((s) => s.seasonId),
         teamName: seasonTeamName,
         teamId: seasonTeamId,
+        team: teams?.find((t) => t.teamId === createTeamDocId) ?? null,
         seasonLabel,
         usesGamesPlayedRecord,
         scheduledGames: Number.parseInt(scheduledGames, 10) || 0,
@@ -113,6 +117,8 @@ export function useSeasonSwitch(opts: {
     seasons,
     seasonTeamName,
     seasonTeamId,
+    teams,
+    createTeamDocId,
     seasonLabel,
     usesGamesPlayedRecord,
     scheduledGames,
@@ -159,6 +165,8 @@ export function useSeasonSwitch(opts: {
     setSeasonTeamName,
     seasonTeamId,
     setSeasonTeamId,
+    createTeamDocId,
+    setCreateTeamDocId,
     seasonLabel,
     setSeasonLabel,
     usesGamesPlayedRecord,

@@ -15,6 +15,7 @@ import { Field } from "../adminUiHelpers";
 import { toastStyle } from "../adminHelpers";
 import type { SeasonSummary } from "@/lib/seasonStore";
 import { validateNewSeasonId } from "@/lib/rosterPlanning";
+import type { Team } from "@/lib/branding";
 
 export const SELECT_CLASS =
   "h-10 w-full min-w-0 rounded-xl border px-3 text-sm disabled:opacity-60 disabled:cursor-not-allowed";
@@ -39,6 +40,10 @@ export function SeasonTab(props: {
   setSeasonTeamNameAction: (v: string) => void;
   seasonTeamId: string;
   setSeasonTeamIdAction: (v: string) => void;
+  /** Team identities (Team Designer); null while loading. */
+  teams: Team[] | null;
+  createTeamDocId: string;
+  setCreateTeamDocIdAction: (v: string) => void;
   seasonLabel: string;
   setSeasonLabelAction: (v: string) => void;
   usesGamesPlayedRecord: boolean;
@@ -162,20 +167,45 @@ export function SeasonTab(props: {
               placeholder="tigers-spring-2027"
               disabled={disabled}
             />
-            <Field
-              label="Team name"
-              value={props.seasonTeamName}
-              onChangeAction={props.setSeasonTeamNameAction}
-              placeholder={props.teamNamePlaceholder || "Team"}
-              disabled={disabled}
-            />
-            <Field
-              label="Team id (optional)"
-              value={props.seasonTeamId}
-              onChangeAction={props.setSeasonTeamIdAction}
-              placeholder="tigers"
-              disabled={disabled}
-            />
+            <label className="grid gap-1">
+              <span className="text-xs font-semibold" style={{ color: "var(--muted)" }}>
+                Team
+              </span>
+              <select
+                aria-label="Team for the new season"
+                className={SELECT_CLASS}
+                style={SELECT_STYLE}
+                value={props.createTeamDocId}
+                onChange={(e) => props.setCreateTeamDocIdAction(e.target.value)}
+                disabled={disabled || props.teams === null}
+              >
+                <option value="">No team (original branding)</option>
+                {(props.teams ?? []).map((t) => (
+                  <option key={t.teamId} value={t.teamId}>
+                    {t.teamName}
+                    {t.division ? ` · ${t.division}` : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {props.createTeamDocId ? null : (
+              <>
+                <Field
+                  label="Team name"
+                  value={props.seasonTeamName}
+                  onChangeAction={props.setSeasonTeamNameAction}
+                  placeholder={props.teamNamePlaceholder || "Team"}
+                  disabled={disabled}
+                />
+                <Field
+                  label="Team id (optional)"
+                  value={props.seasonTeamId}
+                  onChangeAction={props.setSeasonTeamIdAction}
+                  placeholder="tigers"
+                  disabled={disabled}
+                />
+              </>
+            )}
             <Field
               label="Season label"
               value={props.seasonLabel}

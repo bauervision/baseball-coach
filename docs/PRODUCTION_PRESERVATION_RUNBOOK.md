@@ -126,3 +126,17 @@ Recommended order:
 4. **Spring 2027.** Create the season (draft) → build the roster → Make current (activates it). A finalized season cannot be made current until it is reopened.
 
 Note: until the Spring 2026 metadata write, the app labels that season from legacy defaults ("Tigers", "Spring 2026"), which happen to be correct for the one legacy doc that lacks them.
+
+## 9. Team Designer & branding rollout (not executed; each step needs approval)
+
+The app now supports `teams/{teamId}` (team identity, sport, division, bundled logo, independent dark/light palettes, award collection) and a per-season `branding` snapshot. Production has no teams and no snapshots today; that is compatible:
+
+- Seasons without a snapshot render with the deterministic legacy Tigers branding (the original tokens, logo, and Original award artwork). Verified pixel-identical against the pre-change baseline on emulator fixtures.
+- No data migration is required to keep the Tigers looking the same.
+
+Rollout order:
+1. Review and deploy `firestore.rules` (teams are head-coach-only; snapshot fields are validated; a season's snapshot changes only via an explicit "apply team branding" that must equal the team's saved branding; finalized seasons can never change).
+2. Deploy the app.
+3. Optional, separately approved: create a "Tigers" team in Team Designer from the original colors. Linking the two 2026 seasons to it (writing `teamId` + `branding` snapshots onto historical season docs) is a data migration; do it before finalizing those seasons, or not at all — the legacy path already reproduces their appearance.
+
+Limitations (current phase): bundled logos are the Tigers mark or team initials only; Girl Power, Boys of Summer, and Cyberball award collections are listed as Coming Soon (no artwork); softball uses the baseball stat model and terminology (see Team Designer report).

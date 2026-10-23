@@ -37,6 +37,9 @@ import { SeasonTab } from "./_parts/SeasonTab";
 import { SeasonScheduleCard } from "./_parts/SeasonScheduleCard";
 import { RosterBuilderTab } from "./_parts/RosterBuilderTab";
 import { SeasonLifecycleCard } from "./_parts/SeasonLifecycleCard";
+import { DISCARD_TEAM_PROMPT, TeamDesignerTab } from "./_parts/TeamDesignerTab";
+import { listTeams } from "@/lib/teamStore";
+import type { Team } from "@/lib/branding";
 import { isFinalized } from "@/lib/seasonLifecycle";
 import { LineupBuilderTab } from "./_parts/LineupBuilderTab";
 
@@ -86,12 +89,45 @@ export default function AdminClient() {
     canEdit: canEditSeason,
   });
 
+  // Team identities (Team Designer, season creation). Head coach only.
+  const [teams, setTeams] = React.useState<Team[] | null>(null);
+  const [teamsVersion, setTeamsVersion] = React.useState(0);
+  const refreshTeams = React.useCallback(() => setTeamsVersion((v) => v + 1), []);
+  React.useEffect(() => {
+    if (!canEdit) return;
+    let active = true;
+    listTeams(db)
+      .then((list) => {
+        if (active) setTeams(list);
+      })
+      .catch(() => {
+        if (active) setTeams([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, [db, canEdit, teamsVersion]);
+
+  // Leaving the Team Designer with unsaved changes asks first.
+  const [teamDirty, setTeamDirty] = React.useState(false);
+  const goTab = React.useCallback(
+    (next: AdminTab) => {
+      if (tab === "team" && next !== "team" && teamDirty && !window.confirm(DISCARD_TEAM_PROMPT)) {
+        return;
+      }
+      if (next !== "team") setTeamDirty(false);
+      setTab(next);
+    },
+    [tab, teamDirty],
+  );
+
   const seasonSwitch = useSeasonSwitch({
     db,
     uid,
     canEdit,
     currentSeasonId: effectiveSeasonId,
     fallbackTeamName: meta.teamName || "Team",
+    teams,
   });
 
   const rosterDraft = useRosterDraft({
@@ -137,22 +173,27 @@ export default function AdminClient() {
             <TabButton
               label="Stat Update"
               active={tab === "stats"}
-              onClickAction={() => setTab("stats")}
+              onClickAction={() => goTab("stats")}
             />
             <TabButton
               label="Lineup"
               active={tab === "lineup"}
-              onClickAction={() => setTab("lineup")}
+              onClickAction={() => goTab("lineup")}
             />
             <TabButton
               label="Player Update"
               active={tab === "players"}
-              onClickAction={() => setTab("players")}
+              onClickAction={() => goTab("players")}
             />
             <TabButton
               label="Season Update"
               active={tab === "season"}
-              onClickAction={() => setTab("season")}
+              onClickAction={() => goTab("season")}
+            />
+            <TabButton
+              label="Team Designer"
+              active={tab === "team"}
+              onClickAction={() => goTab("team")}
             />
           </div>
 
@@ -293,6 +334,16 @@ export default function AdminClient() {
           onSavePlayerEditsAction={playerEdits.onSavePlayerEditsAction}
           onRemovePlayerAction={playerEdits.onRemovePlayerAction}
         />
+      ) : tab === "team" ? (
+        <TeamDesignerTab
+          db={db}
+          canEdit={canEdit}
+          teams={teams}
+          seasons={seasonSwitch.seasons}
+          onTeamsChangedAction={refreshTeams}
+          onSeasonsChangedAction={seasonSwitch.refreshSeasons}
+          onDirtyChangeAction={setTeamDirty}
+        />
       ) : tab === "lineup" ? (
         <LineupBuilderTab
           db={db}
@@ -321,6 +372,9 @@ export default function AdminClient() {
             setSeasonTeamNameAction={seasonSwitch.setSeasonTeamName}
             seasonTeamId={seasonSwitch.seasonTeamId}
             setSeasonTeamIdAction={seasonSwitch.setSeasonTeamId}
+            teams={teams}
+            createTeamDocId={seasonSwitch.createTeamDocId}
+            setCreateTeamDocIdAction={seasonSwitch.setCreateTeamDocId}
             seasonLabel={seasonSwitch.seasonLabel}
             setSeasonLabelAction={seasonSwitch.setSeasonLabel}
             usesGamesPlayedRecord={seasonSwitch.usesGamesPlayedRecord}

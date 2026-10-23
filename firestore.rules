@@ -101,6 +101,102 @@ service cloud.firestore {
     // lineup is readable by anyone. Do not store private data under
     // /seasons. Removing public reads requires real parent auth (Phase E).
     // ------------------------------------------------------------------
+    // Team identity & branding. Only the head coach (admin) may read or
+    // write teams. Every field is validated: supported sports only,
+    // bundled logo ids only, colors as hex or rgb()/rgba() only (nothing
+    // else can reach CSS), and selectable award collections only.
+    // Keep these lists in sync with src/lib/branding.ts and
+    // src/lib/awardCollections.ts (tests/brandingRules.test.mjs checks).
+    // ------------------------------------------------------------------
+    function brandingSports() { return ['baseball', 'softball']; }
+    function brandingLogoIds() { return ['tigers']; }
+    function brandingCollections() { return ['original']; }
+    function paletteKeys() {
+      return ['bgBase', 'foreground', 'card', 'stroke', 'muted',
+              'primary', 'secondary', 'accent', 'accent2'];
+    }
+
+    function validColor(c) {
+      return c is string && c.size() <= 48 && c.matches(
+        '^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|rgba?[(] *[0-9]{1,3} *, *[0-9]{1,3} *, *[0-9]{1,3} *(, *(0|1|0?[.][0-9]+|1[.]0+) *)?[)])$');
+    }
+
+    function validPalette(p) {
+      return p is map
+          && p.keys().hasOnly(paletteKeys()) && p.keys().hasAll(paletteKeys())
+          && validColor(p.bgBase) && validColor(p.foreground) && validColor(p.card)
+          && validColor(p.stroke) && validColor(p.muted) && validColor(p.primary)
+          && validColor(p.secondary) && validColor(p.accent) && validColor(p.accent2);
+    }
+
+    function validLogo(l) {
+      return l == null
+          || (l is map && l.keys().hasOnly(['kind', 'id']) && l.kind == 'bundled'
+              && l.id in brandingLogoIds());
+    }
+
+    function validBrandingFields(b) {
+      return b.teamName is string && b.teamName.size() > 0 && b.teamName.size() <= 40
+          && b.shortName is string && b.shortName.size() <= 12
+          && b.sport in brandingSports()
+          && b.division is string && b.division.size() <= 40
+          && validLogo(b.logo)
+          && b.palettes is map && b.palettes.keys().hasOnly(['dark', 'light'])
+          && validPalette(b.palettes.dark) && validPalette(b.palettes.light)
+          && b.awardCollection in brandingCollections();
+    }
+
+    function teamKeys() {
+      return ['teamId', 'teamName', 'shortName', 'sport', 'division', 'logo',
+              'palettes', 'awardCollection', 'createdAt', 'updatedAt'];
+    }
+
+    match /teams/{teamId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(teamKeys())
+        && request.resource.data.teamId == teamId
+        && validBrandingFields(request.resource.data);
+      allow update: if isAdmin()
+        && request.resource.data.keys().hasOnly(teamKeys())
+        && request.resource.data.teamId == resource.data.teamId
+        && request.resource.data.get('createdAt', null) == resource.data.get('createdAt', null)
+        && validBrandingFields(request.resource.data);
+      allow delete: if false;
+    }
+
+    // A season's branding snapshot: same fields as a team (minus
+    // timestamps), linked to the season's teamId.
+    function validSnapshot(data) {
+      return !('branding' in data)
+          || (data.branding is map
+              && data.branding.keys().hasOnly(['teamId', 'teamName', 'shortName', 'sport',
+                                               'division', 'logo', 'palettes', 'awardCollection'])
+              && validBrandingFields(data.branding)
+              && data.branding.teamId is string
+              && data.get('teamId', null) == data.branding.teamId);
+    }
+
+    // Explicit "apply team branding" to an open season: a branding-only
+    // write whose snapshot is exactly the team's current saved branding,
+    // so a snapshot can never be hand-edited into something else.
+    function matchesTeam(b) {
+      let team = get(/databases/$(database)/documents/teams/$(b.teamId)).data;
+      return b.teamName == team.teamName && b.shortName == team.shortName
+          && b.sport == team.sport && b.division == team.division
+          && b.logo == team.logo && b.palettes == team.palettes
+          && b.awardCollection == team.awardCollection;
+    }
+
+    function isBrandingApply() {
+      return changedKeys().hasOnly(['branding', 'teamId', 'teamName', 'league', 'updatedAt'])
+          && 'branding' in request.resource.data
+          && validSnapshot(request.resource.data)
+          && exists(/databases/$(database)/documents/teams/$(request.resource.data.teamId))
+          && matchesTeam(request.resource.data.branding);
+    }
+
+    // ------------------------------------------------------------------
     // Season lifecycle: draft -> active -> finalized (-> reopened = active).
     // A finalized season is read-only for everyone, including the coach:
     // the season doc and every subcollection reject writes. The only
@@ -159,7 +255,8 @@ service cloud.firestore {
     function isOrdinaryEdit() {
       return request.resource.data.get('status', '') != 'finalized'
           && !changedKeys().hasAny(['status', 'lifecycleHistory', 'finalizedAt', 'finalizedByUid',
-                                    'reopenedAt', 'reopenedByUid', 'activatedAt']);
+                                    'reopenedAt', 'reopenedByUid', 'activatedAt',
+                                    'branding', 'teamId']);
     }
 
     // Public season reads
@@ -170,11 +267,12 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isAdmin()
         && request.resource.data.get('status', 'draft') in ['draft', 'active']
-        && !('lifecycleHistory' in request.resource.data);
+        && !('lifecycleHistory' in request.resource.data)
+        && validSnapshot(request.resource.data);
       allow update: if isAdmin() && (
         resource.data.get('status', '') == 'finalized'
           ? isReopen()
-          : (isOrdinaryEdit() || isActivation() || isFinalization())
+          : (isOrdinaryEdit() || isActivation() || isFinalization() || isBrandingApply())
       );
       allow delete: if isAdmin() && resource.data.get('status', '') != 'finalized';
 

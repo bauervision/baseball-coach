@@ -12,6 +12,8 @@ import {
 
 import { ThemeModeToggle } from "./ThemeModeToggle";
 import { withSeason } from "@/lib/viewedSeason";
+import { resolveLogo } from "@/lib/branding";
+import { TeamMark, useBranding } from "@/components/theme/BrandingProvider";
 
 const LOGOUT_OVERLAY_MS = 2000;
 
@@ -74,6 +76,7 @@ export function Navbar(props: {
   viewedSeasonId?: string | null;
 }) {
   const homeHref = withSeason("/", props.viewedSeasonId);
+  const hasLogo = resolveLogo(useBranding().logo) !== null;
   const trophiesHref = withSeason("/trophies", props.viewedSeasonId);
   const session = React.useMemo(() => readSession(), []);
   const isAdmin = session?.role === "admin";
@@ -133,7 +136,11 @@ export function Navbar(props: {
             aria-label="Go to home"
           >
             <div className="relative h-8 w-8 shrink-0 overflow-hidden">
-              <div className="tigersMark" aria-hidden="true" />
+              {hasLogo ? (
+                <div className="tigersMark" aria-hidden="true" />
+              ) : (
+                <TeamMark />
+              )}
             </div>
 
             <div className="min-w-0">
@@ -197,7 +204,11 @@ export function Navbar(props: {
               aria-label="Go to home"
             >
               <div className="relative h-8 w-8 shrink-0 overflow-hidden">
-                <div className="tigersMark" aria-hidden="true" />
+                {hasLogo ? (
+                  <div className="tigersMark" aria-hidden="true" />
+                ) : (
+                  <TeamMark />
+                )}
               </div>
 
               <div className="min-w-0">
@@ -277,8 +288,8 @@ export function Navbar(props: {
           inset: 0;
           background: var(--primary);
 
-          -webkit-mask-image: url("/TigersLogo.png");
-          mask-image: url("/TigersLogo.png");
+          -webkit-mask-image: var(--team-logo-mark, url("/TigersLogo.png"));
+          mask-image: var(--team-logo-mark, url("/TigersLogo.png"));
           -webkit-mask-repeat: no-repeat;
           mask-repeat: no-repeat;
           -webkit-mask-position: center;

@@ -15,7 +15,7 @@ import {
   type RecognitionSlotBinding,
 } from "@/components/player/PlayerSeasonPlaque";
 import { canSwapSlots, swapSlots } from "@/lib/recognitionLayout";
-import { TROPHY_ART } from "@/lib/trophyArtwork";
+import { useTrophyArt } from "@/components/theme/BrandingProvider";
 
 type SheetProps = Omit<
   React.ComponentProps<typeof PlayerSeasonPlaque>,
@@ -116,6 +116,7 @@ function slotLabel(index: number, visibleCount: number): string {
 /** An earned award with no room on the sheet, still movable into a slot. */
 function HiddenAwardChip(props: { index: number; card: PlaqueAwardCard }) {
   const { index, card } = props;
+  const trophyArt = useTrophyArt();
   const binding = useRecognitionSlotBinding();
   const slotProps = binding?.slotProps(index) ?? {};
 
@@ -131,7 +132,7 @@ function HiddenAwardChip(props: { index: number; card: PlaqueAwardCard }) {
       }}
     >
       <Image
-        src={TROPHY_ART[card.trophy.key] ?? "/trophies/trophy.png"}
+        src={trophyArt[card.trophy.key] ?? "/trophies/trophy.png"}
         alt=""
         width={28}
         height={28}
@@ -160,6 +161,7 @@ export function RecognitionSheetStage(props: {
   onOrderChange?: (order: string[]) => void;
 }) {
   const { sheet, order, editing, onOrderChange } = props;
+  const trophyArt = useTrophyArt();
 
   const recognition = buildRecognitionCards({
     player: sheet.player,
@@ -317,17 +319,17 @@ export function RecognitionSheetStage(props: {
               borderRadius: 18,
               outlineOffset: 3,
               outline: isSource
-                ? "3px solid #ff4d00"
+                ? "3px solid var(--primary)"
                 : isTarget
                   ? valid
-                    ? "4px solid #ff4d00"
+                    ? "4px solid var(--primary)"
                     : "3px solid #b91c1c"
                   : source !== null && valid
-                    ? "2px dashed #efa243"
+                    ? "2px dashed var(--secondary)"
                     : undefined,
               opacity: drag?.active && isSource ? 0.45 : 1,
               background:
-                isTarget && valid ? "rgba(255,77,0,0.08)" : undefined,
+                isTarget && valid ? "color-mix(in srgb, var(--primary) 8%, transparent)" : undefined,
               transition: "opacity 120ms ease",
             },
           } as React.HTMLAttributes<HTMLDivElement>;
@@ -348,7 +350,7 @@ export function RecognitionSheetStage(props: {
                   tabIndex={-1}
                   className={miniBtn}
                   style={{
-                    background: "#efa243",
+                    background: "var(--secondary)",
                     borderColor: "#d98a26",
                     color: "#1f1b16",
                   }}
@@ -425,12 +427,12 @@ export function RecognitionSheetStage(props: {
           style={{
             left: drag.x + 12,
             top: drag.y + 12,
-            borderColor: "#ff4d00",
+            borderColor: "var(--primary)",
           }}
         >
           <Image
             src={
-              TROPHY_ART[cards[drag.from]?.trophy.key ?? ""] ??
+              trophyArt[cards[drag.from]?.trophy.key ?? ""] ??
               "/trophies/trophy.png"
             }
             alt=""

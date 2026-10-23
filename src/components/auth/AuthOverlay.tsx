@@ -23,6 +23,8 @@ import {
   type Auth,
 } from "@/lib/firebase.client";
 import { useRosterPlayers } from "@/lib/rosterStore";
+import { resolveLogo } from "@/lib/branding";
+import { TeamMark } from "@/components/theme/BrandingProvider";
 
 type PendingKind = "enter" | null;
 
@@ -31,6 +33,7 @@ const OVERLAY_MS = 2000;
 export function AuthOverlay(props: { children: React.ReactNode }) {
   const router = useRouter();
   const { meta } = useRosterPlayers();
+  const hasLogo = resolveLogo(meta.branding.logo) !== null;
   const [auth, setAuth] = React.useState<Auth | null>(null);
 
   React.useEffect(() => {
@@ -258,7 +261,7 @@ export function AuthOverlay(props: { children: React.ReactNode }) {
                       textTransform: "uppercase",
                     }}
                   >
-                    Tigers
+                    {meta.teamName}
                   </div>
                   <div
                     className="mt-1 text-xl"
@@ -447,13 +450,19 @@ export function AuthOverlay(props: { children: React.ReactNode }) {
                           "color-mix(in oklab, var(--bg-base) 70%, transparent)",
                       }}
                     >
+                      {!hasLogo ? (
+                        <div className="h-8 w-8 shrink-0">
+                          <TeamMark branding={meta.branding} monogramStyle={{ fontSize: 12 }} />
+                        </div>
+                      ) : null}
                       <div
+                        hidden={!hasLogo}
                         className="tigersLoadingLogo h-8 w-8 shrink-0"
                         aria-hidden="true"
                         style={{
                           background: "var(--primary)",
-                          WebkitMaskImage: 'url("/TigersLogo.png")',
-                          maskImage: 'url("/TigersLogo.png")',
+                          WebkitMaskImage: 'var(--team-logo-mark, url("/TigersLogo.png"))',
+                          maskImage: 'var(--team-logo-mark, url("/TigersLogo.png"))',
                           WebkitMaskRepeat: "no-repeat",
                           maskRepeat: "no-repeat",
                           WebkitMaskPosition: "center",
@@ -549,12 +558,18 @@ export function AuthOverlay(props: { children: React.ReactNode }) {
                   transition={{ duration: 0.25, delay: 0.05 }}
                   aria-hidden="true"
                 >
+                  {!hasLogo ? (
+                    <div className="h-48 w-48">
+                      <TeamMark branding={meta.branding} monogramStyle={{ fontSize: 64, borderRadius: 32 }} />
+                    </div>
+                  ) : null}
                   <div
+                    hidden={!hasLogo}
                     className="authBigTigersLogo h-48 w-48"
                     style={{
                       background: "var(--primary)",
-                      WebkitMaskImage: 'url("/TigersLogo.png")',
-                      maskImage: 'url("/TigersLogo.png")',
+                      WebkitMaskImage: 'var(--team-logo-mark, url("/TigersLogo.png"))',
+                      maskImage: 'var(--team-logo-mark, url("/TigersLogo.png"))',
                       WebkitMaskRepeat: "no-repeat",
                       maskRepeat: "no-repeat",
                       WebkitMaskPosition: "center",

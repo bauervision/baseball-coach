@@ -69,7 +69,7 @@ const THEME_MODE_KEY = storageKey("themeMode");
  * Your fixed brand tokens (dark) + a clean light counterpart.
  * Brand colors remain the same in both modes.
  */
-const DARK_TOKENS: ThemeTokens = {
+export const DARK_TOKENS: ThemeTokens = {
   bgBase: "#0c0e12",
   foreground: "#e5e6e8",
   card: "#1f1f23",
@@ -83,7 +83,7 @@ const DARK_TOKENS: ThemeTokens = {
   accent2: "#6aea53",
 };
 
-const LIGHT_TOKENS: ThemeTokens = {
+export const LIGHT_TOKENS: ThemeTokens = {
   bgBase: "#f7f8fb",
   foreground: "#0e1116",
   card: "#ffffff",
@@ -97,8 +97,34 @@ const LIGHT_TOKENS: ThemeTokens = {
   accent2: DARK_TOKENS.accent2,
 };
 
+// The viewed season's branding (set by BrandingProvider). When unset, the
+// original Tigers tokens above apply.
+let activePalettes: { dark: ThemeTokens; light: ThemeTokens } | null = null;
+
+export function setActivePalettes(
+  palettes: { dark: ThemeTokens; light: ThemeTokens } | null,
+): void {
+  activePalettes = palettes;
+}
+
 export function getTokensForMode(mode: ThemeMode): ThemeTokens {
+  if (activePalettes) return mode === "light" ? activePalettes.light : activePalettes.dark;
   return mode === "light" ? LIGHT_TOKENS : DARK_TOKENS;
+}
+
+/** CSS variables for a palette, for scoped previews (style={...}). */
+export function paletteCssVars(tokens: ThemeTokens): Record<string, string> {
+  return {
+    "--bg-base": tokens.bgBase,
+    "--foreground": tokens.foreground,
+    "--card": tokens.card,
+    "--stroke": tokens.stroke,
+    "--muted": tokens.muted,
+    "--primary": tokens.primary,
+    "--secondary": tokens.secondary,
+    "--accent": tokens.accent,
+    "--accent-2": tokens.accent2,
+  };
 }
 
 export function readThemeMode(): ThemeMode {

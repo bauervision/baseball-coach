@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import type { TrophyAward } from "@/lib/trophies";
-import { TROPHY_ART } from "@/lib/trophyArtwork";
+import { useTrophyArt } from "@/components/theme/BrandingProvider";
 
 export function PlayerTrophyHero(props: {
   playerName: string;
@@ -10,6 +10,7 @@ export function PlayerTrophyHero(props: {
   endSeasonMode: boolean;
 }) {
   const { playerName, awards, endSeasonMode } = props;
+  const trophyArt = useTrophyArt();
 
   return (
     <div
@@ -63,7 +64,7 @@ export function PlayerTrophyHero(props: {
         <div className="mt-5 grid gap-3 sm:grid-cols-2">
           {awards.map((award) => {
             const artworkSrc =
-              TROPHY_ART[award.trophy.key] ?? "/trophies/trophy.png";
+              trophyArt[award.trophy.key] ?? "/trophies/trophy.png";
 
             return (
               <div

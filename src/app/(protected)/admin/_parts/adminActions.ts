@@ -31,6 +31,7 @@ import {
   type RosterAdditionPlan,
 } from "@/lib/rosterPlanning";
 import { normalizeLinkedFrom } from "@/lib/careerHistory";
+import { snapshotFromTeam, type Team } from "@/lib/branding";
 import {
   asSeasonStatus,
   isFinalized,
@@ -87,6 +88,8 @@ export async function createSeason(opts: {
   usesGamesPlayedRecord: boolean;
   scheduledGames: number;
   fallbackTeamName: string;
+  /** Team identity to link and snapshot (branding is copied, not referenced). */
+  team?: Team | null;
 }): Promise<{ seasonId: string }> {
   const { db, uid } = opts;
   const checked = validateNewSeasonId(opts.seasonId, opts.existingSeasonIds);
@@ -101,11 +104,17 @@ export async function createSeason(opts: {
         `Season "${seasonId}" already exists. Choose it under Make current season instead.`,
       );
     }
-    const teamName = opts.teamName.trim() || opts.fallbackTeamName || "Team";
-    const teamId = opts.teamId.trim().toLowerCase();
+    const team = opts.team ?? null;
+    const teamName = team
+      ? team.teamName.trim()
+      : opts.teamName.trim() || opts.fallbackTeamName || "Team";
+    const teamId = team ? team.teamId : opts.teamId.trim().toLowerCase();
     tx.set(seasonRef, {
       teamName,
       ...(teamId ? { teamId } : {}),
+      ...(team
+        ? { league: team.division.trim(), branding: snapshotFromTeam(team) }
+        : {}),
       seasonLabel: opts.seasonLabel.trim() || "Season",
       record: { wins: 0, losses: 0, ties: 0 },
       usesGamesPlayedRecord: opts.usesGamesPlayedRecord === true,

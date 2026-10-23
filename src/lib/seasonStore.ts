@@ -9,6 +9,7 @@ import { normalizeLinkedFrom } from "@/lib/careerHistory";
 import { seasonSortKey } from "@/lib/seasonOrder";
 import { normalizeSeasonMeta } from "@/lib/rosterStore";
 import type { LifecycleEvent, SeasonStatus } from "@/lib/seasonLifecycle";
+import type { SeasonBranding } from "@/lib/branding";
 
 export type SeasonSummary = {
   seasonId: string;
@@ -26,6 +27,8 @@ export type SeasonSummary = {
   layoutsSaved: number;
   /** Append-only audit of finalize/reopen/activate, oldest first. */
   lifecycleHistory: LifecycleEvent[];
+  /** The season's own branding snapshot; null for legacy seasons. */
+  branding: SeasonBranding | null;
 };
 
 /**
@@ -61,6 +64,7 @@ export function seasonSummaryFromData(
     lifecycleHistory: Array.isArray(data.lifecycleHistory)
       ? (data.lifecycleHistory as LifecycleEvent[])
       : [],
+    branding: meta.hasBrandingSnapshot ? meta.branding : null,
   };
 }
 
