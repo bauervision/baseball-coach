@@ -191,3 +191,26 @@ Coach actions afterwards (in the app, ordinary use): finalize Spring 2026 when r
 - Data: identity and Spring rollback files (written next to the backup export); protected exports; PITR (7 days) or managed-backup restore **into a new database** (§7), then repair from the comparison. Never restore into `(default)`.
 - Rules: redeploy `tests/support/deployed-2026-08-16.firestore.rules` (app rolled back first).
 - App: Hosting rollback to the previous version.
+
+## 11. Draft season deletion release (prepared 2026-10-24; not deployed)
+
+What changes in `firestore.rules` (vs the ruleset live since 2026-10-23, copy in `tests/support/deployed-2026-10-23.firestore.rules`):
+
+- New lifecycle state `deleting`: a draft is locked (`draft → deleting`, audited `deletionStarted`) only if it is not current and its season doc has no games played, record, end-of-season flag, final awards, or recognition layouts. While locked, the season cannot be edited, activated, made current, finalized, or given new roster entries or records; it can only be cancelled back to `draft` (audited `deletionCancelled`) or have roster entries and the season doc deleted.
+- Season docs can be deleted **only** in `deleting` and only when not current. Previously the coach could delete any non-finalized season directly.
+- Games, lines, lineups, and unknown season subcollections are rejected on drafts (and on seasons that do not exist); roster entries require an existing season. So a draft can never hold records the client cannot enumerate.
+- `app/config.currentSeasonId` also refuses `deleting` seasons.
+
+Compatibility (emulator): the live v1.3.0 code passes all 13 legitimate write calls on a restored production copy; full emulator suite and browser suites pass.
+
+Limits: rules cannot prove subcollections are empty. The guarantee covers every write made through the rules (the apps). Admin SDK writes bypass rules: the deletion re-checks games, lineups, and roster stats after locking and cancels if anything is there, but documents in unknown subcollections or orphaned lines under a missing game written by an Admin SDK tool would not be seen (they would be left in place, not deleted).
+
+Release order (each step needs approval):
+
+1. Preflight as §10 step 0 (identity, protection, live ruleset = `aac256a2…` / sha256 `25053a96…438d18`, Hosting version).
+2. Fresh read-only export. For the draft to be deleted (e.g. the Falcons Spring 2027 test draft) confirm from the export: `status: "draft"`, not `app/config.currentSeasonId`, no `games`, `lineups`, or other subcollections besides `players`, roster stats all zero, no awards or layouts. Expect the export to include the coach's intentional additions since 2026-10-23 (teams, the draft, its roster entries); compare against the 2026-10-23 export and explain every difference.
+3. Deploy rules (`--only firestore:rules`, `--account mikecbauervision@gmail.com`), read back and compare.
+4. Deploy the app (draft deletion UI needs the new rules; the new rules work with the live app, so rules go first).
+5. The coach deletes the draft in Season Update → Draft seasons (typed confirmation). Verify with a read-only export diff: only that season and its `players` docs are gone.
+
+Rollback: rules → Rules console history (previous ruleset `aac256a2-4178-42e1-8124-b6d56d4fa78b`), app → Hosting rollback. A deleted draft is restored only from the pre-deletion export or PITR (7 days).

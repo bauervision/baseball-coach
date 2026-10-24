@@ -11,10 +11,12 @@
 // Pure functions only; Firestore writes live in the admin actions and are
 // enforced by firestore.rules.
 
-export type SeasonStatus = "draft" | "active" | "finalized";
+// "deleting" is a short-lived lock on an unused draft while it is deleted
+// (see src/lib/draftDeletion.ts); rules freeze the season while it is set.
+export type SeasonStatus = "draft" | "active" | "finalized" | "deleting";
 
 export type LifecycleEvent = {
-  action: "finalized" | "reopened" | "activated";
+  action: "finalized" | "reopened" | "activated" | "deletionStarted" | "deletionCancelled";
   /** ISO time (client clock; serverTimestamp is not allowed in arrays). */
   at: string;
   byUid: string;
@@ -24,7 +26,7 @@ export type LifecycleEvent = {
 };
 
 export function asSeasonStatus(value: unknown): SeasonStatus | null {
-  return value === "draft" || value === "active" || value === "finalized"
+  return value === "draft" || value === "active" || value === "finalized" || value === "deleting"
     ? value
     : null;
 }
@@ -34,7 +36,7 @@ export function isFinalized(data: { status?: unknown } | null | undefined): bool
 }
 
 export function isWritable(data: { status?: unknown } | null | undefined): boolean {
-  return !isFinalized(data);
+  return !isFinalized(data) && asSeasonStatus(data?.status) !== "deleting";
 }
 
 /** Short status tag for selectors; null when nothing needs saying. */
@@ -55,6 +57,7 @@ export function visibleToViewers(opts: {
   status: SeasonStatus | null;
   isCurrent: boolean;
 }): boolean {
+  if (opts.status === "deleting") return false;
   return opts.status !== "draft" || opts.isCurrent;
 }
 

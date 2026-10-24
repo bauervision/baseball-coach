@@ -2,7 +2,6 @@
 "use client";
 
 import * as React from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 
 import { getFirebaseAuth, getFirestoreDb } from "@/lib/firebase.client";
@@ -12,9 +11,6 @@ import { PLAYER_REGISTRY_ENABLED } from "@/lib/features";
 import {
   Card,
   CardContent,
-  CardHeader,
-  CardTitle,
-  CardSubtitle,
 } from "@/components/ui/Card";
 
 import {
@@ -24,7 +20,8 @@ import {
 
 import type { AdminTab } from "./adminHelpers";
 import { toastStyle } from "./adminHelpers";
-import { Field, TabButton } from "./adminUiHelpers";
+import { Field } from "./adminUiHelpers";
+import { AdminWorkspaceHeader } from "./_parts/AdminWorkspaceHeader";
 
 import { useAdminAuth } from "./_parts/useAdminAuth";
 import { useGameEntry } from "./_parts/useGameEntry";
@@ -38,6 +35,7 @@ import { SeasonTab } from "./_parts/SeasonTab";
 import { SeasonScheduleCard } from "./_parts/SeasonScheduleCard";
 import { RosterBuilderTab } from "./_parts/RosterBuilderTab";
 import { SeasonLifecycleCard } from "./_parts/SeasonLifecycleCard";
+import { DraftSeasonsCard } from "./_parts/DraftSeasonsCard";
 import { DISCARD_TEAM_PROMPT, TeamDesignerTab } from "./_parts/TeamDesignerTab";
 import { listTeams, teamAccessMessage } from "@/lib/teamStore";
 import type { Team } from "@/lib/branding";
@@ -45,6 +43,7 @@ import { isFinalized } from "@/lib/seasonLifecycle";
 import { LineupBuilderTab } from "./_parts/LineupBuilderTab";
 import { LEAVE_SETUP_PROMPT, SeasonSetupWizard } from "./_parts/SeasonSetupWizard";
 import { setupHref } from "@/lib/seasonSetup";
+import { invalidateSeasonList } from "@/components/season/SeasonSelector";
 import { Button } from "@/components/ui/Button";
 
 export default function AdminClient() {
@@ -171,56 +170,15 @@ export default function AdminClient() {
 
   return (
     <div className="grid gap-5">
-      <Card>
-        <CardHeader>
-          <CardTitle>Admin</CardTitle>
-          <CardSubtitle>Sign in and manage the current season.</CardSubtitle>
-        </CardHeader>
-
-        <CardContent className="grid gap-4">
-          <div className="text-xs" style={{ color: "var(--muted)" }}>
-            Current season id:{" "}
-            <span style={{ color: "var(--foreground)", fontWeight: 700 }}>
-              {effectiveSeasonId}
-            </span>
-            {PLAYER_REGISTRY_ENABLED ? (
-              <>
-                {" · "}
-                <Link href="/profile" className="underline">
-                  My Players
-                </Link>
-              </>
-            ) : null}
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            <TabButton
-              label="Stat Update"
-              active={!setupActive && tab === "stats"}
-              onClickAction={() => goTab("stats")}
-            />
-            <TabButton
-              label="Lineup"
-              active={!setupActive && tab === "lineup"}
-              onClickAction={() => goTab("lineup")}
-            />
-            <TabButton
-              label="Player Update"
-              active={!setupActive && tab === "players"}
-              onClickAction={() => goTab("players")}
-            />
-            <TabButton
-              label="Season Update"
-              active={!setupActive && tab === "season"}
-              onClickAction={() => goTab("season")}
-            />
-            <TabButton
-              label="Team Designer"
-              active={!setupActive && tab === "team"}
-              onClickAction={() => goTab("team")}
-            />
-          </div>
-
+      <AdminWorkspaceHeader
+        teamLine={[meta.league, meta.teamName].filter(Boolean).join(" ")}
+        seasonLabel={meta.seasonLabel}
+        seasonId={effectiveSeasonId}
+        activeTab={setupActive ? null : tab}
+        onSelectAction={goTab}
+        ready={authReady && uid !== null && isAllowlisted === true}
+        myPlayersHref={PLAYER_REGISTRY_ENABLED ? "/profile" : null}
+      >
           {currentFinalized ? (
             <div className="rounded-xl border px-3 py-2 text-xs" role="status" style={toastStyle("err")}>
               {meta.seasonLabel} is finalized, so its games, roster, lineup,
@@ -295,13 +253,8 @@ export default function AdminClient() {
             <div className="text-sm" style={{ color: "var(--muted)" }}>
               Checking admin allowlist…
             </div>
-          ) : (
-            <div className="text-sm" style={{ color: "var(--muted)" }}>
-              Signed in and allowlisted.
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          ) : null}
+      </AdminWorkspaceHeader>
 
       {setupActive ? (
         <SeasonSetupWizard
@@ -467,6 +420,17 @@ export default function AdminClient() {
             seasons={seasonSwitch.seasons}
             currentSeasonId={effectiveSeasonId}
             onChangedAction={seasonSwitch.refreshSeasons}
+          />
+          <DraftSeasonsCard
+            db={db}
+            uid={uid}
+            canEdit={canEdit}
+            seasons={seasonSwitch.seasons}
+            currentSeasonId={effectiveSeasonId}
+            onDeletedAction={() => {
+              seasonSwitch.refreshSeasons();
+              invalidateSeasonList();
+            }}
           />
           <FinalSeasonAwardsPanel
             db={db}

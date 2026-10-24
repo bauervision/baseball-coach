@@ -98,7 +98,7 @@ async function newPage(viewport, mobile, role) {
 async function coachPage(viewport, mobile = false) {
   const page = await newPage(viewport, mobile, "admin");
   await page.goto(`${BASE}/admin/`);
-  const signed = page.getByText("Signed in and allowlisted.");
+  const signed = page.locator('[data-admin-ready="true"]');
   const email = page.getByLabel("Email");
   await signed.or(email).first().waitFor({ timeout: 30000 });
   if (!(await signed.isVisible())) {
@@ -212,11 +212,11 @@ test("L: explicit current-season switching, finalize, and reopen (1440)", { skip
   await page.getByRole("combobox", { name: "Season to make current" }).selectOption(SPRING);
   assert.equal(await config(), FALL, "selecting alone changes nothing");
   await page.getByRole("button", { name: "Make current", exact: true }).click();
-  await page.waitForFunction(() => document.body.innerText.includes("Current season id: tigers-2026"), null, { timeout: 20000 });
+  await page.waitForFunction(() => document.querySelector("[data-admin-context]")?.title.endsWith(": tigers-2026"), null, { timeout: 20000 });
   assert.equal(await config(), SPRING);
   await page.getByRole("combobox", { name: "Season to make current" }).selectOption(FALL);
   await page.getByRole("button", { name: "Make current", exact: true }).click();
-  await page.waitForFunction(() => document.body.innerText.includes("Current season id: tigers-fall-2026"), null, { timeout: 20000 });
+  await page.waitForFunction(() => document.querySelector("[data-admin-context]")?.title.endsWith(": tigers-fall-2026"), null, { timeout: 20000 });
   assert.equal(await config(), FALL);
 
   // Finalize Spring 2026 with the checklist, then reopen it.

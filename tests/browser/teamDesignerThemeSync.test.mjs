@@ -54,7 +54,7 @@ before(async () => {
   );
   page = await ctx.newPage();
   await page.goto(`${BASE}/admin`);
-  const signed = page.getByText("Signed in and allowlisted.");
+  const signed = page.locator('[data-admin-ready="true"]');
   const email = page.getByLabel("Email");
   await signed.or(email).first().waitFor({ timeout: 30000 });
   if (!(await signed.isVisible())) {

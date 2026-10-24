@@ -36,7 +36,7 @@ service cloud.firestore {
       return id is string && id.size() > 0
           && existsAfter(/databases/$(database)/documents/seasons/$(id))
           && !(getAfter(/databases/$(database)/documents/seasons/$(id)).data.get('status', '')
-               in ['draft', 'finalized']);
+               in ['draft', 'finalized', 'deleting']);
     }
 
     // ------------------------------------------------------------------
@@ -227,11 +227,72 @@ service cloud.firestore {
 
     // Finalized before or after this request (covers batches/transactions
     // that try to finalize and edit, or reopen and edit, together).
+    function statusBefore(seasonId) {
+      return exists(seasonDoc(seasonId))
+          ? get(seasonDoc(seasonId)).data.get('status', '') : '';
+    }
+
+    function statusAfter(seasonId) {
+      return existsAfter(seasonDoc(seasonId))
+          ? getAfter(seasonDoc(seasonId)).data.get('status', '') : '';
+    }
+
     function seasonOpen(seasonId) {
-      return !(exists(seasonDoc(seasonId))
-               && get(seasonDoc(seasonId)).data.get('status', '') == 'finalized')
-          && !(existsAfter(seasonDoc(seasonId))
-               && getAfter(seasonDoc(seasonId)).data.get('status', '') == 'finalized');
+      return statusBefore(seasonId) != 'finalized' && statusAfter(seasonId) != 'finalized';
+    }
+
+    // Roster entries: the season must exist, be open, and not be locked for
+    // deletion ("deleting" only allows removing roster entries).
+    function rosterWritable(seasonId) {
+      return existsAfter(seasonDoc(seasonId)) && seasonOpen(seasonId)
+          && statusBefore(seasonId) != 'deleting' && statusAfter(seasonId) != 'deleting';
+    }
+
+    // Games, lines, lineups, and any other season records: only on an
+    // existing, open season that is not a draft. A draft therefore never
+    // holds records, which is what makes deleting an unused draft safe.
+    function acceptsRecords(seasonId) {
+      return existsAfter(seasonDoc(seasonId)) && seasonOpen(seasonId)
+          && !(statusBefore(seasonId) in ['draft', 'deleting'])
+          && !(statusAfter(seasonId) in ['draft', 'deleting']);
+    }
+
+    function isCurrentSeason(seasonId) {
+      return exists(/databases/$(database)/documents/app/config)
+          && get(/databases/$(database)/documents/app/config).data.get('currentSeasonId', '') == seasonId;
+    }
+
+    // Nothing recorded on the season doc itself (games, record, awards,
+    // recognition layouts). Unknown final-award keys block (fail closed).
+    function seasonDocUnused(d) {
+      let record = d.get('record', {});
+      let awards = d.get('finalAwards', {});
+      return d.get('endSeasonMode', false) != true
+          && d.get('gamesPlayed', 0) == 0
+          && d.get('recognitionLayouts', {}).size() == 0
+          && record.get('wins', 0) == 0 && record.get('losses', 0) == 0 && record.get('ties', 0) == 0
+          && awards.keys().hasOnly(['mvp', 'dominator', 'honorableMention', 'bestAllAround', 'bestAttitude'])
+          && awards.get('mvp', '') == '' && awards.get('dominator', '') == ''
+          && awards.get('honorableMention', '') == '' && awards.get('bestAllAround', '') == ''
+          && awards.get('bestAttitude', '') == '';
+    }
+
+    // Draft deletion, step 1: lock an unused, non-current draft. While
+    // "deleting", the season can only be cancelled back to draft or deleted,
+    // and its roster entries can only be removed.
+    function isDeletionLock(seasonId) {
+      return resource.data.get('status', '') == 'draft'
+          && request.resource.data.get('status', '') == 'deleting'
+          && changedKeys().hasOnly(['status', 'lifecycleHistory', 'updatedAt'])
+          && historyAppended('deletionStarted')
+          && !isCurrentSeason(seasonId)
+          && seasonDocUnused(resource.data);
+    }
+
+    function isDeletionCancel() {
+      return request.resource.data.get('status', '') == 'draft'
+          && changedKeys().hasOnly(['status', 'lifecycleHistory', 'updatedAt'])
+          && historyAppended('deletionCancelled');
     }
 
     function changedKeys() {
@@ -289,28 +350,35 @@ service cloud.firestore {
       allow update: if isAdmin() && (
         resource.data.get('status', '') == 'finalized'
           ? isReopen()
-          : (isOrdinaryEdit() || isActivation() || isFinalization() || isBrandingApply())
+          : resource.data.get('status', '') == 'deleting'
+            ? isDeletionCancel()
+            : (isOrdinaryEdit() || isActivation() || isFinalization() || isBrandingApply()
+               || isDeletionLock(seasonId))
       );
-      allow delete: if isAdmin() && resource.data.get('status', '') != 'finalized';
+      // Only a draft locked for deletion (never current, legacy, active, or
+      // finalized). Roster entries are removed first, while locked.
+      allow delete: if isAdmin() && resource.data.get('status', '') == 'deleting'
+                    && !isCurrentSeason(seasonId);
 
       match /players/{playerId} {
         allow read: if true;
-        allow write: if isAdmin() && seasonOpen(seasonId);
+        allow create, update: if isAdmin() && rosterWritable(seasonId);
+        allow delete: if isAdmin() && seasonOpen(seasonId);
       }
 
       match /games/{gameId} {
         allow read: if true;
-        allow write: if isAdmin() && seasonOpen(seasonId);
+        allow write: if isAdmin() && acceptsRecords(seasonId);
 
         match /lines/{playerId} {
           allow read: if true;
-          allow write: if isAdmin() && seasonOpen(seasonId);
+          allow write: if isAdmin() && acceptsRecords(seasonId);
         }
       }
 
       match /lineups/{lineupId} {
         allow read: if true;
-        allow write: if isAdmin() && seasonOpen(seasonId);
+        allow write: if isAdmin() && acceptsRecords(seasonId);
       }
 
       // Any other present or future season subcollection: finalized seasons
@@ -319,7 +387,7 @@ service cloud.firestore {
       // to the collections above.
       match /{subcollection}/{docId=**} {
         allow read: if isAdmin();
-        allow write: if isAdmin() && seasonOpen(seasonId);
+        allow write: if isAdmin() && acceptsRecords(seasonId);
       }
     }
   }

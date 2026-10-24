@@ -132,7 +132,7 @@ export function Navbar(props: {
         <div className="flex h-full items-center justify-between gap-3 sm:hidden">
           <Link
             href={homeHref}
-            className="flex items-center gap-3 min-w-0 transition-opacity hover:opacity-90"
+            className="flex items-center gap-3 min-w-0 transition-opacity hover:opacity-90 max-[380px]:gap-2"
             aria-label="Go to home"
           >
             <div className="relative h-8 w-8 shrink-0 overflow-hidden">
@@ -145,7 +145,7 @@ export function Navbar(props: {
 
             <div className="min-w-0">
               <div
-                className="text-sm font-semibold whitespace-nowrap truncate"
+                className="text-sm font-semibold whitespace-nowrap truncate max-[380px]:text-[13px]"
                 style={{ color: "var(--foreground)" }}
               >
                 {props.title}
@@ -160,7 +160,7 @@ export function Navbar(props: {
           </Link>
 
           {/* Icon-only pills on phones so the team name has room (labels stay for screen readers). */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 max-[380px]:gap-1.5">
             {isAdmin ? (
               <PillLink href="/admin" title="Go to admin" disabled={loggingOut}>
                 <Shield

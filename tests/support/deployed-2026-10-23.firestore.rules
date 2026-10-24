@@ -1,0 +1,326 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+
+    // Admin allowlist
+    match /admins/{uid} {
+  allow read: if isSignedIn() && request.auth.uid == uid;
+  allow write: if false; // manage manually in console
+}
+
+    // Public app configuration reads; only allowlisted admins may update it.
+    // The current season must exist and be eligible once the request is
+    // applied: never a draft (activate it in the same transaction) and
+    // never finalized (reopen it first). Legacy seasons without status are
+    // eligible. Rewriting config with the same current season is always
+    // allowed, so a finalized current season never blocks other writes.
+    match /app/config {
+      allow read: if true;
+      allow create, update: if isAdmin() && (
+        (resource != null
+          && request.resource.data.get('currentSeasonId', null) == resource.data.get('currentSeasonId', null))
+        || eligibleCurrentSeason(request.resource.data.get('currentSeasonId', null))
+      );
+      allow delete: if false;
+    }
+
+    function eligibleCurrentSeason(id) {
+      return id is string && id.size() > 0
+          && existsAfter(/databases/$(database)/documents/seasons/$(id))
+          && !(getAfter(/databases/$(database)/documents/seasons/$(id)).data.get('status', '')
+               in ['draft', 'finalized']);
+    }
+
+    // ------------------------------------------------------------------
+    // Coach-managed player identities: each coach's private record of the
+    // players they have managed, not a universal registry. No transfer or
+    // cross-coach discovery. NOT publicly
+    // readable. Only coaches listed in managerUids may read or update an
+    // identity. Reading a missing doc is allowed so a coach can tell
+    // "absent" from "someone else's" (ids are random UUIDs).
+    // managerUids and careerPlayerId are immutable once created.
+    // ------------------------------------------------------------------
+    match /playerIdentities/{playerId} {
+      function identityKeys() {
+        return ['careerPlayerId', 'displayName', 'managerUids',
+                'createdByUid', 'createdAt', 'updatedAt'];
+      }
+
+      allow get: if isAdmin()
+        && (resource == null || request.auth.uid in resource.data.managerUids);
+      allow list: if isAdmin()
+        && request.auth.uid in resource.data.managerUids;
+
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(identityKeys())
+        && request.resource.data.careerPlayerId == playerId
+        && request.resource.data.managerUids == [request.auth.uid]
+        && request.resource.data.createdByUid == request.auth.uid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 80;
+
+      allow update: if isAdmin()
+        && request.auth.uid in resource.data.managerUids
+        && request.resource.data.keys().hasOnly(identityKeys())
+        && request.resource.data.careerPlayerId == resource.data.careerPlayerId
+        && request.resource.data.managerUids == resource.data.managerUids
+        && request.resource.data.createdByUid == resource.data.createdByUid
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() > 0
+        && request.resource.data.displayName.size() <= 80;
+
+      allow delete: if false;
+    }
+
+    // ------------------------------------------------------------------
+    // Coach-linked children. Private to the owning coach account. A link
+    // may only point at an identity that coach manages (checked after the
+    // write, so an identity and its link can be created in one batch).
+    // ------------------------------------------------------------------
+    match /coachProfiles/{uid}/linkedPlayers/{playerId} {
+      function isOwner() {
+        return isAdmin() && request.auth.uid == uid;
+      }
+
+      function managesIdentity() {
+        return request.auth.uid in getAfter(
+          /databases/$(database)/documents/playerIdentities/$(playerId)
+        ).data.managerUids;
+      }
+
+      function validLink() {
+        return request.resource.data.keys().hasOnly(
+                 ['careerPlayerId', 'displayName', 'relationship',
+                  'confirmed', 'linkedAt'])
+          && request.resource.data.careerPlayerId == playerId
+          && request.resource.data.relationship == 'child'
+          && request.resource.data.confirmed == true
+          && request.resource.data.displayName is string
+          && request.resource.data.displayName.size() <= 80;
+      }
+
+      allow read: if isOwner();
+      allow create, update: if isOwner() && validLink() && managesIdentity();
+      allow delete: if isOwner();
+    }
+
+    // Public season reads
+    // KNOWN EXPOSURE (assessment D1): every season, player, game, line, and
+    // lineup is readable by anyone. Do not store private data under
+    // /seasons. Removing public reads requires real parent auth (Phase E).
+    // ------------------------------------------------------------------
+    // Team identity & branding. Only the head coach (admin) may read or
+    // write teams. Every field is validated: supported sports only,
+    // bundled logo ids only, colors as hex or rgb()/rgba() only (nothing
+    // else can reach CSS), and selectable award collections only.
+    // Keep these lists in sync with src/lib/branding.ts and
+    // src/lib/awardCollections.ts (tests/brandingRules.test.mjs checks).
+    // ------------------------------------------------------------------
+    function brandingSports() { return ['baseball', 'softball']; }
+    function brandingLogoIds() { return ['tigers']; }
+    function brandingCollections() { return ['original']; }
+    function paletteKeys() {
+      return ['bgBase', 'foreground', 'card', 'stroke', 'muted',
+              'primary', 'secondary', 'accent', 'accent2'];
+    }
+
+    function validColor(c) {
+      return c is string && c.size() <= 48 && c.matches(
+        '^(#[0-9a-fA-F]{3}|#[0-9a-fA-F]{6}|#[0-9a-fA-F]{8}|rgba?[(] *[0-9]{1,3} *, *[0-9]{1,3} *, *[0-9]{1,3} *(, *(0|1|0?[.][0-9]+|1[.]0+) *)?[)])$');
+    }
+
+    function validPalette(p) {
+      return p is map
+          && p.keys().hasOnly(paletteKeys()) && p.keys().hasAll(paletteKeys())
+          && validColor(p.bgBase) && validColor(p.foreground) && validColor(p.card)
+          && validColor(p.stroke) && validColor(p.muted) && validColor(p.primary)
+          && validColor(p.secondary) && validColor(p.accent) && validColor(p.accent2);
+    }
+
+    function validLogo(l) {
+      return l == null
+          || (l is map && l.keys().hasOnly(['kind', 'id']) && l.kind == 'bundled'
+              && l.id in brandingLogoIds());
+    }
+
+    function validBrandingFields(b) {
+      return b.teamName is string && b.teamName.size() > 0 && b.teamName.size() <= 40
+          && b.shortName is string && b.shortName.size() <= 12
+          && b.sport in brandingSports()
+          && b.division is string && b.division.size() <= 40
+          && validLogo(b.logo)
+          && b.palettes is map && b.palettes.keys().hasOnly(['dark', 'light'])
+          && validPalette(b.palettes.dark) && validPalette(b.palettes.light)
+          && b.awardCollection in brandingCollections();
+    }
+
+    function teamKeys() {
+      return ['teamId', 'teamName', 'shortName', 'sport', 'division', 'logo',
+              'palettes', 'awardCollection', 'createdAt', 'updatedAt'];
+    }
+
+    match /teams/{teamId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.keys().hasOnly(teamKeys())
+        && request.resource.data.teamId == teamId
+        && validBrandingFields(request.resource.data);
+      allow update: if isAdmin()
+        && request.resource.data.keys().hasOnly(teamKeys())
+        && request.resource.data.teamId == resource.data.teamId
+        && request.resource.data.get('createdAt', null) == resource.data.get('createdAt', null)
+        && validBrandingFields(request.resource.data);
+      allow delete: if false;
+    }
+
+    // A season's branding snapshot: same fields as a team (minus
+    // timestamps), linked to the season's teamId.
+    function validSnapshot(data) {
+      return !('branding' in data)
+          || (data.branding is map
+              && data.branding.keys().hasOnly(['teamId', 'teamName', 'shortName', 'sport',
+                                               'division', 'logo', 'palettes', 'awardCollection'])
+              && validBrandingFields(data.branding)
+              && data.branding.teamId is string
+              && data.get('teamId', null) == data.branding.teamId);
+    }
+
+    // Explicit "apply team branding" to an open season: a branding-only
+    // write whose snapshot is exactly the team's current saved branding,
+    // so a snapshot can never be hand-edited into something else.
+    function matchesTeam(b) {
+      let team = get(/databases/$(database)/documents/teams/$(b.teamId)).data;
+      return b.teamName == team.teamName && b.shortName == team.shortName
+          && b.sport == team.sport && b.division == team.division
+          && b.logo == team.logo && b.palettes == team.palettes
+          && b.awardCollection == team.awardCollection;
+    }
+
+    function isBrandingApply() {
+      return changedKeys().hasOnly(['branding', 'teamId', 'teamName', 'league', 'updatedAt'])
+          && 'branding' in request.resource.data
+          && validSnapshot(request.resource.data)
+          && exists(/databases/$(database)/documents/teams/$(request.resource.data.teamId))
+          && matchesTeam(request.resource.data.branding);
+    }
+
+    // ------------------------------------------------------------------
+    // Season lifecycle: draft -> active -> finalized (-> reopened = active).
+    // A finalized season is read-only for everyone, including the coach:
+    // the season doc and every subcollection reject writes. The only
+    // permitted write to a finalized season is an explicit reopen.
+    // Seasons without `status` (created before lifecycle support) are open.
+    // lifecycleHistory is append-only and attributed to the acting coach.
+    // ------------------------------------------------------------------
+    function seasonDoc(seasonId) {
+      return /databases/$(database)/documents/seasons/$(seasonId);
+    }
+
+    // Finalized before or after this request (covers batches/transactions
+    // that try to finalize and edit, or reopen and edit, together).
+    function seasonOpen(seasonId) {
+      return !(exists(seasonDoc(seasonId))
+               && get(seasonDoc(seasonId)).data.get('status', '') == 'finalized')
+          && !(existsAfter(seasonDoc(seasonId))
+               && getAfter(seasonDoc(seasonId)).data.get('status', '') == 'finalized');
+    }
+
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function historyAppended(action) {
+      let before = resource.data.get('lifecycleHistory', []);
+      let after = request.resource.data.get('lifecycleHistory', []);
+      return after.size() == before.size() + 1
+          && (before.size() == 0 || after[0:before.size()] == before)
+          && after[after.size() - 1].action == action
+          && after[after.size() - 1].byUid == request.auth.uid;
+    }
+
+    function isActivation() {
+      return resource.data.get('status', '') == 'draft'
+          && request.resource.data.get('status', '') == 'active'
+          && changedKeys().hasOnly(['status', 'activatedAt', 'lifecycleHistory', 'updatedAt'])
+          && historyAppended('activated');
+    }
+
+    function isFinalization() {
+      return request.resource.data.get('status', '') == 'finalized'
+          && changedKeys().hasOnly(['status', 'finalizedAt', 'finalizedByUid', 'lifecycleHistory', 'updatedAt'])
+          && request.resource.data.finalizedByUid == request.auth.uid
+          && historyAppended('finalized');
+    }
+
+    function isReopen() {
+      return request.resource.data.get('status', '') == 'active'
+          && changedKeys().hasOnly(['status', 'reopenedAt', 'reopenedByUid', 'lifecycleHistory', 'updatedAt'])
+          && request.resource.data.reopenedByUid == request.auth.uid
+          && historyAppended('reopened');
+    }
+
+    // Ordinary edits on an open season: no status or audit-field changes.
+    function isOrdinaryEdit() {
+      return request.resource.data.get('status', '') != 'finalized'
+          && !changedKeys().hasAny(['status', 'lifecycleHistory', 'finalizedAt', 'finalizedByUid',
+                                    'reopenedAt', 'reopenedByUid', 'activatedAt',
+                                    'branding', 'teamId']);
+    }
+
+    // Public season reads
+    // KNOWN EXPOSURE (assessment D1): every season, player, game, line, and
+    // lineup is readable by anyone. Do not store private data under
+    // /seasons. Removing public reads requires real parent auth (Phase E).
+    match /seasons/{seasonId} {
+      allow read: if true;
+      allow create: if isAdmin()
+        && request.resource.data.get('status', 'draft') in ['draft', 'active']
+        && !('lifecycleHistory' in request.resource.data)
+        && validSnapshot(request.resource.data);
+      allow update: if isAdmin() && (
+        resource.data.get('status', '') == 'finalized'
+          ? isReopen()
+          : (isOrdinaryEdit() || isActivation() || isFinalization() || isBrandingApply())
+      );
+      allow delete: if isAdmin() && resource.data.get('status', '') != 'finalized';
+
+      match /players/{playerId} {
+        allow read: if true;
+        allow write: if isAdmin() && seasonOpen(seasonId);
+      }
+
+      match /games/{gameId} {
+        allow read: if true;
+        allow write: if isAdmin() && seasonOpen(seasonId);
+
+        match /lines/{playerId} {
+          allow read: if true;
+          allow write: if isAdmin() && seasonOpen(seasonId);
+        }
+      }
+
+      match /lineups/{lineupId} {
+        allow read: if true;
+        allow write: if isAdmin() && seasonOpen(seasonId);
+      }
+
+      // Any other present or future season subcollection: finalized seasons
+      // stay read-only. Reads are head-coach only, as under the deployed
+      // rules (unknown paths were unreadable); public reads stay limited
+      // to the collections above.
+      match /{subcollection}/{docId=**} {
+        allow read: if isAdmin();
+        allow write: if isAdmin() && seasonOpen(seasonId);
+      }
+    }
+  }
+}

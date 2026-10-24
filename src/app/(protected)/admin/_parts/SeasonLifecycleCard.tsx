@@ -162,7 +162,7 @@ export function SeasonLifecycleCard(props: {
               onChange={(e) => setPicked(e.target.value)}
               disabled={!canEdit || busy || seasons === null}
             >
-              {(seasons ?? []).map((s) => (
+              {(seasons ?? []).filter((s) => s.status !== "deleting").map((s) => (
                 <option key={s.seasonId} value={s.seasonId}>
                   {seasonOptionLabel(s)}
                   {s.status === "finalized" ? " — final" : s.seasonId === currentSeasonId ? " — current" : ""}

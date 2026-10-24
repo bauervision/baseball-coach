@@ -5,6 +5,7 @@ import {
   doc,
   getDoc,
   getDocs,
+  limit,
   query,
   orderBy,
   runTransaction,
@@ -40,6 +41,7 @@ import {
   type LifecycleEvent,
 } from "@/lib/seasonLifecycle";
 import { loadCurrentLineup } from "@/lib/lineupStore";
+import { DELETE_BATCH, rosterBlockers, seasonDocBlockers } from "@/lib/draftDeletion";
 import type { GameLineupSnapshot } from "@/lib/lineup";
 import {
   asGameType,
@@ -226,6 +228,135 @@ export async function makeCurrentSeason(opts: {
       { merge: true },
     );
   });
+}
+
+export class DraftNotDeletableError extends Error {
+  readonly reasons: string[];
+  constructor(reasons: string[]) {
+    super(reasons.join(" "));
+    this.reasons = reasons;
+    this.name = "DraftNotDeletableError";
+  }
+}
+
+async function lockDraftForDeletion(
+  db: Firestore,
+  uid: string,
+  seasonRef: ReturnType<typeof doc>,
+  cfgRef: ReturnType<typeof doc>,
+  seasonId: string,
+): Promise<void> {
+  await runTransaction(db, async (tx) => {
+    const snap = await tx.get(seasonRef);
+    const cfg = await tx.get(cfgRef);
+    if (!snap.exists()) throw new DraftNotDeletableError(["The season no longer exists."]);
+    const data = snap.data();
+    if (data.status === "deleting") return; // another request locked it; resume
+    const reasons = seasonDocBlockers(data, { isCurrent: cfg.data()?.currentSeasonId === seasonId });
+    if (data.status !== "draft" && !reasons.length) reasons.push("Only draft seasons can be deleted.");
+    if (reasons.length) throw new DraftNotDeletableError(reasons);
+    const event: LifecycleEvent = {
+      action: "deletionStarted",
+      at: new Date().toISOString(),
+      byUid: uid,
+      fromStatus: "draft",
+    };
+    tx.update(seasonRef, {
+      status: "deleting",
+      lifecycleHistory: [
+        ...(Array.isArray(data.lifecycleHistory) ? data.lifecycleHistory : []),
+        event,
+      ],
+      updatedAt: serverTimestamp(),
+    });
+  });
+}
+
+/**
+ * Deletes an unused draft season and its draft roster entries. Nothing
+ * else is touched: permanent identities, linked children, earlier seasons,
+ * and the team all stay.
+ *
+ * 1. Lock: one transaction moves the draft to "deleting" (rules: unused,
+ *    not current, audited). While locked, rules reject activation, making
+ *    it current, edits, and any new roster entry or record.
+ * 2. Verify with writes frozen: no games or lineups (rules never allow them
+ *    on drafts) and no stats or awards on roster entries. Otherwise the
+ *    lock is cancelled back to draft and nothing is deleted (fail closed).
+ * 3. Delete roster entries in bounded batches, then the season doc.
+ * Re-running resumes an interrupted deletion; a missing season reports
+ * "alreadyDeleted".
+ */
+export async function deleteDraftSeason(opts: {
+  db: Firestore;
+  uid: string;
+  seasonId: string;
+}): Promise<{ outcome: "deleted" | "alreadyDeleted"; removedPlayers: number }> {
+  const { db, uid } = opts;
+  const seasonId = opts.seasonId.trim();
+  if (!seasonId) throw new Error("Choose a season.");
+  const seasonRef = doc(db, "seasons", seasonId);
+  const cfgRef = doc(db, "app", "config");
+
+  const first = await getDoc(seasonRef);
+  if (!first.exists()) return { outcome: "alreadyDeleted", removedPlayers: 0 };
+
+  if (first.data().status !== "deleting") {
+    try {
+      await lockDraftForDeletion(db, uid, seasonRef, cfgRef, seasonId);
+    } catch (e) {
+      // A concurrent request may have locked or finished the deletion.
+      const now = await getDoc(seasonRef);
+      if (!now.exists()) return { outcome: "alreadyDeleted", removedPlayers: 0 };
+      if (now.data().status !== "deleting") throw e;
+    }
+  }
+
+  const [games, lineups, players] = await Promise.all([
+    getDocs(query(collection(db, "seasons", seasonId, "games"), limit(1))),
+    getDocs(query(collection(db, "seasons", seasonId, "lineups"), limit(1))),
+    getDocs(collection(db, "seasons", seasonId, "players")),
+  ]);
+  const reasons = [
+    ...(games.empty ? [] : ["The season has games."]),
+    ...(lineups.empty ? [] : ["The season has a saved lineup."]),
+    ...rosterBlockers(players.docs.map((d) => ({ id: d.id, data: d.data() }))),
+  ];
+  if (reasons.length) {
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(seasonRef);
+      if (!snap.exists() || snap.data().status !== "deleting") return;
+      const history = snap.data().lifecycleHistory;
+      const event: LifecycleEvent = {
+        action: "deletionCancelled",
+        at: new Date().toISOString(),
+        byUid: uid,
+        fromStatus: "deleting",
+      };
+      tx.update(seasonRef, {
+        status: "draft",
+        lifecycleHistory: [...(Array.isArray(history) ? history : []), event],
+        updatedAt: serverTimestamp(),
+      });
+    });
+    throw new DraftNotDeletableError(reasons);
+  }
+
+  for (let i = 0; i < players.docs.length; i += DELETE_BATCH) {
+    const batch = writeBatch(db);
+    for (const d of players.docs.slice(i, i + DELETE_BATCH)) batch.delete(d.ref);
+    await batch.commit();
+  }
+  try {
+    const batch = writeBatch(db);
+    batch.delete(seasonRef);
+    await batch.commit();
+  } catch (e) {
+    // A concurrent request finished first.
+    if (!(await getDoc(seasonRef)).exists()) return { outcome: "alreadyDeleted", removedPlayers: 0 };
+    throw e;
+  }
+  return { outcome: "deleted", removedPlayers: players.size };
 }
 
 /** Clear error before Firestore rules reject a write to a finalized season. */

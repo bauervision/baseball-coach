@@ -121,7 +121,7 @@ export function SeasonTab(props: {
                 {seasons === null ? (
                   <option value={currentSeasonId}>Loading seasons…</option>
                 ) : null}
-                {(seasons ?? []).map((s) => (
+                {(seasons ?? []).filter((s) => s.status !== "deleting").map((s) => (
                   <option
                     key={s.seasonId}
                     value={s.seasonId}
