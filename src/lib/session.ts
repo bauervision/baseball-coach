@@ -1,6 +1,7 @@
 import { storageKey } from "@/lib/storage";
+import { multiCoachEnabled } from "@/lib/features";
 
-export type AppRole = "public" | "admin";
+export type AppRole = "public" | "admin" | "coach";
 
 export type AppSession = {
   role: AppRole;
@@ -51,6 +52,17 @@ export function sanitizeSession(
     return {
       role: "public",
       name: session.name ?? "Parent",
+    };
+  }
+
+  // Multi-coach mode: a signed-in coach (UI routing only; access to any
+  // data is decided by Firestore rules from coaches/{uid}).
+  if (session.role === "coach" && multiCoachEnabled() && session.uid) {
+    return {
+      role: "coach",
+      name: session.name ?? "Coach",
+      email: normalizeEmail(session.email),
+      uid: session.uid,
     };
   }
 

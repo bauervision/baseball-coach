@@ -95,9 +95,33 @@ Hard rule: no second coach invite exists before step 4 is verified, so no state 
 |---|---|---|
 | A | This document; routing spike | **Done** |
 | Foundation | Privacy split tool + rehearsal, target rules + isolation tests, Auth record check, browser guard (`docs/PUBLIC_PRIVATE_DATA.md`) | **Done (2026-10-24)** |
-| B | Google sign-in, invites, workspaces, app on the target rules | Pending |
+| B | Google sign-in, invitations, workspaces, account linking (§10) | **Done in code/emulator (2026-10-26); not activated** |
+| B+ | Admin data layer on the target rules (scoped queries, ownerUid/workspaceId on writes, audit to private/audit) | Pending |
 | C | Team routes, team current season, publication, public projection, legacy redirects | Pending |
 | D | First-run onboarding via existing setup, Copy team link | Pending |
 | E | Full emulator/browser acceptance, privacy audit, migration rehearsal, runbook | Pending |
 
 **OWNER decision P3 — release bundling:** the Admin redesign + draft deletion release (runbook §11) is still pending. Recommended: release it first, separately; the multi-coach rules build on that ruleset.
+
+## 10. Checkpoint B — implemented (emulator only; nothing activated)
+
+- **Flags** (`src/lib/features.ts`, build-time, default off): `NEXT_PUBLIC_FEATURE_MULTI_COACH` (Google-first Coach Login, workspace gate on `/admin`, `coach` session role) and `NEXT_PUBLIC_FEATURE_GOOGLE_LINK` ("Link Google account" in the existing Admin). Emulator builds may override per browser context (`localStorage bc:feature:*`); production code compiles that out (`BC_EMULATOR_BUILD` is always defined by `next.config.ts`). Flags only change presentation; Firestore rules decide access.
+- **Invitation acceptance** needs no server: one client batch binds `coachInvites/{id}` to the caller, creates `coaches/{uid}` and a new `coachWorkspaces/{ws}`; `firestore.target.rules` check all three together using token claims (`sign_in_provider == google.com`, `email_verified`, `email`). An invite binds once; a coach record is created once (retries/concurrent tabs recover the same workspace); workspace ids are random (`ws_…`), never uid/email. Clients cannot create, list, or revoke invites.
+- **Owner tools** (Admin SDK, emulator by default, `--allow-production` for real): `tools/coach-invites.mjs` (`--list`, `--create <email> --apply`, `--revoke <id> --apply`; revoking an accepted invite disables the coach); `tools/coach-workspace-migrate.mjs` (binds the verified original UID — must equal `admins/{uid}` — to the first workspace and adds `ownerUid`/`workspaceId` to existing teams and `ownerUid` to seasons; dry run, backup check, rollback file, idempotent).
+- **Access**: `isCoach()` = active `coaches/{uid}` + active workspace; disabling either removes all private access.
+- **Linking**: `linkGoogle()` uses `linkWithPopup` on the signed-in password account, refuses if the uid would change, never removes the password provider. Emulator: UID unchanged, providers `google.com,password`, both sign-ins land on the same account. A *first* Google sign-in without linking would (emulator) keep the UID but drop the password provider — the UI therefore tells password users to sign in with the password and link.
+- **Browser tests** use an emulator-only credential seam (`window.__bcTestGoogleIdToken`) because Firebase's popup loads `apis.google.com`, which the production guard blocks. Real Google OAuth is not tested.
+
+### Activation prerequisites (each needs approval)
+
+1. Admin data layer on the target rules (B+) and Checkpoints C–D (routing, publication, onboarding); privacy split + target rules release (`docs/PUBLIC_PRIVATE_DATA.md` §5).
+2. Enable the Google provider in Firebase Auth (console) and add the production domain to authorized domains.
+3. Build with `NEXT_PUBLIC_FEATURE_GOOGLE_LINK=1`, deploy; the owner signs in with the password and links Google; read-only check that the UID is unchanged and providers are `google.com,password`.
+4. Fresh export → `coach-workspace-migrate.mjs` (rehearsed) → deploy target rules → build with `NEXT_PUBLIC_FEATURE_MULTI_COACH=1`.
+5. `coach-invites.mjs --create <test account> --apply`; later the brother-in-law's address once supplied and approved.
+
+### Limitations
+
+- With multi-coach on, `/admin` shows the workspace landing (own teams) only; team/season management on the target rules is B+. The legacy Admin keeps working with the flag off.
+- Revocation takes effect on the next request (rules read `coaches/{uid}`); it does not revoke Firebase sessions.
+- Email used for matching is the token email; a coach changing their Google email keeps access (bound by UID) but cannot accept a second invite.

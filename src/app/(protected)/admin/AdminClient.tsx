@@ -6,7 +6,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 
 import { getFirebaseAuth, getFirestoreDb } from "@/lib/firebase.client";
 import { useRosterPlayers, DEFAULT_SEASON_ID } from "@/lib/rosterStore";
-import { PLAYER_REGISTRY_ENABLED } from "@/lib/features";
+import { googleLinkEnabled, PLAYER_REGISTRY_ENABLED } from "@/lib/features";
+import { LinkGoogleCard } from "@/components/auth/LinkGoogleCard";
 
 import {
   Card,
@@ -91,6 +92,11 @@ export default function AdminClient() {
     players,
     canEdit: canEditSeason,
   });
+
+  // "Link Google account" (feature-gated; decided after mount so the static
+  // HTML never differs).
+  const [showGoogleLink, setShowGoogleLink] = React.useState(false);
+  React.useEffect(() => setShowGoogleLink(googleLinkEnabled()), []);
 
   // Team identities (Team Designer, season creation). Head coach only.
   const [teams, setTeams] = React.useState<Team[] | null>(null);
@@ -254,6 +260,7 @@ export default function AdminClient() {
               Checking admin allowlist…
             </div>
           ) : null}
+        {showGoogleLink && authReady && uid !== null && isAllowlisted === true ? <LinkGoogleCard auth={auth} /> : null}
       </AdminWorkspaceHeader>
 
       {setupActive ? (

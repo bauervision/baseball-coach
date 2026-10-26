@@ -9,6 +9,7 @@ import { BackToTop } from "../ui/BackToTop";
 import { useRosterPlayers } from "@/lib/rosterStore";
 import { useViewedSeasonId } from "@/lib/viewedSeason";
 import { BrandingProvider } from "@/components/theme/BrandingProvider";
+import { multiCoachEnabled } from "@/lib/features";
 
 export function ShellLayout(props: { children: React.ReactNode }) {
   // Shell shows the viewed season (?season=), else the active season.
@@ -19,16 +20,25 @@ export function ShellLayout(props: { children: React.ReactNode }) {
   const normalizedPathname = pathname.replace(/\/+$/, "");
   const isPlayerPage = normalizedPathname === "/player";
 
+  // Multi-coach mode: the coach area belongs to the signed-in coach's own
+  // workspace, not to the legacy current season, so the shell stays neutral
+  // there (no legacy team/season labels, no raw loader errors).
+  const [multiCoach, setMultiCoach] = React.useState(false);
+  React.useEffect(() => setMultiCoach(multiCoachEnabled()), []);
+  const coachArea = multiCoach && normalizedPathname === "/admin";
+
   const navTitle = React.useMemo(() => {
+    if (coachArea) return "Baseball Coach";
     const league = meta.league?.trim() ?? "";
     const team = meta.teamName?.trim() || "?";
     return league ? `${league} ${team}` : team;
-  }, [meta.league, meta.teamName]);
+  }, [coachArea, meta.league, meta.teamName]);
 
   const seasonLabel = React.useMemo(() => {
+    if (coachArea) return undefined;
     const s = meta.seasonLabel?.trim();
     return s && s.length ? s : undefined;
-  }, [meta.seasonLabel]);
+  }, [coachArea, meta.seasonLabel]);
 
   return (
     <BrandingProvider branding={meta.branding}>
@@ -58,7 +68,7 @@ export function ShellLayout(props: { children: React.ReactNode }) {
               isPlayerPage ? "max-w-none 2xl:px-10" : "max-w-6xl",
             ].join(" ")}
           >
-            {error ? (
+            {error && !coachArea ? (
               <div className="mb-4 text-xs" style={{ color: "var(--muted)" }}>
                 {error}
               </div>
@@ -74,9 +84,9 @@ export function ShellLayout(props: { children: React.ReactNode }) {
           }}
         >
           <Footer
-            teamName={meta.teamName}
-            league={meta.league}
-            seasonLabel={meta.seasonLabel}
+            teamName={coachArea ? "" : meta.teamName}
+            league={coachArea ? "" : meta.league}
+            seasonLabel={coachArea ? "" : meta.seasonLabel}
           />
           <BackToTop />
         </div>

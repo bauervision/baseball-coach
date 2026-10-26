@@ -24,6 +24,16 @@ test("the client bundle gets the version string only, never package.json", () =>
   };
   walk("src");
   assert.deepEqual(offenders, []);
-  assert.match(read("next.config.ts"), /env:\s*\{\s*APP_VERSION:\s*packageJson\.version\s*\}/);
+  assert.match(read("next.config.ts"), /env:\s*\{\s*APP_VERSION:\s*packageJson\.version\s*,\s*BC_EMULATOR_BUILD:/);
+  assert.equal((read("next.config.ts").match(/packageJson\./g) ?? []).length, 1, "only the version is read from package.json");
   assert.match(read("src/components/shell/Footer.tsx"), /process\.env\.APP_VERSION/);
+});
+
+test("emulator-only test seams are keyed to an always-defined build constant", () => {
+  // next.config always defines BC_EMULATOR_BUILD ("0" unless tools/build-emulator.mjs),
+  // so production code compiles these seams to dead code.
+  assert.match(read("next.config.ts"), /BC_EMULATOR_BUILD: process\.env\.BC_EMULATOR_BUILD === "1" \? "1" : "0"/);
+  for (const f of ["src/lib/features.ts", "src/lib/coachAccess.ts"]) {
+    assert.match(read(f), /const EMULATOR_BUILD = process\.env\.BC_EMULATOR_BUILD === "1";/, f);
+  }
 });

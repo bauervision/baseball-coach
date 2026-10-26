@@ -25,6 +25,8 @@ import {
 import { useRosterPlayers } from "@/lib/rosterStore";
 import { resolveLogo } from "@/lib/branding";
 import { TeamMark } from "@/components/theme/BrandingProvider";
+import { multiCoachEnabled } from "@/lib/features";
+import { CoachSignInPanel } from "@/components/auth/CoachSignInPanel";
 
 type PendingKind = "enter" | null;
 
@@ -53,6 +55,11 @@ export function AuthOverlay(props: { children: React.ReactNode }) {
   const [adminError, setAdminError] = React.useState<string | null>(null);
 
   const timersRef = React.useRef<number[]>([]);
+
+  // Multi-coach mode (feature-gated): Coach Login offers Google first.
+  const [multiCoach, setMultiCoach] = React.useState(false);
+  const [usePassword, setUsePassword] = React.useState(false);
+  React.useEffect(() => setMultiCoach(multiCoachEnabled()), []);
 
   React.useEffect(() => {
     setSession(readSession());
@@ -348,7 +355,24 @@ export function AuthOverlay(props: { children: React.ReactNode }) {
                     </button>
                   </div>
 
-                  {adminOpen ? (
+                  {adminOpen && multiCoach && !usePassword ? (
+                    <CoachSignInPanel
+                      auth={auth}
+                      disabled={pending !== null}
+                      onUsePasswordAction={() => setUsePassword(true)}
+                      onCancelAction={() => setAdminOpen(false)}
+                      onSignedInAction={(user) => {
+                        writeSession({
+                          role: "coach",
+                          name: user.displayName ?? "Coach",
+                          email: user.email ?? "",
+                          uid: user.uid,
+                        });
+                        setAdminOpen(false);
+                        router.replace("/admin/");
+                      }}
+                    />
+                  ) : adminOpen ? (
                     <div
                       className="mt-4 rounded-xl border p-3"
                       style={{

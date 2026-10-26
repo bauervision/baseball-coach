@@ -13,8 +13,21 @@ service cloud.firestore {
     function signedIn() { return request.auth != null; }
     function uid() { return request.auth.uid; }
     function coachPath() { return /databases/$(database)/documents/coaches/$(request.auth.uid); }
+    function wsPath(id) { return /databases/$(database)/documents/coachWorkspaces/$(id); }
+    function invitePath(id) { return /databases/$(database)/documents/coachInvites/$(id); }
+    // An approved coach: active coach record AND active workspace (a
+    // disabled coach or workspace loses all private access at once).
     function isCoach() {
-      return signedIn() && exists(coachPath()) && get(coachPath()).data.get('status', '') == 'active';
+      return signedIn() && exists(coachPath())
+          && get(coachPath()).data.get('status', '') == 'active'
+          && get(wsPath(get(coachPath()).data.workspaceId)).data.get('status', '') == 'active';
+    }
+    // Firebase-verified Google identity (token claims, not client fields).
+    function isVerifiedGoogle() {
+      return signedIn()
+          && request.auth.token.firebase.sign_in_provider == 'google.com'
+          && request.auth.token.email_verified == true
+          && request.auth.token.email is string;
     }
 
     function seasonPath(id) { return /databases/$(database)/documents/seasons/$(id); }
@@ -52,19 +65,56 @@ service cloud.firestore {
     }
 
     // ------------------------------------------------------------------
-    // Coaches, workspaces, invitations: no client writes until invitation
-    // binding is implemented (Checkpoint B). A coach reads only their own.
+    // Invitations, coaches, workspaces (invitation-only access).
+    // Invites are created, revoked, and listed only by the owner's Admin
+    // SDK tool. A verified Google user may read only invites addressed to
+    // their own token email, and accept one by binding it to their uid in
+    // the same batch that creates coaches/{uid} and a new workspace. Coach
+    // status changes (disable) are Admin SDK only.
     // ------------------------------------------------------------------
+    match /coachInvites/{inviteId} {
+      allow get, list: if isVerifiedGoogle()
+        && resource.data.emailLower == request.auth.token.email.lower();
+      allow update: if isVerifiedGoogle()
+        && resource.data.emailLower == request.auth.token.email.lower()
+        && resource.data.status == 'approved'
+        && resource.data.get('boundUid', null) == null
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'boundUid', 'acceptedAt'])
+        && request.resource.data.status == 'accepted'
+        && request.resource.data.boundUid == uid()
+        && request.resource.data.acceptedAt == request.time
+        && getAfter(coachPath()).data.inviteId == inviteId;
+      allow create, delete: if false;
+    }
     match /coaches/{coachUid} {
       allow read: if signedIn() && uid() == coachUid;
-      allow write: if false;
+      allow create: if signedIn() && uid() == coachUid
+        && request.resource.data.keys().hasOnly(['workspaceId', 'inviteId', 'status', 'createdAt'])
+        && request.resource.data.status == 'active'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.inviteId is string
+        && request.resource.data.workspaceId is string
+        && request.resource.data.workspaceId != uid()
+        // The invite is bound to this uid by this very batch.
+        && get(invitePath(request.resource.data.inviteId)).data.status == 'approved'
+        && get(invitePath(request.resource.data.inviteId)).data.get('boundUid', null) == null
+        && getAfter(invitePath(request.resource.data.inviteId)).data.boundUid == uid()
+        // ...and a brand-new workspace owned by this uid is created with it.
+        && !exists(wsPath(request.resource.data.workspaceId))
+        && getAfter(wsPath(request.resource.data.workspaceId)).data.ownerUid == uid();
+      allow update, delete: if false;
     }
     match /coachWorkspaces/{workspaceId} {
       allow read: if isCoach() && resource.data.ownerUid == uid();
-      allow write: if false;
-    }
-    match /coachInvites/{inviteId} {
-      allow read, write: if false;
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['ownerUid', 'status', 'createdAt'])
+        && request.resource.data.ownerUid == uid()
+        && request.resource.data.status == 'active'
+        && request.resource.data.createdAt == request.time
+        && workspaceId != uid()
+        && !exists(coachPath())
+        && getAfter(coachPath()).data.workspaceId == workspaceId;
+      allow update, delete: if false;
     }
 
     // Legacy allowlist and global config (old app only; never used for
