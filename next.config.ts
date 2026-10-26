@@ -13,6 +13,10 @@ const nextConfig: NextConfig = {
   // (scripts, account names, dependencies).
   env: { APP_VERSION: packageJson.version },
 
+  // Emulator test builds export to their own folder (tools/build-emulator.mjs)
+  // so browser tests can never be pointed at the production-configured out/.
+  ...(process.env.BC_EMULATOR_BUILD === "1" ? { distDir: "out-emulator" } : {}),
+
   // Optional, but helps avoid surprises with static export.
   images: { unoptimized: true },
 };

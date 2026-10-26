@@ -12,6 +12,8 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 
+import { assertNoExternalRequests, launchGuardedBrowser } from "./support/guard.mjs";
+
 import { productionShapedSnapshot } from "../support/productionShapedFixture.mjs";
 
 const BASE = process.env.BROWSER_BASE_URL;
@@ -75,12 +77,15 @@ before(async () => {
   }
   await batch.commit();
   springBefore = await seasonTree(SPRING);
-  const { chromium } = await import("playwright");
-  browser = await chromium.launch();
+  browser = await launchGuardedBrowser(BASE);
 });
 
 after(async () => {
-  await browser?.close();
+  try {
+    if (browser) assertNoExternalRequests(browser);
+  } finally {
+    await browser?.close();
+  }
 });
 
 async function newPage(viewport, mobile, role) {

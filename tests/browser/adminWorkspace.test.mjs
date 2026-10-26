@@ -9,6 +9,8 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 
+import { assertNoExternalRequests, launchGuardedBrowser } from "./support/guard.mjs";
+
 import { PS_IDS, productionShapedSnapshot } from "../support/productionShapedFixture.mjs";
 import { LEGACY_TIGERS_BRANDING } from "../../src/lib/branding.ts";
 
@@ -73,12 +75,15 @@ before(async () => {
   batch.set(db.doc(`coachProfiles/${COACH}/linkedPlayers/${PS_IDS.alex}`), { careerPlayerId: PS_IDS.alex, displayName: "Alex Rivera", relationship: "child", confirmed: true, linkedAt: new Date() });
   await batch.commit();
   historyBefore = await history();
-  const { chromium } = await import("playwright");
-  browser = await chromium.launch();
+  browser = await launchGuardedBrowser(BASE);
 });
 
 after(async () => {
-  await browser?.close();
+  try {
+    if (browser) assertNoExternalRequests(browser);
+  } finally {
+    await browser?.close();
+  }
 });
 
 async function coachPage(viewport, mobile = false) {

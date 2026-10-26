@@ -1,18 +1,18 @@
 // Browser acceptance for New Season Setup (Team → Season → Roster → Ready).
 //
-// Needs the demo emulators and an app build pointed at them WITH the player
-// registry enabled (linked children):
+// Needs the demo emulators and the emulator build (never out/; the
+// production guard in ./support/guard.mjs refuses anything else):
 //   npx firebase emulators:start --only firestore,auth --project demo-baseball-coach
-//   NEXT_PUBLIC_FIREBASE_PROJECT_ID=demo-baseball-coach NEXT_PUBLIC_FIREBASE_API_KEY=demo-key \
-//     NEXT_PUBLIC_FIREBASE_EMULATORS=1 NEXT_PUBLIC_FEATURE_PLAYER_REGISTRY=1 \
-//     NEXT_PUBLIC_ADMIN_EMAILS=coach@example.test npx next build
-//   (serve out/ locally), then BROWSER_BASE_URL=http://127.0.0.1:3105 npm run test:browser
+//   npm run build:emulator && npm run serve:emulator
+//   BROWSER_BASE_URL=http://127.0.0.1:3105 npm run test:browser
 // Skipped when BROWSER_BASE_URL is not set. Fixture data only.
 //
 // Order matters: B (Tigers, stays draft) → C (interrupted, mobile) →
 // A (Falcons, activated) → D (historical Tigers unchanged).
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
+
+import { assertNoExternalRequests, launchGuardedBrowser } from "./support/guard.mjs";
 
 import { IDS, legacySnapshot } from "../support/fixtures.mjs";
 
@@ -87,12 +87,15 @@ before(async () => {
   await batch.commit();
   historyBefore = await historyFingerprint();
 
-  const { chromium } = await import("playwright");
-  browser = await chromium.launch();
+  browser = await launchGuardedBrowser(BASE);
 });
 
 after(async () => {
-  await browser?.close();
+  try {
+    if (browser) assertNoExternalRequests(browser);
+  } finally {
+    await browser?.close();
+  }
 });
 
 async function coachPage(viewport, mobile = false) {

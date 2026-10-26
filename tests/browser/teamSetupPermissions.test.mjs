@@ -10,6 +10,8 @@
 // S: Season → Roster → Ready smoke for a created team.
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
+
+import { assertNoExternalRequests, launchGuardedBrowser } from "./support/guard.mjs";
 import fs from "node:fs";
 
 import { legacySnapshot } from "../support/fixtures.mjs";
@@ -79,13 +81,16 @@ before(async () => {
   }
   await batch.commit();
   historyBefore = await historyFingerprint();
-  const { chromium } = await import("playwright");
-  browser = await chromium.launch();
+  browser = await launchGuardedBrowser(BASE);
 });
 
 after(async () => {
   if (BASE) await loadRules(REPO_RULES);
-  await browser?.close();
+  try {
+    if (browser) assertNoExternalRequests(browser);
+  } finally {
+    await browser?.close();
+  }
 });
 
 async function coachPage(viewport, mobile = false) {

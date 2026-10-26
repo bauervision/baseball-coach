@@ -13,6 +13,8 @@
 import { after, before, test } from "node:test";
 import assert from "node:assert/strict";
 
+import { assertNoExternalRequests, launchGuardedBrowser } from "./support/guard.mjs";
+
 const BASE = process.env.BROWSER_BASE_URL;
 const PROJECT = "demo-baseball-coach";
 const FS_HOST = process.env.FIRESTORE_EMULATOR_HOST ?? "127.0.0.1:8085";
@@ -46,8 +48,7 @@ before(async () => {
     createdAt: new Date(), updatedAt: new Date(),
   });
 
-  const { chromium } = await import("playwright");
-  browser = await chromium.launch();
+  browser = await launchGuardedBrowser(BASE);
   const ctx = await browser.newContext({ viewport: { width: 1366, height: 768 } });
   await ctx.addInitScript(() =>
     localStorage.setItem("baseball-coach:session", JSON.stringify({ role: "admin", email: "coach@example.test", uid: "coach-mike", name: "Coach" })),
@@ -69,7 +70,11 @@ before(async () => {
 });
 
 after(async () => {
-  await browser?.close();
+  try {
+    if (browser) assertNoExternalRequests(browser);
+  } finally {
+    await browser?.close();
+  }
 });
 
 const tab = (group, name) =>
