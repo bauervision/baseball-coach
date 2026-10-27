@@ -222,3 +222,13 @@ export async function setSeasonPublished(opts: {
   }
   return { linksChanged };
 }
+
+/**
+ * Recomputes every public careerLinks list of the coach's seasons from the
+ * current publication state (after roster changes on a published season).
+ */
+export async function refreshCareerLinks(db: Firestore, uid: string): Promise<number> {
+  const owned = await getDocs(query(collection(db, "seasons"), where("ownerUid", "==", uid)));
+  const seasons: OwnedSeason[] = owned.docs.map((d) => ({ id: d.id, data: d.data() }));
+  return syncCareerLinks(db, seasons, new Map(seasons.map((s) => [s.id, s.data.published === true] as const)));
+}

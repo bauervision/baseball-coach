@@ -10,6 +10,7 @@ import * as React from "react";
 
 import { withSeason } from "@/lib/seasonHref";
 import { useTeamScope } from "@/lib/teamScopeContext";
+import { useAdminScope } from "@/lib/adminScope";
 import { seasonHomeHref, seasonPlayerHref, seasonTrophiesHref, teamHref } from "@/lib/teamRoutes";
 
 export type SeasonLinks = {
@@ -26,8 +27,30 @@ export function useSeasonLinks(): SeasonLinks {
   const team = scope.inTeam ? scope.teamId : null;
   const current = scope.inTeam ? scope.currentSeasonId : null;
   const shown = scope.inTeam ? scope.seasonId : null;
+  // Coach area (Tallies): player pages open inside the team's Admin (coach
+  // controls); trophies and other teams go to the public routes.
+  const admin = useAdminScope();
+  const adminTeam = !scope.inTeam ? (admin?.team ?? null) : null;
+  const adminTeamId = adminTeam?.teamId ?? null;
+  const adminCurrent = adminTeam?.currentSeasonId ?? null;
 
   return React.useMemo<SeasonLinks>(() => {
+    if (adminTeamId) {
+      const base = `/admin/?team=${encodeURIComponent(adminTeamId)}`;
+      return {
+        publicView: false,
+        home: (sid, _active, teamId) => (teamId && teamId !== adminTeamId ? (sid ? seasonHomeHref(teamId, sid) : teamHref(teamId)) : base),
+        trophies: (sid) => {
+          const s = sid ?? adminCurrent;
+          return s ? seasonTrophiesHref(adminTeamId, s) : teamHref(adminTeamId);
+        },
+        player: (sid, pid, _active, teamId) => {
+          const s = sid ?? adminCurrent;
+          if (teamId && teamId !== adminTeamId) return s ? seasonPlayerHref(teamId, s, pid) : teamHref(teamId);
+          return `${base}&id=${encodeURIComponent(pid)}${s ? `&season=${encodeURIComponent(s)}` : ""}`;
+        },
+      };
+    }
     if (team) {
       return {
         publicView: true,
@@ -52,5 +75,5 @@ export function useSeasonLinks(): SeasonLinks {
       trophies: (sid) => withSeason("/trophies", sid),
       player: (sid, pid, active) => withSeason(`/player?id=${encodeURIComponent(pid)}`, sid, active),
     };
-  }, [team, current, shown]);
+  }, [team, current, shown, adminTeamId, adminCurrent]);
 }

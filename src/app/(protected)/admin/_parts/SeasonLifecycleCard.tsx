@@ -1,6 +1,7 @@
 // app/admin/_parts/SeasonLifecycleCard.tsx
 "use client";
 
+import { useAdminScope } from "@/lib/adminScope";
 import * as React from "react";
 import {
   collection,
@@ -53,6 +54,7 @@ export function SeasonLifecycleCard(props: {
   onChangedAction: () => void;
 }) {
   const { db, uid, canEdit, seasons, currentSeasonId, onChangedAction } = props;
+  const scope = useAdminScope();
   const [picked, setPicked] = React.useState("");
   const seasonId = picked || currentSeasonId;
   const season = seasons?.find((s) => s.seasonId === seasonId) ?? null;
@@ -109,14 +111,14 @@ export function SeasonLifecycleCard(props: {
     setMsg(null);
     try {
       if (action === "finalize") {
-        const res = await finalizeSeason({ db, uid, seasonId });
+        const res = await finalizeSeason({ db, uid, seasonId, scope });
         setMsg(
           res.alreadyFinalized
             ? `${name} was already finalized. Nothing changed.`
             : `${name} is finalized and read-only. Its record, stats, and awards were not changed.`,
         );
       } else {
-        await reopenSeason({ db, uid, seasonId });
+        await reopenSeason({ db, uid, seasonId, scope });
         setMsg(
           `${name} is reopened and editable. It was not made the current season.`,
         );

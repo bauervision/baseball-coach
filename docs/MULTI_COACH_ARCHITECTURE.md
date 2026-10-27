@@ -96,9 +96,9 @@ Hard rule: no second coach invite exists before step 4 is verified, so no state 
 | A | This document; routing spike | **Done** |
 | Foundation | Privacy split tool + rehearsal, target rules + isolation tests, Auth record check, browser guard (`docs/PUBLIC_PRIVATE_DATA.md`) | **Done (2026-10-24)** |
 | B | Google sign-in, invitations, workspaces, account linking (§10) | **Done in code/emulator (2026-10-26); not activated** |
-| B+ | Admin data layer on the target rules (scoped queries, ownerUid/workspaceId on writes, audit to private/audit) — full Admin, Team Designer, Season Update, New Season Setup inside a selected team | **Next** |
+| B+ | Full Admin, Team Designer, Season Update, New Season Setup, onboarding inside a selected team on the target rules (§12) | **Done in code/emulator (2026-10-27); not activated** |
 | C | Tallies brand, landing, sign-in; team routes, team current season, publication, public projection, legacy redirects, Copy team link (§11) | **Done in code/emulator (2026-10-26); not activated** |
-| D | First-run onboarding via existing setup | Pending (needs B+) |
+| D | First-run onboarding via existing setup | Done with B+ (§12) |
 | E | Full emulator/browser acceptance, privacy audit, migration rehearsal, runbook | Pending |
 
 **OWNER decision P3 — release bundling:** the Admin redesign + draft deletion release (runbook §11) is still pending. Recommended: release it first, separately; the multi-coach rules build on that ruleset.
@@ -155,3 +155,35 @@ Everything below is behind `NEXT_PUBLIC_FEATURE_MULTI_COACH` (= "Tallies mode", 
 
 - Real Google OAuth, the Tallies CSP, and the `talllies` domain are untested (emulator credential seam only).
 - careerLinks hygiene is enforced by the app's publish/unpublish flow; rules guarantee unpublished seasons are unreadable but cannot inspect each link entry.
+
+## 12. Checkpoint B+ — team-scoped Admin and onboarding (emulator only; nothing activated)
+
+**One scope.** `src/lib/adminScope.ts` (`AdminDataScope`: coach uid, workspace, the selected team read under the rules, that team's season ids) is provided by `TeamAdminScope` (`src/components/auth/TeamWorkspace.tsx`) for `/admin/?team={id}`, or with no team for onboarding (`/admin/?setup=1`). The URL only selects; reading the team is the access check (another coach's or unknown id → "Team not found"). The workspace is keyed by team id: switching teams remounts every screen, so no state, cache, or result crosses teams; writes already in flight keep their own season id.
+
+**Existing screens, scoped data.** The legacy Admin components are reused unchanged in layout; each Admin action takes an optional `scope` and delegates to `src/lib/teamData.ts`:
+
+| Area | Legacy (firestore.rules) | Tallies (target rules) |
+|---|---|---|
+| Current season | `app/config` | `teams/{t}.currentSeasonId` (+ `publicTeams`), never app/config |
+| Season list / picker | all seasons | `ownerUid == uid && teamId == team`; audit merged from `private/audit` |
+| Create season | id from name+term | opaque `s_…`, draft, unpublished, `ownerUid`, team snapshot; same label → resume |
+| Lifecycle | history on season doc | season status fields only; history + byUid in `private/audit` |
+| Draft deletion | lock/verify/delete | same, plus private profiles and audit doc |
+| Roster add/edit/remove | identity + shirt size on public doc | public doc (opaque `sp_…` id, not the identity) + `private/profile`; returning players only from this team |
+| Teams | `listTeams` all; name-based id | selected team only; opaque `t_…`; `ownerUid`/`workspaceId` immutable; `publicTeams` in the same transaction |
+| Stats, games, lines, lineup, final awards, layouts | unchanged | unchanged writes (ordinary owner edits) on the team's current season |
+| Player page (coach) | `/player?id=` | `/admin/?team=&id=&season=` (coach controls); parents' `/teams/…` pages never show them |
+
+Reads in the coach area merge each player's `private/profile` (owner-only) over the public entry (`useRosterPlayers`); a season id outside the selected team resolves to nothing, never to another season. A team with no current season shows setup and the Team Designer only (no season-dependent screen mounts). Every scoped write re-reads the season and checks `teamId` + `ownerUid` (`assertSeasonInTeam`); rules enforce ownership regardless. Rules cannot distinguish two teams of the *same* coach beyond team/season consistency (season `teamId` immutable, team current season must be its own), so same-coach cross-team isolation is enforced by that app-side check and tested.
+
+**Onboarding.** Empty workspace → "Set up your first team" → New Season Setup (Team Designer: name, short name, division, sport baseball/softball, bundled logo or initials, both palettes, award collection) → season → roster → ready → explicit make-current. Double submits and retries recover the same team/draft. Logo upload is not supported (no file storage); bundled logos or initials only.
+
+**Rules change.** `teams/{t}` read: approved coaches may read a *missing* id (onboarding checks a new id is free); existing teams stay owner-only.
+
+**Publication consistency.** Unpublish strips every public career link to the season (one batch per season) *before* the season and its public pointer are hidden in one batch; publish adds links after. An interruption can only leave links missing for a still-published season (re-running repairs it), never a link to an unpublished one; rules additionally refuse unpublishing while `publicTeams` still points at the season and keep unpublished seasons unreadable. Fully atomic link hygiene across many seasons is not possible in one batch under the per-request rules lookup limit; the bounded alternative (a server function) is not in scope.
+
+### Limitations
+
+- My Players (`/profile`) redirects to the workspace in Tallies mode; the registry UI is not team-scoped yet.
+- Career history in the coach area follows the public career links (published seasons), like parents see.
+- Production migration (Tigers team doc, ownership/publication backfill, privacy split), Google OAuth, Tallies security headers, and deployment remain separate approval-gated work.

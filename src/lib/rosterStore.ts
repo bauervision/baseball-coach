@@ -21,6 +21,7 @@ import { asIdentityStatus } from "@/lib/playerIdentity";
 import { normalizeLinkedFrom } from "@/lib/careerHistory";
 import { normalizeCareerLinks } from "@/lib/careerLinks";
 import { useTeamScope } from "@/lib/teamScopeContext";
+import { useAdminScope } from "@/lib/adminScope";
 import { asSeasonStatus, type SeasonStatus } from "@/lib/seasonLifecycle";
 import {
   LEGACY_TIGERS_BRANDING,
@@ -538,9 +539,17 @@ export function useRosterPlayers(seasonId?: string | null): {
   error: string | null;
 } {
   const scope = useTeamScope();
-  const requested = scope.inTeam
-    ? (scope.seasonId ?? NO_SEASON)
-    : seasonId?.trim() || null;
+  const admin = useAdminScope();
+  // Coach area (Tallies): only the selected team's seasons, the team's own
+  // current season by default, never app/config — and nothing at all
+  // before a team is selected.
+  const adminTeam = !scope.inTeam && admin ? admin.team : null;
+  let requested: string | null;
+  if (scope.inTeam) requested = scope.seasonId ?? NO_SEASON;
+  else if (admin) {
+    const r = seasonId?.trim() || adminTeam?.currentSeasonId || null;
+    requested = r && admin.seasonIds?.has(r) ? r : NO_SEASON;
+  } else requested = seasonId?.trim() || null;
   const [snap, setSnap] = React.useState<RosterSnapshot>({
     seasonId: requested === NO_SEASON ? "" : requested ?? "",
     activeSeasonId: "",
@@ -561,8 +570,75 @@ export function useRosterPlayers(seasonId?: string | null): {
     };
   }, [requested]);
 
+  const privates = usePrivateProfiles(admin && requested !== NO_SEASON ? requested : null, snap.players);
+  // Stable identity: screens key effects on the players array.
+  const merged = React.useMemo(
+    () => (snap.players && privates ? snap.players.map((p) => mergePrivate(p, privates.get(p.id))) : null),
+    [snap.players, privates],
+  );
+
   if (scope.inTeam) return { ...snap, activeSeasonId: scope.currentSeasonId ?? "" };
+  if (admin) {
+    return {
+      ...snap,
+      activeSeasonId: adminTeam?.currentSeasonId ?? "",
+      players: merged,
+    };
+  }
   return snap;
+}
+
+/** Private roster fields (coach only) merged over the public entry. */
+function mergePrivate(p: Player, d: Record<string, unknown> | undefined): Player {
+  if (!d) return p;
+  const merged = normalizePlayer({ ...p, stats: p.stats, ...d }, p.id) ?? p;
+  return { ...merged, stats: p.stats, careerLinks: p.careerLinks };
+}
+
+/**
+ * Watches seasons/{s}/players/{p}/private/profile for every roster entry
+ * (owner-only docs). Returns null until every profile has reported once,
+ * so coach screens never show a roster without its private fields.
+ */
+function usePrivateProfiles(
+  seasonId: string | null,
+  players: Player[] | null,
+): Map<string, Record<string, unknown>> | null {
+  const ids = React.useMemo(() => (players ?? []).map((p) => p.id).sort().join("|"), [players]);
+  const [state, setState] = React.useState<{ key: string; map: Map<string, Record<string, unknown>> } | null>(null);
+  // Includes "not loaded yet": an empty roster must still start the watch.
+  const key = `${seasonId}#${players === null ? "-" : ids}`;
+  React.useEffect(() => {
+    if (!seasonId || players === null) return;
+    const db = getFirestoreDb();
+    const list = ids ? ids.split("|") : [];
+    const map = new Map<string, Record<string, unknown>>();
+    const seen = new Set<string>();
+    const emit = () => {
+      if (seen.size === list.length) setState({ key, map: new Map(map) });
+    };
+    emit();
+    const unsubs = list.map((id) =>
+      onSnapshot(
+        doc(db, "seasons", seasonId, "players", id, "private", "profile"),
+        (s) => {
+          if (s.exists()) map.set(id, s.data());
+          else map.delete(id);
+          seen.add(id);
+          emit();
+        },
+        () => {
+          seen.add(id);
+          emit();
+        },
+      ),
+    );
+    return () => unsubs.forEach((u) => u());
+    // `players` only gates the start; the id list is the dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+  if (!seasonId) return new Map();
+  return state?.key === key ? state.map : null;
 }
 
 export async function fetchPlayers(seasonId: string): Promise<Player[]> {

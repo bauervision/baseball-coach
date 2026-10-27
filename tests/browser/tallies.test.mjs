@@ -390,6 +390,8 @@ test("D: one coach, two teams, independent current seasons; Copy team link (1366
   await signInPassword(page);
   await page.locator(`[data-team-link-row="${FALCONS}"]`).click();
   await page.waitForURL(new RegExp(`/admin/\\?team=${FALCONS}$`));
+  // Publishing lives in the team workspace's "Parent link & publishing" panel.
+  await page.locator("[data-parents-toggle]").click();
   const mgr = page.locator(`[data-team-manager="${FALCONS}"]`);
   await mgr.waitFor({ timeout: 30000 });
   assert.match(await mgr.locator("[data-current-season]").innerText(), /No current season yet/);

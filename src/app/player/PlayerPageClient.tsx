@@ -18,6 +18,7 @@ import { useRosterPlayers } from "@/lib/rosterStore";
 import { useViewedSeasonId } from "@/lib/viewedSeason";
 import { useSeasonLinks } from "@/lib/seasonLinks";
 import { useTeamScope } from "@/lib/teamScope";
+import { useAdminScope } from "@/lib/adminScope";
 import { isFinalized } from "@/lib/seasonLifecycle";
 import { SeasonSelector } from "@/components/season/SeasonSelector";
 import { getFirebaseAuth, getFirestoreDb } from "@/lib/firebase.client";
@@ -115,6 +116,7 @@ export default function PlayerPageClient() {
   const scope = useTeamScope();
   const id = scope.inTeam ? (scope.route?.playerId ?? "") : (sp.get("id") ?? "").trim();
   const links = useSeasonLinks();
+  const adminScope = useAdminScope();
 
   // The viewed season (?season=) drives everything on this page: stats,
   // game log, awards, saved arrangement, recognition sheet, and PDF.
@@ -167,7 +169,9 @@ export default function PlayerPageClient() {
   // Career follows the permanent identity (careerPlayerId) and only
   // explicitly linked seasons; names are never matched.
   const { teamName, seasonLabel, endSeasonMode, finalAwards } = meta;
-  const publicCareer = links.publicView;
+  // Parents' pages and the Tallies coach area follow the public careerLinks
+  // (identity data is private there); the legacy app scans careerPlayerId.
+  const publicCareer = links.publicView || adminScope !== null;
   React.useEffect(() => {
     if (!player || !seasonId) return;
     if (publicCareer ? !player.careerLinks?.length : !player.careerPlayerId) return;

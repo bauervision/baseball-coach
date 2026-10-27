@@ -12,15 +12,25 @@ import { BrandingProvider } from "@/components/theme/BrandingProvider";
 import { ThemeModeToggle } from "@/components/shell/ThemeModeToggle";
 import { getFirestoreDb } from "@/lib/firebase.client";
 import { TALLIES_NEUTRAL_BRANDING } from "@/lib/talliesBrand";
+import type { SeasonBranding } from "@/lib/branding";
 import { seasonHomeHref, seasonPlayerHref, seasonTrophiesHref } from "@/lib/teamRoutes";
 
-/** Coach area (/admin) in Tallies mode: neutral brand frame, no team labels. */
+/**
+ * Lets the selected team show its own colors and logo inside the coach
+ * shell (one document-level provider, so there is no nesting order to get
+ * wrong). The Tallies header stays Tallies.
+ */
+export const CoachShellBrandingContext = React.createContext<(b: SeasonBranding | null) => void>(() => {});
+
+/** Coach area (/admin) in Tallies mode: Tallies frame; the team's own colors inside a team. */
 export function TalliesCoachShell(props: { children: React.ReactNode }) {
+  const [teamBranding, setTeamBranding] = React.useState<SeasonBranding | null>(null);
   React.useEffect(() => {
     document.title = "Coach workspace · Tallies";
   }, []);
   return (
-    <BrandingProvider branding={TALLIES_NEUTRAL_BRANDING}>
+    <CoachShellBrandingContext.Provider value={setTeamBranding}>
+    <BrandingProvider branding={teamBranding ?? TALLIES_NEUTRAL_BRANDING}>
       <div
         className="flex min-h-dvh flex-col"
         style={{ background: "var(--bg-base)", color: "var(--foreground)" }}
@@ -30,16 +40,17 @@ export function TalliesCoachShell(props: { children: React.ReactNode }) {
           className="border-b"
           style={{ borderColor: "color-mix(in oklab, var(--stroke) 92%, transparent)" }}
         >
-          <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-3 px-4">
+          <div className="mx-auto flex h-14 w-full max-w-6xl items-center justify-between gap-3 px-4">
             <Link href="/" aria-label="Tallies home" className="rounded-lg">
               <TalliesLockup size={26} />
             </Link>
             <ThemeModeToggle />
           </div>
         </header>
-        <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 sm:py-8">{props.children}</main>
+        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:py-8">{props.children}</main>
       </div>
     </BrandingProvider>
+    </CoachShellBrandingContext.Provider>
   );
 }
 

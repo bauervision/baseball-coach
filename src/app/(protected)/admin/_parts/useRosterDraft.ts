@@ -1,6 +1,8 @@
 // app/admin/_parts/useRosterDraft.ts
 "use client";
 
+import { useAdminScope } from "@/lib/adminScope";
+import { loadScopedRosterSeasons } from "@/lib/teamData";
 import * as React from "react";
 import type { Firestore } from "firebase/firestore";
 import type { DraftPlayer } from "../adminHelpers";
@@ -55,6 +57,7 @@ export function useRosterDraft(opts: {
   canEdit: boolean;
 }) {
   const { db, uid, seasons, defaultSeasonId, canEdit } = opts;
+  const scope = useAdminScope();
 
   // Follows the current season (which may still be loading) until the coach
   // picks a season explicitly.
@@ -96,7 +99,7 @@ export function useRosterDraft(opts: {
     if (!canEdit || seasons === null) return;
     let active = true;
     setRosterSeasons(null);
-    loadRosterSeasons(db, seasons)
+    (scope ? loadScopedRosterSeasons(db, seasons) : loadRosterSeasons(db, seasons))
       .then((list) => {
         if (active) setRosterSeasons(list);
       })
@@ -109,7 +112,7 @@ export function useRosterDraft(opts: {
     return () => {
       active = false;
     };
-  }, [db, seasons, canEdit, reloadVersion]);
+  }, [scope, db, seasons, canEdit, reloadVersion]);
 
   React.useEffect(() => {
     if (!PLAYER_REGISTRY_ENABLED || !canEdit || !uid) return;
@@ -228,6 +231,7 @@ export function useRosterDraft(opts: {
 
     try {
       const res = await addPlayersToRoster({
+        scope,
         db,
         seasonId: targetSeasonId,
         imports: Object.values(picks).map((p) => ({
@@ -258,7 +262,7 @@ export function useRosterDraft(opts: {
       }
 
       const parts = [
-        `Added ${res.writes.length} player${res.writes.length === 1 ? "" : "s"} to ${targetSeasonId}.`,
+        `Added ${res.writes.length} player${res.writes.length === 1 ? "" : "s"} to ${scope ? (seasons?.find((x) => x.seasonId === targetSeasonId)?.seasonLabel ?? "the roster") : targetSeasonId}.`,
       ];
       if (res.skipped.length) {
         parts.push(
@@ -275,7 +279,7 @@ export function useRosterDraft(opts: {
     } finally {
       setRosterBusy(false);
     }
-  }, [canEdit, rosterBusy, targetSeasonId, db, picks, draft, uid]);
+  }, [scope, seasons, canEdit, rosterBusy, targetSeasonId, db, picks, draft, uid]);
 
   return {
     targetSeasonId,

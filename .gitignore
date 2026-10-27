@@ -46,3 +46,9 @@ service-account.json
 *.psd
 # firebase emulators
 *-debug.log
+
+# private agent working artifacts (reports, screenshots, logs, notes) — not product docs
+/.agent/
+/agent-reports/
+/test-results/
+/screenshots/

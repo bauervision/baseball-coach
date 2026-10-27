@@ -1,6 +1,8 @@
 // app/admin/_parts/TeamDesignerTab.tsx
 "use client";
 
+import { useAdminScope } from "@/lib/adminScope";
+import { newOpaqueTeamId } from "@/lib/teamData";
 import * as React from "react";
 import type { Firestore } from "firebase/firestore";
 
@@ -290,6 +292,7 @@ export function TeamDesignerTab(props: {
    */
   setup?: { template: "blank" | "tigers"; onSavedAction: (team: Team) => void };
 }) {
+  const scope = useAdminScope();
   const {
     db,
     canEdit,
@@ -405,13 +408,13 @@ export function TeamDesignerTab(props: {
     setErr(null);
     setMsg(null);
     try {
-      if (isNew) pendingIdRef.current ??= newTeamId(draft.teamName);
+      if (isNew) pendingIdRef.current ??= scope ? newOpaqueTeamId() : newTeamId(draft.teamName);
       const team: Team = {
         ...draft,
         teamId: draft.teamId || pendingIdRef.current!,
       };
-      if (isNew) await createTeamIdempotent(db, team);
-      else await updateTeam(db, team);
+      if (isNew) await createTeamIdempotent(db, team, scope);
+      else await updateTeam(db, team, scope);
       pendingIdRef.current = null;
       setSaved(structuredClone(team));
       setDraft(structuredClone(team));
@@ -467,7 +470,8 @@ export function TeamDesignerTab(props: {
             </CardSubtitle>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {setup ? null : (
+            {/* Tallies: the selected team only; new teams come from setup. */}
+            {setup || scope?.team ? null : (
               <>
                 <label className="sr-only" htmlFor="team-designer-select">
                   Team

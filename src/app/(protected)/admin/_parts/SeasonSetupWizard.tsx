@@ -10,6 +10,8 @@
 // and leaving and returning resume where the data actually is; nothing is
 // kept in browser storage.
 
+import { useAdminScope } from "@/lib/adminScope";
+import { listScopedSeasons } from "@/lib/teamData";
 import * as React from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Firestore } from "firebase/firestore";
@@ -131,6 +133,7 @@ export function SeasonSetupWizard(props: {
   onOpenLineupAction: () => void;
 }) {
   const { db, uid, canEdit, currentSeasonId } = props;
+  const scope = useAdminScope();
   const router = useRouter();
   const sp = useSearchParams();
   const teamParam = sp.get("team");
@@ -146,11 +149,12 @@ export function SeasonSetupWizard(props: {
   React.useEffect(() => setLocalSeasons(null), [props.seasons]);
 
   async function reloadTeams() {
-    setLocalTeams(await listTeams(db));
+    setLocalTeams(await listTeams(db, scope));
     props.onTeamsChangedAction();
   }
   async function reloadSeasons() {
-    setLocalSeasons(await listSeasons(db));
+    setLocalSeasons(scope ? await listScopedSeasons(db, scope) : await listSeasons(db));
+    scope?.refresh();
     invalidateSeasonList();
     props.onSeasonsChangedAction();
   }
@@ -205,7 +209,9 @@ export function SeasonSetupWizard(props: {
   // ---------------------------------------------------------------- team
   const [teamMode, setTeamMode] = React.useState<"existing" | "new" | null>(null);
   const [template, setTemplate] = React.useState<"blank" | "tigers">("blank");
-  const mode = teamMode ?? ((teams?.length ?? 0) > 0 ? "existing" : "new");
+  // Tallies: inside a team the team is fixed; with no team selected
+  // (onboarding) setup creates one. Legacy: choose or create.
+  const mode = scope ? (scope.team ? "existing" : "new") : teamMode ?? ((teams?.length ?? 0) > 0 ? "existing" : "new");
 
   // ---------------------------------------------------------------- season
   const suggested = React.useMemo(() => nextSeasonAfter(new Date()), []);
@@ -240,6 +246,7 @@ export function SeasonSetupWizard(props: {
     setMsg(null);
     try {
       const res = await createSeasonOrResume({
+        scope,
         db,
         uid: uid ?? "",
         team,
@@ -272,7 +279,7 @@ export function SeasonSetupWizard(props: {
     setErr(null);
     setMsg(null);
     try {
-      await makeCurrentSeason({ db, seasonId: season.seasonId, uid: uid ?? undefined });
+      await makeCurrentSeason({ db, seasonId: season.seasonId, uid: uid ?? undefined, scope });
       await reloadSeasons();
       setConfirm(null);
       if (then === "lineup") props.onOpenLineupAction();
@@ -360,7 +367,7 @@ export function SeasonSetupWizard(props: {
                   {props.teamsError}
                 </div>
               ) : null}
-              <div role="radiogroup" aria-label="Team" className="flex flex-wrap gap-2">
+              <div role="radiogroup" aria-label="Team" className="flex flex-wrap gap-2" hidden={!!scope}>
                 {(
                   [
                     ["existing", "Use an existing team"],
@@ -491,7 +498,7 @@ export function SeasonSetupWizard(props: {
                   <span style={{ color: "#fb7185" }}>Enter a year between 2000 and 2100.</span>
                 ) : plan?.kind === "create" ? (
                   <>
-                    Creates <strong>{plan.seasonLabel}</strong> for {team.teamName} as a <strong>draft</strong> (id <code>{plan.seasonId}</code>), with {team.teamName}&rsquo;s branding.
+                    Creates <strong>{plan.seasonLabel}</strong> for {team.teamName} as a <strong>draft</strong>{scope ? null : <> (id <code>{plan.seasonId}</code>)</>}, with {team.teamName}&rsquo;s branding.
                   </>
                 ) : plan?.kind === "resume" ? (
                   <>

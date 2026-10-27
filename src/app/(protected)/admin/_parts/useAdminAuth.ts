@@ -6,6 +6,7 @@ import { onAuthStateChanged, type Auth } from "firebase/auth";
 import type { Firestore } from "firebase/firestore";
 import { signInWithEmailAndPassword } from "@/lib/firebase.client";
 import { checkAllowlist } from "./adminActions";
+import { useAdminScope } from "@/lib/adminScope";
 
 export function useAdminAuth(opts: { auth: Auth; db: Firestore }) {
   const { auth, db } = opts;
@@ -62,6 +63,22 @@ export function useAdminAuth(opts: { auth: Auth; db: Firestore }) {
   );
 
   const canEdit = uid !== null && isAllowlisted === true;
+
+  // Tallies: a selected team was read as this coach's own (rules) — that,
+  // not the legacy admins/{uid} allowlist, is what enables editing.
+  const scope = useAdminScope();
+  if (scope?.team) {
+    return {
+      authReady: true,
+      uid: scope.uid as string | null,
+      isAllowlisted: true as boolean | null,
+      canEdit: true,
+      signingIn,
+      signInError,
+      signInAction,
+      setSignInError,
+    };
+  }
 
   return {
     authReady,

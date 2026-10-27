@@ -1,6 +1,8 @@
 // app/admin/_parts/useSeasonSwitch.ts
 "use client";
 
+import { useAdminScope } from "@/lib/adminScope";
+import { listScopedSeasons } from "@/lib/teamData";
 import * as React from "react";
 import type { Firestore } from "firebase/firestore";
 import { createSeason, makeCurrentSeason } from "./adminActions";
@@ -23,6 +25,7 @@ export function useSeasonSwitch(opts: {
   teams: Team[] | null;
 }) {
   const { db, uid, canEdit, currentSeasonId, fallbackTeamName, teams } = opts;
+  const scope = useAdminScope();
 
   const [seasons, setSeasons] = React.useState<SeasonSummary[] | null>(null);
   const [seasonsVersion, setSeasonsVersion] = React.useState(0);
@@ -48,7 +51,7 @@ export function useSeasonSwitch(opts: {
 
   React.useEffect(() => {
     let active = true;
-    listSeasons(db)
+    (scope ? listScopedSeasons(db, scope) : listSeasons(db))
       .then((list) => {
         if (active) setSeasons(list);
       })
@@ -61,7 +64,7 @@ export function useSeasonSwitch(opts: {
     return () => {
       active = false;
     };
-  }, [db, seasonsVersion]);
+  }, [scope, db, seasonsVersion]);
 
   const refreshSeasons = React.useCallback(() => {
     invalidateSeasonList();
@@ -77,6 +80,7 @@ export function useSeasonSwitch(opts: {
 
     try {
       const { seasonId } = await createSeason({
+        scope,
         db,
         uid: uid ?? "",
         seasonId: seasonEditId,
@@ -91,7 +95,8 @@ export function useSeasonSwitch(opts: {
       });
 
       if (makeCurrentAfterCreate) {
-        await makeCurrentSeason({ db, seasonId, uid: uid ?? undefined });
+        await makeCurrentSeason({ db, seasonId, uid: uid ?? undefined, scope });
+        scope?.refresh();
       }
 
       setLastCreatedSeasonId(seasonId);
@@ -109,6 +114,7 @@ export function useSeasonSwitch(opts: {
       setSeasonBusy(false);
     }
   }, [
+    scope,
     canEdit,
     seasonBusy,
     db,
@@ -136,9 +142,10 @@ export function useSeasonSwitch(opts: {
     setSeasonMsg(null);
     setSeasonErr(null);
     try {
-      await makeCurrentSeason({ db, seasonId: target, uid: uid ?? undefined });
+      await makeCurrentSeason({ db, seasonId: target, uid: uid ?? undefined, scope });
+      scope?.refresh();
       setSeasonMsg(
-        `Current season set to ${target}. Its games, stats, and awards were not changed.`,
+        `Current season set to ${scope ? (seasons?.find((x) => x.seasonId === target)?.seasonLabel ?? "the selected season") : target}. Its games, stats, and awards were not changed.`,
       );
       refreshSeasons();
     } catch (e: unknown) {
@@ -147,6 +154,8 @@ export function useSeasonSwitch(opts: {
       setSeasonBusy(false);
     }
   }, [
+    scope,
+    seasons,
     canEdit,
     seasonBusy,
     selectedCurrentId,

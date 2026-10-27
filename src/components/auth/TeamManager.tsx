@@ -98,7 +98,13 @@ export function CopyTeamLink(props: { teamId: string }) {
   );
 }
 
-export function TeamManager(props: { uid: string; teamId: string }) {
+export function TeamManager(props: {
+  uid: string;
+  teamId: string;
+  /** Inside the team workspace: no back link, no focus move, report changes. */
+  embedded?: boolean;
+  onChangedAction?: () => void;
+}) {
   const db = React.useMemo(() => getFirestoreDb(), []);
   const [team, setTeam] = React.useState<OwnedTeam | null | undefined>(undefined);
   const [seasons, setSeasons] = React.useState<SeasonSummary[] | null>(null);
@@ -123,8 +129,8 @@ export function TeamManager(props: { uid: string; teamId: string }) {
 
   const loadState = team === undefined ? "loading" : team ? "found" : "missing";
   React.useEffect(() => {
-    if (loadState !== "loading") headingRef.current?.focus({ preventScroll: true });
-  }, [loadState]);
+    if (loadState !== "loading" && !props.embedded) headingRef.current?.focus({ preventScroll: true });
+  }, [loadState, props.embedded]);
 
   async function run(key: string, action: () => Promise<string>) {
     if (busy) return;
@@ -133,6 +139,7 @@ export function TeamManager(props: { uid: string; teamId: string }) {
     try {
       setMessage({ kind: "ok", text: await action() });
       setVersion((v) => v + 1);
+      props.onChangedAction?.();
     } catch (e) {
       setMessage({ kind: "error", text: e instanceof Error ? e.message : "That didn't work. Please try again." });
     } finally {
@@ -173,9 +180,11 @@ export function TeamManager(props: { uid: string; teamId: string }) {
   return (
     <Card data-team-manager={team.teamId}>
       <CardHeader>
-        <Link href="/admin/" className="text-xs font-semibold underline underline-offset-4" style={{ color: "var(--muted)" }}>
-          ← Your teams
-        </Link>
+        {props.embedded ? null : (
+          <Link href="/admin/" className="text-xs font-semibold underline underline-offset-4" style={{ color: "var(--muted)" }}>
+            ← Your teams
+          </Link>
+        )}
         <CardTitle className="mt-1">
           <span ref={headingRef} tabIndex={-1} className="outline-none">
             {team.teamName}

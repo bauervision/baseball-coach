@@ -43,6 +43,24 @@ import {
 import { loadCurrentLineup } from "@/lib/lineupStore";
 import { DELETE_BATCH, rosterBlockers, seasonDocBlockers } from "@/lib/draftDeletion";
 import type { GameLineupSnapshot } from "@/lib/lineup";
+import { requireTeam, type AdminDataScope } from "@/lib/adminScope";
+import {
+  addScopedRosterPlayers,
+  createScopedSeason,
+  deleteScopedDraft,
+  finalizeScopedSeason,
+  removeScopedRosterPlayer,
+  reopenScopedSeason,
+  saveScopedPlayerEdits,
+  ScopedDraftNotDeletableError,
+} from "@/lib/teamData";
+import { setTeamCurrentSeason } from "@/lib/teamPublication";
+
+// Every action below takes an optional `scope`: in Tallies mode (a coach's
+// selected team) it delegates to the team-scoped implementation in
+// src/lib/teamData.ts (multi-coach shapes, target rules); without it the
+// legacy single-team behavior is unchanged.
+type Scoped = { scope?: AdminDataScope | null };
 import {
   asGameType,
   computeOfficialSeasonTally,
@@ -92,8 +110,16 @@ export async function createSeason(opts: {
   fallbackTeamName: string;
   /** Team identity to link and snapshot (branding is copied, not referenced). */
   team?: Team | null;
-}): Promise<{ seasonId: string }> {
+} & Scoped): Promise<{ seasonId: string }> {
   const { db, uid } = opts;
+  if (opts.scope) {
+    const r = await createScopedSeason(db, opts.scope, {
+      seasonLabel: opts.seasonLabel,
+      scheduledGames: opts.scheduledGames,
+      usesGamesPlayedRecord: opts.usesGamesPlayedRecord,
+    });
+    return { seasonId: r.seasonId };
+  }
   const checked = validateNewSeasonId(opts.seasonId, opts.existingSeasonIds);
   if (!checked.ok) throw new Error(checked.error);
   const seasonId = checked.seasonId;
@@ -148,8 +174,11 @@ export async function createSeasonOrResume(opts: {
   seasonLabel: string;
   scheduledGames: number;
   existingSeasonIds: string[];
-}): Promise<{ seasonId: string; outcome: "created" | "resumed" }> {
+} & Scoped): Promise<{ seasonId: string; outcome: "created" | "resumed" }> {
   const { db, uid, team, seasonId, seasonLabel } = opts;
+  if (opts.scope) {
+    return createScopedSeason(db, opts.scope, { seasonLabel, scheduledGames: opts.scheduledGames });
+  }
   try {
     await createSeason({
       db,
@@ -186,10 +215,15 @@ export async function makeCurrentSeason(opts: {
   db: Firestore;
   seasonId: string;
   uid?: string;
-}): Promise<void> {
+} & Scoped): Promise<void> {
   const { db } = opts;
   const seasonId = opts.seasonId.trim();
   if (!seasonId) throw new Error("Choose a season.");
+  if (opts.scope) {
+    // The team's own current season (never app/config); activates a draft.
+    await setTeamCurrentSeason({ db, uid: opts.scope.uid, teamId: requireTeam(opts.scope).teamId, seasonId });
+    return;
+  }
   const seasonRef = doc(db, "seasons", seasonId);
   const cfgRef = doc(db, "app", "config");
 
@@ -291,10 +325,18 @@ export async function deleteDraftSeason(opts: {
   db: Firestore;
   uid: string;
   seasonId: string;
-}): Promise<{ outcome: "deleted" | "alreadyDeleted"; removedPlayers: number }> {
+} & Scoped): Promise<{ outcome: "deleted" | "alreadyDeleted"; removedPlayers: number }> {
   const { db, uid } = opts;
   const seasonId = opts.seasonId.trim();
   if (!seasonId) throw new Error("Choose a season.");
+  if (opts.scope) {
+    try {
+      return await deleteScopedDraft(db, opts.scope, seasonId);
+    } catch (e) {
+      if (e instanceof ScopedDraftNotDeletableError) throw new DraftNotDeletableError(e.reasons);
+      throw e;
+    }
+  }
   const seasonRef = doc(db, "seasons", seasonId);
   const cfgRef = doc(db, "app", "config");
 
@@ -378,8 +420,9 @@ export async function finalizeSeason(opts: {
   db: Firestore;
   uid: string;
   seasonId: string;
-}): Promise<{ alreadyFinalized: boolean }> {
+} & Scoped): Promise<{ alreadyFinalized: boolean }> {
   const { db, uid, seasonId } = opts;
+  if (opts.scope) return finalizeScopedSeason(db, opts.scope, seasonId);
   const ref = doc(db, "seasons", seasonId);
   return runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
@@ -406,8 +449,9 @@ export async function reopenSeason(opts: {
   db: Firestore;
   uid: string;
   seasonId: string;
-}): Promise<void> {
+} & Scoped): Promise<void> {
   const { db, uid, seasonId } = opts;
+  if (opts.scope) return reopenScopedSeason(db, opts.scope, seasonId);
   const ref = doc(db, "seasons", seasonId);
   await runTransaction(db, async (tx) => {
     const snap = await tx.get(ref);
@@ -463,8 +507,11 @@ export async function savePlayerEdits(opts: {
       dirty: boolean;
     }
   >;
-}): Promise<{ wrote: number }> {
+} & Scoped): Promise<{ wrote: number }> {
   const { db, seasonId, players, edits } = opts;
+  if (opts.scope) {
+    return saveScopedPlayerEdits({ db, scope: opts.scope, seasonId, players, edits, parseNumber: parseOptionalInt });
+  }
 
   if (players.length === 0) throw new Error("No players in roster.");
   await assertSeasonWritable(db, seasonId);
@@ -521,9 +568,12 @@ export async function addPlayersToRoster(opts: {
   seasonId: string;
   imports: ImportSelection[];
   newPlayers: NewPlayerDraft[];
-}): Promise<RosterAdditionPlan> {
+} & Scoped): Promise<RosterAdditionPlan> {
   const { db, seasonId } = opts;
   if (!seasonId.trim()) throw new Error("Choose a season.");
+  if (opts.scope) {
+    return addScopedRosterPlayers({ db, scope: opts.scope, seasonId, imports: opts.imports, newPlayers: opts.newPlayers });
+  }
 
   const seasonSnap = await getDoc(doc(db, "seasons", seasonId));
   if (!seasonSnap.exists()) {
@@ -630,8 +680,18 @@ export async function removeRosterPlayer(opts: {
   seasonId: string;
   seasonPlayerId: string;
   confirmName: string;
-}): Promise<void> {
+} & Scoped): Promise<void> {
   const { db, seasonId, seasonPlayerId } = opts;
+  if (opts.scope) {
+    return removeScopedRosterPlayer({
+      db,
+      scope: opts.scope,
+      seasonId,
+      seasonPlayerId,
+      confirmName: opts.confirmName,
+      scan: (id) => scanSeasonReferences(db, id),
+    });
+  }
   await assertSeasonWritable(db, seasonId);
   const ref = doc(db, "seasons", seasonId, "players", seasonPlayerId);
   const snap = await getDoc(ref);

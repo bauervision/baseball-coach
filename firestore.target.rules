@@ -232,7 +232,9 @@ service cloud.firestore {
     }
 
     match /teams/{teamId} {
-      allow read: if isCoach() && resource.data.ownerUid == uid();
+      // Missing ids read as "not found" (onboarding checks a new id is
+      // free); an existing team only for its owner.
+      allow read: if isCoach() && (resource == null || resource.data.ownerUid == uid());
       allow create: if isCoach()
         && request.resource.data.keys().hasOnly(teamKeys())
         && request.resource.data.teamId == teamId

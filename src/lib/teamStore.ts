@@ -25,6 +25,8 @@ import {
   type Team,
 } from "@/lib/branding";
 import { isFinalized } from "@/lib/seasonLifecycle";
+import type { AdminDataScope } from "@/lib/adminScope";
+import { createScopedTeam, listScopedTeams, readScopedTeam, updateScopedTeam } from "@/lib/teamData";
 
 /**
  * User-facing text for a failed team read or write. A permission denial
@@ -63,7 +65,13 @@ function teamFromData(id: string, d: Record<string, unknown>): Team | null {
   };
 }
 
-export async function listTeams(db: Firestore): Promise<Team[]> {
+/** All teams (legacy), or in Tallies mode the selected team / the coach's own. */
+export async function listTeams(db: Firestore, scope?: AdminDataScope | null): Promise<Team[]> {
+  if (scope) {
+    if (!scope.team) return listScopedTeams(db, scope.uid);
+    const fresh = await readScopedTeam(db, scope.team.teamId);
+    return fresh ? [fresh] : [];
+  }
   const snap = await getDocs(collection(db, "teams"));
   return snap.docs
     .map((d) => teamFromData(d.id, d.data()))
@@ -112,7 +120,9 @@ export async function createTeam(db: Firestore, team: Team): Promise<void> {
 export async function createTeamIdempotent(
   db: Firestore,
   team: Team,
+  scope?: AdminDataScope | null,
 ): Promise<"created" | "recovered"> {
+  if (scope) return createScopedTeam(db, scope, team);
   try {
     await createTeam(db, team);
     return "created";
@@ -128,7 +138,8 @@ export async function createTeamIdempotent(
 }
 
 /** Saves a team's identity and both palettes together. */
-export async function updateTeam(db: Firestore, team: Team): Promise<void> {
+export async function updateTeam(db: Firestore, team: Team, scope?: AdminDataScope | null): Promise<void> {
+  if (scope) return updateScopedTeam(db, scope, team);
   assertValid(team);
   const ref = doc(db, "teams", team.teamId);
   await runTransaction(db, async (tx) => {

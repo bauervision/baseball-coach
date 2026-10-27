@@ -26,11 +26,15 @@ export const SELECT_STYLE: React.CSSProperties = {
 };
 
 export function seasonOptionLabel(s: SeasonSummary): string {
+  // Tallies season ids are opaque (s_…): the label alone identifies them.
+  if (/^s_[0-9a-f]{20}$/.test(s.seasonId)) return `${s.teamName} · ${s.seasonLabel}`;
   return `${s.teamName} · ${s.seasonLabel} (${s.seasonId})`;
 }
 
 export function SeasonTab(props: {
   canEdit: boolean;
+  /** Tallies: seasons are created with New season setup (opaque ids, the selected team). */
+  hideCreate?: boolean;
   currentSeasonId: string;
   seasons: SeasonSummary[] | null;
 
@@ -151,6 +155,7 @@ export function SeasonTab(props: {
 
         <section
           aria-labelledby="create-season-heading"
+          hidden={props.hideCreate}
           className="grid gap-2 border-t pt-4"
           style={{
             borderColor: "color-mix(in oklab, var(--stroke) 70%, transparent)",

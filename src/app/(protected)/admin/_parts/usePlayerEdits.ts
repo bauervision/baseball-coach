@@ -1,5 +1,6 @@
 "use client";
 
+import { useAdminScope } from "@/lib/adminScope";
 import * as React from "react";
 import type { Firestore } from "firebase/firestore";
 import type { Player } from "@/lib/roster";
@@ -41,6 +42,7 @@ export function usePlayerEdits(opts: {
   canEdit: boolean;
 }) {
   const { db, seasonId, players, canEdit } = opts;
+  const scope = useAdminScope();
 
   const [playerEdits, setPlayerEdits] = React.useState<
     Record<string, PlayerEdit>
@@ -122,6 +124,7 @@ export function usePlayerEdits(opts: {
     try {
       const ps = players ?? [];
       const res = await savePlayerEdits({
+        scope,
         db,
         seasonId,
         players: ps,
@@ -145,12 +148,13 @@ export function usePlayerEdits(opts: {
     } finally {
       setPlayerBusy(false);
     }
-  }, [canEdit, playerBusy, players, db, seasonId, playerEdits]);
+  }, [scope, canEdit, playerBusy, players, db, seasonId, playerEdits]);
 
   const onRemovePlayerAction = React.useCallback(
     async (playerId: string, confirmName: string) => {
       if (!canEdit) return;
       await removeRosterPlayer({
+        scope,
         db,
         seasonId,
         seasonPlayerId: playerId,
@@ -158,7 +162,7 @@ export function usePlayerEdits(opts: {
       });
       setPlayerMsg(`Removed ${confirmName.trim()} from the roster.`);
     },
-    [canEdit, db, seasonId],
+    [scope, canEdit, db, seasonId],
   );
 
   return {

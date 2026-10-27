@@ -4,6 +4,7 @@
 // Only drafts that are not current are listed; deletion itself re-checks
 // eligibility under a rules-enforced lock (deleteDraftSeason).
 
+import { useAdminScope } from "@/lib/adminScope";
 import * as React from "react";
 import { collection, getDocs, type Firestore } from "firebase/firestore";
 
@@ -22,6 +23,7 @@ export function DraftSeasonsCard(props: {
   onDeletedAction: () => void;
 }) {
   const { db, uid, canEdit, seasons, currentSeasonId } = props;
+  const scope = useAdminScope();
   const drafts = (seasons ?? []).filter(
     (s) => (s.status === "draft" || s.status === "deleting") && s.seasonId !== currentSeasonId,
   );
@@ -49,7 +51,7 @@ export function DraftSeasonsCard(props: {
     setMsg(null);
     const s = confirming;
     try {
-      const res = await deleteDraftSeason({ db, uid, seasonId: s.seasonId });
+      const res = await deleteDraftSeason({ db, uid, seasonId: s.seasonId, scope });
       setConfirming(null);
       setMsg({
         kind: "ok",

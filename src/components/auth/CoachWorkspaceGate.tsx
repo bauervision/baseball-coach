@@ -18,7 +18,7 @@ import { clearSession, readSession } from "@/lib/session";
 import { hasGoogle, resolveCoachAccess, type CoachAccess } from "@/lib/coachAccess";
 import { listOwnedTeams, type OwnedTeam } from "@/lib/teamPublication";
 import { LinkGoogleCard } from "@/components/auth/LinkGoogleCard";
-import { TeamManager } from "@/components/auth/TeamManager";
+import { FirstTeamSetup, NewTeamButton, OnboardingScope, TeamAdminScope, TeamWorkspace } from "@/components/auth/TeamWorkspace";
 
 type GateState =
   | { kind: "loading" }
@@ -149,7 +149,10 @@ function CoachWorkspaceHome(props: {
 }) {
   const db = React.useMemo(() => getFirestoreDb(), []);
   const auth = React.useMemo(() => getFirebaseAuth(), []);
-  const selectedTeam = useSearchParams().get("team")?.trim() || null;
+  const router = useRouter();
+  const sp = useSearchParams();
+  const selectedTeam = sp.get("team")?.trim() || null;
+  const onboarding = !selectedTeam && sp.get("setup") === "1";
   const headingRef = useFocusOnChange(selectedTeam ? "team" : "approved");
   const [teams, setTeams] = React.useState<OwnedTeam[] | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
@@ -192,7 +195,13 @@ function CoachWorkspaceHome(props: {
       {passwordOnly ? <LinkGoogleCard auth={auth} /> : null}
 
       {selectedTeam ? (
-        <TeamManager uid={props.user.uid} teamId={selectedTeam} />
+        <TeamAdminScope key={selectedTeam} uid={props.user.uid} workspaceId={props.workspaceId} teamId={selectedTeam}>
+          <TeamWorkspace teams={teams} />
+        </TeamAdminScope>
+      ) : onboarding ? (
+        <OnboardingScope uid={props.user.uid} workspaceId={props.workspaceId}>
+          <FirstTeamSetup />
+        </OnboardingScope>
       ) : (
         <Card>
           <CardHeader>
@@ -207,8 +216,15 @@ function CoachWorkspaceHome(props: {
                 Loading teams…
               </div>
             ) : teams.length === 0 ? (
-              <div className="text-sm" style={{ color: "var(--muted)" }} data-empty-workspace>
-                No teams yet. Your first team will be set up here with the guided New Season Setup (coming in the next update).
+              <div className="grid gap-3" data-empty-workspace>
+                <p className="text-sm" style={{ color: "var(--muted)" }}>
+                  No teams yet. Set up your first team: its name, sport, colors, and first season.
+                </p>
+                <div>
+                  <Button onClick={() => router.push("/admin/?setup=1&step=team")} data-first-team>
+                    Set up your first team
+                  </Button>
+                </div>
               </div>
             ) : (
               <ul aria-label="Your teams" className="grid gap-2">
@@ -229,6 +245,11 @@ function CoachWorkspaceHome(props: {
                 ))}
               </ul>
             )}
+            {teams && teams.length > 0 ? (
+              <div className="pt-1">
+                <NewTeamButton />
+              </div>
+            ) : null}
           </CardContent>
         </Card>
       )}

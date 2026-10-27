@@ -46,12 +46,28 @@ import { LEAVE_SETUP_PROMPT, SeasonSetupWizard } from "./_parts/SeasonSetupWizar
 import { setupHref } from "@/lib/seasonSetup";
 import { invalidateSeasonList } from "@/components/season/SeasonSelector";
 import { Button } from "@/components/ui/Button";
+import { adminHref, useAdminScope } from "@/lib/adminScope";
+import { TeamWithoutSeason } from "./_parts/TeamWithoutSeason";
+import { PlayerPagesCard } from "./_parts/PlayerPagesCard";
 
 export default function AdminClient() {
+  // Tallies: inside a selected team every read and write is scoped to it
+  // (useAdminScope); the season is the team's own current season and never
+  // the legacy default. A team without a current season gets setup instead.
+  const scope = useAdminScope();
+  if (scope && !scope.team?.currentSeasonId) return <TeamWithoutSeason />;
+  return <AdminWorkspace />;
+}
+
+function AdminWorkspace() {
+  const scope = useAdminScope();
   const { seasonId, meta, players, error: rosterError } = useRosterPlayers();
-  const effectiveSeasonId = seasonId || DEFAULT_SEASON_ID;
+  const effectiveSeasonId = seasonId || (scope?.team?.currentSeasonId ?? DEFAULT_SEASON_ID);
   const seasonFinalState = normalizeSeasonFinalState(meta);
-  const [tab, setTab] = React.useState<AdminTab>("stats");
+  // ?tab=lineup opens the Lineup Builder (e.g. right after setup makes the
+  // first season current, which swaps in this view).
+  const initialTab = useSearchParams().get("tab") === "lineup" ? "lineup" : "stats";
+  const [tab, setTab] = React.useState<AdminTab>(initialTab);
 
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
@@ -103,11 +119,14 @@ export default function AdminClient() {
   // A failed load is shown, never treated as "no teams".
   const [teamsError, setTeamsError] = React.useState<string | null>(null);
   const [teamsVersion, setTeamsVersion] = React.useState(0);
-  const refreshTeams = React.useCallback(() => setTeamsVersion((v) => v + 1), []);
+  const refreshTeams = React.useCallback(() => {
+    setTeamsVersion((v) => v + 1);
+    scope?.refresh();
+  }, [scope]);
   React.useEffect(() => {
     if (!canEdit) return;
     let active = true;
-    listTeams(db)
+    listTeams(db, scope)
       .then((list) => {
         if (!active) return;
         setTeams(list);
@@ -121,13 +140,14 @@ export default function AdminClient() {
     return () => {
       active = false;
     };
-  }, [db, canEdit, teamsVersion]);
+  }, [db, canEdit, teamsVersion, scope]);
 
   // Guided New Season Setup lives in the URL (?setup=1&step=…), so it
   // survives refresh and back/forward. Any Admin tab leaves it.
   const router = useRouter();
   const searchParams = useSearchParams();
   const setupActive = searchParams.get("setup") === "1";
+  const adminHome = adminHref(scope);
   const [setupDirty, setSetupDirty] = React.useState(false);
 
   // Leaving the Team Designer (or setup) with unsaved changes asks first.
@@ -137,7 +157,7 @@ export default function AdminClient() {
       if (setupActive) {
         if (setupDirty && !window.confirm(LEAVE_SETUP_PROMPT)) return;
         setSetupDirty(false);
-        router.push("/admin/");
+        router.push(adminHome);
         setTab(next);
         return;
       }
@@ -147,7 +167,7 @@ export default function AdminClient() {
       if (next !== "team") setTeamDirty(false);
       setTab(next);
     },
-    [tab, teamDirty, setupActive, setupDirty, router],
+    [tab, teamDirty, setupActive, setupDirty, router, adminHome],
   );
 
   const seasonSwitch = useSeasonSwitch({
@@ -183,7 +203,7 @@ export default function AdminClient() {
         activeTab={setupActive ? null : tab}
         onSelectAction={goTab}
         ready={authReady && uid !== null && isAllowlisted === true}
-        myPlayersHref={PLAYER_REGISTRY_ENABLED ? "/profile" : null}
+        myPlayersHref={PLAYER_REGISTRY_ENABLED && !scope ? "/profile" : null}
       >
           {currentFinalized ? (
             <div className="rounded-xl border px-3 py-2 text-xs" role="status" style={toastStyle("err")}>
@@ -260,7 +280,7 @@ export default function AdminClient() {
               Checking admin allowlist…
             </div>
           ) : null}
-        {showGoogleLink && authReady && uid !== null && isAllowlisted === true ? <LinkGoogleCard auth={auth} /> : null}
+        {showGoogleLink && !scope && authReady && uid !== null && isAllowlisted === true ? <LinkGoogleCard auth={auth} /> : null}
       </AdminWorkspaceHeader>
 
       {setupActive ? (
@@ -277,12 +297,12 @@ export default function AdminClient() {
           onDirtyChangeAction={setSetupDirty}
           onExitAction={() => {
             setSetupDirty(false);
-            router.push("/admin/");
+            router.push(adminHome);
             setTab("season");
           }}
           onOpenLineupAction={() => {
             setSetupDirty(false);
-            router.push("/admin/");
+            router.push(adminHome);
             setTab("lineup");
           }}
         />
@@ -373,7 +393,9 @@ export default function AdminClient() {
               </div>
               <Button
                 disabled={!canEdit}
-                onClick={() => router.push(setupHref({ step: "team" }))}
+                onClick={() =>
+                  router.push(scope?.team ? setupHref({ step: "season", team: scope.team.teamId }) : setupHref({ step: "team" }))
+                }
               >
                 Start setup
               </Button>
@@ -387,6 +409,7 @@ export default function AdminClient() {
             gamesPlayed={meta.gamesPlayed}
           />
           <SeasonTab
+            hideCreate={!!scope}
             canEdit={canEdit}
             currentSeasonId={effectiveSeasonId}
             seasons={seasonSwitch.seasons}
@@ -447,6 +470,7 @@ export default function AdminClient() {
             endSeasonMode={seasonFinalState.endSeasonMode}
             finalAwards={seasonFinalState.finalAwards}
           />
+          {scope ? <PlayerPagesCard seasonId={effectiveSeasonId} players={players} /> : null}
           <RosterBuilderTab
             canEdit={canEdit}
             seasons={seasonSwitch.seasons}

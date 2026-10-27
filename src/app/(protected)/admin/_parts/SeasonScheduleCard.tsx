@@ -65,7 +65,7 @@ export function SeasonScheduleCard(props: {
       <CardHeader>
         <CardTitle>Season Schedule</CardTitle>
         <CardSubtitle>
-          Official scheduled games for <code>{seasonId}</code>. Changing this
+          Official scheduled games for {/^s_[0-9a-f]{20}$/.test(seasonId) ? "this season" : <code>{seasonId}</code>}. Changing this
           never alters saved games.
         </CardSubtitle>
       </CardHeader>
