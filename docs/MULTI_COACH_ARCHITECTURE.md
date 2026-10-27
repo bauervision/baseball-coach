@@ -99,6 +99,7 @@ Hard rule: no second coach invite exists before step 4 is verified, so no state 
 | B+ | Full Admin, Team Designer, Season Update, New Season Setup, onboarding inside a selected team on the target rules (§12) | **Done in code/emulator (2026-10-27); not activated** |
 | C | Tallies brand, landing, sign-in; team routes, team current season, publication, public projection, legacy redirects, Copy team link (§11) | **Done in code/emulator (2026-10-26); not activated** |
 | D | First-run onboarding via existing setup | Done with B+ (§12) |
+| D1 | Production migration tooling: inspect, plan, emulator-only apply, verify, rollback (`docs/TALLIES_MIGRATION.md`) | **Done in code/emulator (2026-10-27); never run against production** |
 | E | Full emulator/browser acceptance, privacy audit, migration rehearsal, runbook | Pending |
 
 **OWNER decision P3 — release bundling:** the Admin redesign + draft deletion release (runbook §11) is still pending. Recommended: release it first, separately; the multi-coach rules build on that ruleset.
@@ -147,7 +148,7 @@ Everything below is behind `NEXT_PUBLIC_FEATURE_MULTI_COACH` (= "Tallies mode", 
 ### Production prerequisites (each separately approved)
 
 1. Checkpoint B+ (Admin on the target rules) and D (onboarding), so coaches can run a season in Tallies mode.
-2. Ownership/publication backfill tool (not built yet): Tigers `teams` doc + `publicTeams`, `teamId`/`ownerUid`/`published` on the 2026 seasons (Falcons draft unpublished), `teams/{t}.currentSeasonId` from app/config; then the privacy split (careerLinks).
+2. Ownership/publication backfill tool (built in D1: `tools/tallies-migrate.mjs`, `docs/TALLIES_MIGRATION.md`; production run not approved): Tigers `teams` doc + `publicTeams`, `teamId`/`ownerUid`/`published` on the 2026 seasons (Falcons draft unpublished), `teams/{t}.currentSeasonId` from app/config; then the privacy split (careerLinks).
 3. §10 steps 2–5 (Google provider, authorized domain `talllies.web.app`, explicit owner link, workspace migration, target rules) — order in `docs/PUBLIC_PRIVATE_DATA.md` §5.
 4. Tallies Hosting deploy to `talllies` with the flag on; legacy `bauer-baseball` retired or redirected afterwards (decision pending).
 

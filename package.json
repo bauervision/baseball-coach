@@ -13,7 +13,8 @@
     "test:emulator": "firebase emulators:exec --only firestore,auth --project demo-baseball-coach \"node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tests/support/register-alias.mjs --test --test-concurrency=1 tests/emulator/*.test.mjs\"",
     "test:browser": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tests/support/register-alias.mjs --test --test-concurrency=1 \"tests/browser/*.test.mjs\"",
     "build:emulator": "node tools/build-emulator.mjs",
-    "serve:emulator": "node tools/serve-emulator-build.mjs"
+    "serve:emulator": "node tools/serve-emulator-build.mjs",
+    "tallies:migrate": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./tests/support/register-alias.mjs tools/tallies-migrate.mjs"
   },
   "dependencies": {
     "firebase": "^12.8.0",

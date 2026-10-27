@@ -52,3 +52,16 @@ service-account.json
 /agent-reports/
 /test-results/
 /screenshots/
+# migration working files (inventories, plans, manifests, rollback files,
+# verification reports, exports) hold child data; the tool refuses to write
+# them inside the repo — these patterns are a second line of defence
+/migration/
+/migration-reports/
+tallies-d1-*.json
+*inventory*.json
+*-plan.json
+plan*.json
+*rollback*.json
+*verify*.json
+*export*.json
+*.json.sha256
