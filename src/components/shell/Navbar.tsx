@@ -11,7 +11,7 @@ import {
 } from "@/components/layout/AuthOverlayHost";
 
 import { ThemeModeToggle } from "./ThemeModeToggle";
-import { withSeason } from "@/lib/viewedSeason";
+import { useSeasonLinks } from "@/lib/seasonLinks";
 import { resolveLogo } from "@/lib/branding";
 import { TeamMark, useBranding } from "@/components/theme/BrandingProvider";
 
@@ -75,11 +75,14 @@ export function Navbar(props: {
   /** Viewer pages keep the browsed season when navigating home/trophies. */
   viewedSeasonId?: string | null;
 }) {
-  const homeHref = withSeason("/", props.viewedSeasonId);
+  const links = useSeasonLinks();
+  const homeHref = links.home(props.viewedSeasonId ?? null);
   const hasLogo = resolveLogo(useBranding().logo) !== null;
-  const trophiesHref = withSeason("/trophies", props.viewedSeasonId);
+  const trophiesHref = links.trophies(props.viewedSeasonId ?? null);
   const session = React.useMemo(() => readSession(), []);
-  const isAdmin = session?.role === "admin";
+  // Parents' team pages (Tallies) have no session and no coach controls.
+  const publicView = links.publicView;
+  const isAdmin = !publicView && session?.role === "admin";
 
   const [loggingOut, setLoggingOut] = React.useState(false);
   const logoutTimerRef = React.useRef<number | null>(null);
@@ -182,17 +185,19 @@ export function Navbar(props: {
 </PillLink>
             <ThemeModeToggle disabled={loggingOut} />
 
-            <IconButton
-              title={loggingOut ? "Signing out…" : "Sign out"}
-              onClickAction={onSignOutAction}
-              disabled={loggingOut}
-            >
-              <LogOut
-                className="h-4 w-4"
-                style={{ color: "var(--secondary)" }}
-                aria-hidden="true"
-              />
-            </IconButton>
+            {publicView ? null : (
+              <IconButton
+                title={loggingOut ? "Signing out…" : "Sign out"}
+                onClickAction={onSignOutAction}
+                disabled={loggingOut}
+              >
+                <LogOut
+                  className="h-4 w-4"
+                  style={{ color: "var(--secondary)" }}
+                  aria-hidden="true"
+                />
+              </IconButton>
+            )}
           </div>
         </div>
 
@@ -268,17 +273,19 @@ export function Navbar(props: {
 
             <ThemeModeToggle disabled={loggingOut} />
 
-            <IconButton
-              title={loggingOut ? "Signing out…" : "Sign out"}
-              onClickAction={onSignOutAction}
-              disabled={loggingOut}
-            >
-              <LogOut
-                className="h-4 w-4"
-                style={{ color: "var(--secondary)" }}
-                aria-hidden="true"
-              />
-            </IconButton>
+            {publicView ? null : (
+              <IconButton
+                title={loggingOut ? "Signing out…" : "Sign out"}
+                onClickAction={onSignOutAction}
+                disabled={loggingOut}
+              >
+                <LogOut
+                  className="h-4 w-4"
+                  style={{ color: "var(--secondary)" }}
+                  aria-hidden="true"
+                />
+              </IconButton>
+            )}
           </div>
         </div>
       </div>

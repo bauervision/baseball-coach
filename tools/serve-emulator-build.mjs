@@ -24,6 +24,8 @@ http
     let file = path.join(ROOT, rel);
     if (!file.startsWith(ROOT)) return res.writeHead(403).end();
     if (fs.existsSync(file) && fs.statSync(file).isDirectory()) file = path.join(file, "index.html");
+    // Same rewrite as firebase.tallies.json: every /teams/** path is the team shell.
+    if (!fs.existsSync(file) && rel.startsWith("/teams/")) file = path.join(ROOT, "teams", "index.html");
     if (!fs.existsSync(file)) return res.writeHead(404).end();
     res.writeHead(200, { "content-type": TYPES[path.extname(file)] ?? "application/octet-stream" });
     fs.createReadStream(file).pipe(res);

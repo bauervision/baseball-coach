@@ -32,6 +32,7 @@ service cloud.firestore {
 
     function seasonPath(id) { return /databases/$(database)/documents/seasons/$(id); }
     function teamPath(id) { return /databases/$(database)/documents/teams/$(id); }
+    function publicTeamPath(id) { return /databases/$(database)/documents/publicTeams/$(id); }
     function auditPath(id) { return /databases/$(database)/documents/seasons/$(id)/private/audit; }
 
     function statusBefore(id) { return exists(seasonPath(id)) ? get(seasonPath(id)).data.get('status', '') : ''; }
@@ -62,6 +63,11 @@ service cloud.firestore {
     }
     function seasonPrivateKeys() {
       return ['lifecycleHistory', 'finalizedByUid', 'reopenedByUid', 'coachUids'];
+    }
+    // Public career links: a bounded list (entries are {seasonId,
+    // seasonPlayerId}); unpublished targets are unreadable regardless.
+    function validCareerLinks(d) {
+      return !('careerLinks' in d) || (d.careerLinks is list && d.careerLinks.size() <= 25);
     }
 
     // ------------------------------------------------------------------
@@ -247,6 +253,16 @@ service cloud.firestore {
 
     // Parent-facing team identity: only public branding fields and the
     // current season, kept equal to the private team doc (same batch).
+    // currentSeasonId is the team's current season when that season is
+    // published after the write, and null otherwise — so parents never learn
+    // of an activated-but-unpublished season (/teams/{teamId}/ shows "no
+    // season yet"). Never a season of another team.
+    function publishedCurrentAfter(teamId) {
+      let cur = getAfter(teamPath(teamId)).data.get('currentSeasonId', null);
+      return cur != null && existsAfter(seasonPath(cur))
+             && getAfter(seasonPath(cur)).data.get('published', false) == true
+             && getAfter(seasonPath(cur)).data.get('teamId', '') == teamId ? cur : null;
+    }
     match /publicTeams/{teamId} {
       allow read: if true;
       allow create, update: if isCoach()
@@ -255,10 +271,13 @@ service cloud.firestore {
                                                  'palettes', 'awardCollection', 'currentSeasonId', 'updatedAt'])
         && validBrandingFields(request.resource.data)
         && request.resource.data.teamName == getAfter(teamPath(teamId)).data.teamName
+        && request.resource.data.shortName == getAfter(teamPath(teamId)).data.shortName
+        && request.resource.data.sport == getAfter(teamPath(teamId)).data.sport
+        && request.resource.data.division == getAfter(teamPath(teamId)).data.division
+        && request.resource.data.logo == getAfter(teamPath(teamId)).data.get('logo', null)
         && request.resource.data.palettes == getAfter(teamPath(teamId)).data.palettes
-        && request.resource.data.get('currentSeasonId', null) == getAfter(teamPath(teamId)).data.get('currentSeasonId', null)
-        && (request.resource.data.get('currentSeasonId', null) == null
-            || getAfter(seasonPath(request.resource.data.currentSeasonId)).data.get('published', false) == true);
+        && request.resource.data.awardCollection == getAfter(teamPath(teamId)).data.awardCollection
+        && request.resource.data.get('currentSeasonId', null) == publishedCurrentAfter(teamId);
       allow delete: if false;
     }
 
@@ -323,11 +342,16 @@ service cloud.firestore {
           && auditAppended(seasonId, 'deletionCancelled');
     }
     // Publication is its own explicit change, independent of lifecycle,
-    // but never for a draft or a season being deleted.
-    function isPublicationChange() {
+    // but never for a draft or a season being deleted. Unpublishing must
+    // also take the season off its team's public page in the same batch.
+    function isPublicationChange(seasonId) {
+      let teamId = resource.data.get('teamId', '');
       return changedKeys().hasOnly(['published', 'updatedAt'])
           && request.resource.data.published is bool
-          && !(request.resource.data.published == true && resource.data.get('status', '') in ['draft', 'deleting']);
+          && !(request.resource.data.published == true && resource.data.get('status', '') in ['draft', 'deleting'])
+          && (request.resource.data.published == true || teamId == ''
+              || !existsAfter(publicTeamPath(teamId))
+              || getAfter(publicTeamPath(teamId)).data.get('currentSeasonId', null) != seasonId);
     }
     function isOrdinaryEdit() {
       return !changedKeys().hasAny(['status', 'finalizedAt', 'reopenedAt', 'activatedAt', 'branding',
@@ -364,11 +388,11 @@ service cloud.firestore {
         && request.resource.data.get('teamId', null) == resource.data.get('teamId', null)
         && !request.resource.data.keys().hasAny(seasonPrivateKeys())
         && (resource.data.get('status', '') == 'finalized'
-              ? (isReopen(seasonId) || isPublicationChange())
+              ? (isReopen(seasonId) || isPublicationChange(seasonId))
               : resource.data.get('status', '') == 'deleting'
                 ? isDeletionCancel(seasonId)
                 : (isOrdinaryEdit() || isActivation(seasonId) || isFinalization(seasonId)
-                   || isBrandingApply() || isDeletionLock(seasonId) || isPublicationChange()));
+                   || isBrandingApply() || isDeletionLock(seasonId) || isPublicationChange(seasonId)));
       allow delete: if isCoach() && resource.data.ownerUid == uid()
                     && resource.data.get('status', '') == 'deleting' && !isCurrentSomewhere(seasonId);
 
@@ -387,7 +411,13 @@ service cloud.firestore {
       match /players/{playerId} {
         allow read: if ownsSeason(seasonId) || publishedSeason(seasonId);
         allow create, update: if ownsSeasonAfter(seasonId) && rosterWritable(seasonId)
-          && !request.resource.data.keys().hasAny(playerPrivateKeys());
+          && !request.resource.data.keys().hasAny(playerPrivateKeys())
+          && validCareerLinks(request.resource.data);
+        // Public career links follow publication, even on finalized seasons
+        // (only the links change; stats, awards, and records stay frozen).
+        allow update: if ownsSeason(seasonId) && statusBefore(seasonId) != 'deleting'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['careerLinks'])
+          && validCareerLinks(request.resource.data);
         allow delete: if ownsSeason(seasonId) && seasonOpen(seasonId);
 
         match /private/{docId} {

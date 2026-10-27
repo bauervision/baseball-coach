@@ -11,7 +11,8 @@ import {
   computeLeaders,
 } from "@/lib/roster";
 import { useRosterPlayers } from "@/lib/rosterStore";
-import { useViewedSeasonId, withSeason } from "@/lib/viewedSeason";
+import { useViewedSeasonId } from "@/lib/viewedSeason";
+import { useSeasonLinks } from "@/lib/seasonLinks";
 import { SeasonSelector } from "@/components/season/SeasonSelector";
 import { resolveLogo } from "@/lib/branding";
 import { TeamMark, useBranding } from "@/components/theme/BrandingProvider";
@@ -284,6 +285,7 @@ function rosterStatsForPlayer(args: {
 
 export function Roster() {
   const viewedSeasonParam = useViewedSeasonId();
+  const links = useSeasonLinks();
   const heroHasLogo = resolveLogo(useBranding().logo) !== null;
   const { seasonId, activeSeasonId, meta, players, error } =
     useRosterPlayers(viewedSeasonParam);
@@ -425,7 +427,7 @@ export function Roster() {
       ) : null}
 
       <Link
-        href={withSeason("/trophies", viewedSeasonParam)}
+        href={links.trophies(viewedSeasonParam)}
         className="group block min-w-0 max-w-full overflow-hidden rounded-2xl border p-4 transition-opacity hover:opacity-95 sm:p-5"
         style={{
           borderColor: "color-mix(in oklab, var(--stroke) 92%, transparent)",
@@ -520,10 +522,7 @@ export function Roster() {
               return (
                 <Link
                   key={p.id}
-                  href={withSeason(
-                    `/player?id=${encodeURIComponent(p.id)}`,
-                    viewedSeasonParam,
-                  )}
+                  href={links.player(viewedSeasonParam, p.id)}
                   className="playerRow min-w-0 max-w-full overflow-hidden"
                   aria-label={`Open ${p.name}`}
                 >

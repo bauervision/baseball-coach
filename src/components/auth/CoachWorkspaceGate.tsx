@@ -2,19 +2,23 @@
 
 // Multi-coach mode Admin entry: decides access from Firebase Auth + Firestore
 // (coaches/{uid}, invitations) before showing anything private. Approved
-// coaches land in their workspace; everyone else sees "Access not enabled".
-// Team and season management for new workspaces arrives with onboarding
-// (next checkpoint); this view lists the coach's own teams only.
+// coaches land in their workspace (their own teams; ?team= opens one);
+// everyone else sees "Access not enabled". Full season management on the
+// multi-coach data model (stats, roster, setup) is the next checkpoint.
 
 import * as React from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
-import { collection, getDocs, query, where } from "firebase/firestore";
 
 import { Card, CardContent, CardHeader, CardSubtitle, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { getFirebaseAuth, getFirestoreDb } from "@/lib/firebase.client";
 import { clearSession, readSession } from "@/lib/session";
-import { resolveCoachAccess, type CoachAccess } from "@/lib/coachAccess";
+import { hasGoogle, resolveCoachAccess, type CoachAccess } from "@/lib/coachAccess";
+import { listOwnedTeams, type OwnedTeam } from "@/lib/teamPublication";
+import { LinkGoogleCard } from "@/components/auth/LinkGoogleCard";
+import { TeamManager } from "@/components/auth/TeamManager";
 
 type GateState =
   | { kind: "loading" }
@@ -33,6 +37,7 @@ function useFocusOnChange(key: string) {
 }
 
 export function CoachWorkspaceGate() {
+  const router = useRouter();
   const auth = React.useMemo(() => getFirebaseAuth(), []);
   const db = React.useMemo(() => getFirestoreDb(), []);
   const [state, setState] = React.useState<GateState>({ kind: "loading" });
@@ -89,7 +94,14 @@ export function CoachWorkspaceGate() {
       title: state.kind === "signedOut" && state.sessionEnded ? "Your session has ended" : "Sign in to continue",
       body: "Sign in again with your coach account.",
       action: (
-        <Button onClick={() => clearSession()}>Sign in</Button>
+        <Button
+          onClick={() => {
+            clearSession();
+            router.push("/signin/");
+          }}
+        >
+          Sign in
+        </Button>
       ),
     },
     notApproved: {
@@ -136,16 +148,20 @@ function CoachWorkspaceHome(props: {
   onSignOutAction: () => Promise<void>;
 }) {
   const db = React.useMemo(() => getFirestoreDb(), []);
-  const headingRef = useFocusOnChange("approved");
-  const [teams, setTeams] = React.useState<Array<{ id: string; name: string }> | null>(null);
+  const auth = React.useMemo(() => getFirebaseAuth(), []);
+  const selectedTeam = useSearchParams().get("team")?.trim() || null;
+  const headingRef = useFocusOnChange(selectedTeam ? "team" : "approved");
+  const [teams, setTeams] = React.useState<OwnedTeam[] | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
+  // The original coach signs in with a password until Google is linked.
+  const passwordOnly = !hasGoogle(props.user);
 
   React.useEffect(() => {
     let active = true;
     // Scoped query: rules only allow the coach's own teams.
-    getDocs(query(collection(db, "teams"), where("ownerUid", "==", props.user.uid)))
-      .then((snap) => {
-        if (active) setTeams(snap.docs.map((d) => ({ id: d.id, name: String(d.data().teamName ?? d.id) })).sort((a, b) => a.name.localeCompare(b.name)));
+    listOwnedTeams(db, props.user.uid)
+      .then((list) => {
+        if (active) setTeams(list);
       })
       .catch(() => {
         if (active) setErr("Your teams couldn't be loaded.");
@@ -156,41 +172,66 @@ function CoachWorkspaceHome(props: {
   }, [db, props.user.uid]);
 
   return (
-    <Card data-coach-gate="approved" data-workspace-id={props.workspaceId}>
-      <CardHeader>
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <CardTitle>
-            <span ref={headingRef} tabIndex={-1} className="outline-none">
+    <div className="grid gap-4" data-coach-gate="approved" data-workspace-id={props.workspaceId}>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="min-w-0">
+          <h1 className="text-xl font-extrabold">
+            <span ref={selectedTeam ? undefined : headingRef} tabIndex={-1} className="outline-none">
               Your workspace
             </span>
-          </CardTitle>
-          <Button size="sm" variant="ghost" onClick={() => void props.onSignOutAction()}>
-            Sign out
-          </Button>
+          </h1>
+          <p className="text-sm" style={{ color: "var(--muted)" }}>
+            Signed in as {props.user.email ?? "coach"}
+          </p>
         </div>
-        <CardSubtitle>Signed in as {props.user.email ?? "coach"}</CardSubtitle>
-      </CardHeader>
-      <CardContent className="grid gap-2">
-        {err ? (
-          <div role="alert" className="text-sm">{err}</div>
-        ) : teams === null ? (
-          <div className="text-sm" style={{ color: "var(--muted)" }}>
-            Loading teams…
-          </div>
-        ) : teams.length === 0 ? (
-          <div className="text-sm" style={{ color: "var(--muted)" }} data-empty-workspace>
-            No teams yet. Team and season setup for new workspaces is coming next.
-          </div>
-        ) : (
-          <ul aria-label="Your teams" className="grid gap-1 text-sm">
-            {teams.map((t) => (
-              <li key={t.id} className="font-semibold">
-                {t.name}
-              </li>
-            ))}
-          </ul>
-        )}
-      </CardContent>
-    </Card>
+        <Button size="sm" variant="ghost" onClick={() => void props.onSignOutAction()}>
+          Sign out
+        </Button>
+      </div>
+
+      {passwordOnly ? <LinkGoogleCard auth={auth} /> : null}
+
+      {selectedTeam ? (
+        <TeamManager uid={props.user.uid} teamId={selectedTeam} />
+      ) : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Your teams</CardTitle>
+            <CardSubtitle>Choose a team to manage its seasons and parent link.</CardSubtitle>
+          </CardHeader>
+          <CardContent className="grid gap-2">
+            {err ? (
+              <div role="alert" className="text-sm">{err}</div>
+            ) : teams === null ? (
+              <div className="text-sm" style={{ color: "var(--muted)" }}>
+                Loading teams…
+              </div>
+            ) : teams.length === 0 ? (
+              <div className="text-sm" style={{ color: "var(--muted)" }} data-empty-workspace>
+                No teams yet. Your first team will be set up here with the guided New Season Setup (coming in the next update).
+              </div>
+            ) : (
+              <ul aria-label="Your teams" className="grid gap-2">
+                {teams.map((t) => (
+                  <li key={t.teamId}>
+                    <Link
+                      href={`/admin/?team=${encodeURIComponent(t.teamId)}`}
+                      className="flex items-center justify-between gap-3 rounded-xl border px-3 py-2.5 font-semibold transition-opacity hover:opacity-90"
+                      style={{ borderColor: "color-mix(in oklab, var(--stroke) 92%, transparent)" }}
+                      data-team-link-row={t.teamId}
+                    >
+                      <span>{t.teamName}</span>
+                      <span className="text-xs font-semibold" style={{ color: "var(--muted)" }}>
+                        Manage →
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }

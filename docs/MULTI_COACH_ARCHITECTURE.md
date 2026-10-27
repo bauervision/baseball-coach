@@ -96,9 +96,9 @@ Hard rule: no second coach invite exists before step 4 is verified, so no state 
 | A | This document; routing spike | **Done** |
 | Foundation | Privacy split tool + rehearsal, target rules + isolation tests, Auth record check, browser guard (`docs/PUBLIC_PRIVATE_DATA.md`) | **Done (2026-10-24)** |
 | B | Google sign-in, invitations, workspaces, account linking (§10) | **Done in code/emulator (2026-10-26); not activated** |
-| B+ | Admin data layer on the target rules (scoped queries, ownerUid/workspaceId on writes, audit to private/audit) | Pending |
-| C | Team routes, team current season, publication, public projection, legacy redirects | Pending |
-| D | First-run onboarding via existing setup, Copy team link | Pending |
+| B+ | Admin data layer on the target rules (scoped queries, ownerUid/workspaceId on writes, audit to private/audit) — full Admin, Team Designer, Season Update, New Season Setup inside a selected team | **Next** |
+| C | Tallies brand, landing, sign-in; team routes, team current season, publication, public projection, legacy redirects, Copy team link (§11) | **Done in code/emulator (2026-10-26); not activated** |
+| D | First-run onboarding via existing setup | Pending (needs B+) |
 | E | Full emulator/browser acceptance, privacy audit, migration rehearsal, runbook | Pending |
 
 **OWNER decision P3 — release bundling:** the Admin redesign + draft deletion release (runbook §11) is still pending. Recommended: release it first, separately; the multi-coach rules build on that ruleset.
@@ -125,3 +125,33 @@ Hard rule: no second coach invite exists before step 4 is verified, so no state 
 - With multi-coach on, `/admin` shows the workspace landing (own teams) only; team/season management on the target rules is B+. The legacy Admin keeps working with the flag off.
 - Revocation takes effect on the next request (rules read `coaches/{uid}`); it does not revoke Firebase sessions.
 - Email used for matching is the token email; a coach changing their Google email keeps access (bound by UID) but cannot accept a second invite.
+
+## 11. Checkpoint C — Tallies brand and team routing (emulator only; nothing activated)
+
+Everything below is behind `NEXT_PUBLIC_FEATURE_MULTI_COACH` (= "Tallies mode", off in production). With it off the app is the existing Baseball Coach, unchanged (browser-tested).
+
+**Brand.** Wordmark: lowercase `tallies` in Bubblegum Sans (Sudtipos / Angel Koziupa & Alejandro Paul, SIL OFL 1.1, Reserved Font Name "Bubblegum Sans"). Latin WOFF2 as distributed by Google Fonts, self-hosted via `next/font/local` (`src/app/fonts/`, `preload: false` so legacy pages never fetch it); license beside the font and served at `/licenses/BubblegumSans-OFL.txt`. No final period (the tagline ends in one; the bare word reads better at header sizes). Symbol: five-bar tally gate on a coral tile (`TallyMark`), legible at 16 px. Palette (ink #221B3A, cream #FFF8EE, coral #EF4F5A, sunshine #FFB627, teal #1F9D8B), scoped to `.tallies`; team themes and the Tigers are untouched. The favicon and `<title>` metadata are still Baseball Coach's (shared static files) — swap them when the Tallies site is deployed.
+
+**Routes (static export).** `/teams/{teamId}/` = the team's *published* current season (the permanent parent link); `/teams/{teamId}/seasons/{seasonId}/home|trophies`, `…/players/{playerId}` (stats, career, recognition sheet, print). One prerendered shell (`src/app/teams/[[...path]]`) + Hosting rewrite `/teams/** → /teams/index.html`; `src/lib/teamScope.tsx` parses the path, reads `publicTeams/{teamId}`, and verifies the season is a published season of that team before anything renders. Unknown/unpublished/foreign ids → "Team page not found"; nothing published → "no season yet" with published history. Never app/config, never the Tigers default. Old links (`/player?id=&season=`, `/trophies?season=`, `/?season=`) redirect to the team route when that season is published.
+
+**Team current season.** `teams/{t}.currentSeasonId` only (`setTeamCurrentSeason`): the season must be this team's and this owner's; a draft is activated in the same transaction (audit in `private/audit`); finalized must be reopened first. `app/config` is neither read nor written.
+
+**Publication.** `seasons/{s}.published` is separate from status (`setSeasonPublished`). Drafts can't be published. `publicTeams/{t}.currentSeasonId` = the team's current season *if published*, else null (rules compute this exactly), so an activated-but-unpublished season is never revealed. Unpublishing is refused by rules unless the public pointer is cleared in the same batch. Public `careerLinks` are recomputed on every publication change (unpublish: links stripped first; publish: added after), including on finalized seasons (rules allow a links-only update there, ≤ 25 links).
+
+**Coach workspace.** `/admin` (Tallies frame): own teams → `/admin/?team={id}`: Copy team link (`https://<site>/teams/{id}/` — no uid, email, season, name, division, location), View parent page, per-season Make current / Activate and make current / Publish / Unpublish. Another coach's id in the URL → "Team not found" (rules). Password-only coach sees "Link Google account". **Not yet in Tallies mode (B+):** stats entry, roster, lineups, awards, lifecycle, Team Designer, New Season Setup, My Players, team creation for an empty workspace.
+
+**Rules (`firestore.target.rules` only).** `publishedCurrentAfter()` for `publicTeams` (all public branding fields must equal the team's); unpublish guard in `isPublicationChange(seasonId)`; `validCareerLinks`; links-only player update on finalized seasons. `firestore.rules`/`firebase.json` unchanged.
+
+**Hosting plan.** `firebase.tallies.json` targets only site `talllies` (three Ls), rewrites `/teams/**` first, deploys no rules. Future deploy (separate approval): `NEXT_PUBLIC_FEATURE_MULTI_COACH=1 next build` then `firebase deploy --only hosting --config firebase.tallies.json --project baseball-coach-997ab --account mikecbauervision@gmail.com`. Its CSP adds what Google sign-in needs (apis.google.com, accounts.google.com, the auth domain frame) — verify against real OAuth before relying on it. `bauer-baseball` is untouched by that command.
+
+### Production prerequisites (each separately approved)
+
+1. Checkpoint B+ (Admin on the target rules) and D (onboarding), so coaches can run a season in Tallies mode.
+2. Ownership/publication backfill tool (not built yet): Tigers `teams` doc + `publicTeams`, `teamId`/`ownerUid`/`published` on the 2026 seasons (Falcons draft unpublished), `teams/{t}.currentSeasonId` from app/config; then the privacy split (careerLinks).
+3. §10 steps 2–5 (Google provider, authorized domain `talllies.web.app`, explicit owner link, workspace migration, target rules) — order in `docs/PUBLIC_PRIVATE_DATA.md` §5.
+4. Tallies Hosting deploy to `talllies` with the flag on; legacy `bauer-baseball` retired or redirected afterwards (decision pending).
+
+### Limitations
+
+- Real Google OAuth, the Tallies CSP, and the `talllies` domain are untested (emulator credential seam only).
+- careerLinks hygiene is enforced by the app's publish/unpublish flow; rules guarantee unpublished seasons are unreadable but cannot inspect each link entry.

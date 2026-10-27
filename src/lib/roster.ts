@@ -89,6 +89,8 @@ export type Player = {
   identityStatus?: "confirmed" | "unreviewed";
   /** Prior roster entries the coach explicitly linked when importing. */
   linkedFrom?: Array<{ seasonId: string; seasonPlayerId: string }>;
+  /** Public career links (multi-coach data model; see careerLinks.ts). */
+  careerLinks?: Array<{ seasonId: string; seasonPlayerId: string }>;
   stats: PlayerBattingStats;
 };
 

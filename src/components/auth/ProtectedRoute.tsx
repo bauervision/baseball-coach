@@ -3,6 +3,7 @@
 import * as React from "react";
 import type { AppSession } from "@/lib/session";
 import { onSessionChanged, readSession } from "@/lib/session";
+import { useAppMode } from "@/lib/teamScope";
 
 type Role = AppSession["role"];
 
@@ -33,6 +34,7 @@ export function ProtectedRoute(props: {
     readSession(),
   );
   const [ready, setReady] = React.useState(() => readSession() !== null);
+  const mode = useAppMode();
 
   React.useEffect(() => {
     let alive = true;
@@ -65,6 +67,10 @@ export function ProtectedRoute(props: {
       document.removeEventListener("visibilitychange", onFocus);
     };
   }, []);
+
+  // Tallies mode: the coach workspace gate decides from Firebase Auth and
+  // Firestore (the local session is only a UI hint there).
+  if (mode === "tallies") return <>{children}</>;
 
   if (!ready) return <>{loadingFallback}</>;
 

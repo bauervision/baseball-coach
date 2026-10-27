@@ -184,6 +184,8 @@ export type CareerHistoryRow = {
   /** Season-specific coach recognition, positive only. */
   recognition: string[];
   accent?: string;
+  /** The season's team (cross-team career links on team routes). */
+  teamId?: string;
 };
 
 export function buildCareerHistoryRows(
@@ -225,6 +227,7 @@ export function buildCareerHistoryRows(
       atBats: clean(p.stats.atBats),
       recognition,
       accent: p.season.branding?.primary,
+      ...(p.season.teamId ? { teamId: p.season.teamId } : {}),
     };
   });
 }

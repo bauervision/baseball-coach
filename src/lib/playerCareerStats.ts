@@ -19,6 +19,7 @@ import {
   type ParticipationDoc,
 } from "@/lib/careerHistory";
 import { normalizeSeasonMeta } from "@/lib/rosterStore";
+import { seasonSortKey } from "@/lib/seasonOrder";
 
 type SeasonInfo = ParticipationDoc["season"];
 
@@ -155,4 +156,44 @@ export async function loadCareerSummary(opts: {
     history: buildCareerHistoryRows(included),
     totals: aggregateCareerStats(included),
   };
+}
+
+/**
+ * Public career for a team route (multi-coach data model): follows the
+ * entry's public careerLinks only — the coach's identity data is private.
+ * A link to a season that is not (or no longer) published cannot be read
+ * (rules) and is skipped, as is anything that is not marked published.
+ */
+export async function loadPublicCareer(opts: {
+  db: Firestore;
+  seasonId: string;
+  player: Player;
+  currentSeason: SeasonInfo;
+}): Promise<CareerSummary> {
+  const { db, seasonId, player, currentSeason } = opts;
+  const parts: ParticipationDoc[] = [
+    participation(seasonId, player.id, { name: player.name, number: player.number, stats: player.stats }, currentSeason),
+  ];
+  const links = (player.careerLinks ?? []).filter((l) => l.seasonId !== seasonId);
+  const loaded = await Promise.all(
+    links.map(async (l) => {
+      try {
+        const [s, p] = await Promise.all([
+          getDoc(doc(db, "seasons", l.seasonId)),
+          getDoc(doc(db, "seasons", l.seasonId, "players", l.seasonPlayerId)),
+        ]);
+        if (!s.exists() || !p.exists() || s.data().published !== true) return null;
+        return participation(l.seasonId, p.id, p.data(), seasonInfo(s.data()));
+      } catch {
+        return null;
+      }
+    }),
+  );
+  for (const p of loaded) if (p) parts.push(p);
+  parts.sort(
+    (a, b) =>
+      seasonSortKey(a.season.seasonLabel, a.season.createdAtMs) -
+      seasonSortKey(b.season.seasonLabel, b.season.createdAtMs),
+  );
+  return { history: buildCareerHistoryRows(parts), totals: aggregateCareerStats(parts) };
 }

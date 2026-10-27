@@ -19,6 +19,8 @@ import type { Player, PlayerBattingStats } from "@/lib/roster";
 import { normalizeSavedOrder } from "@/lib/recognitionLayout";
 import { asIdentityStatus } from "@/lib/playerIdentity";
 import { normalizeLinkedFrom } from "@/lib/careerHistory";
+import { normalizeCareerLinks } from "@/lib/careerLinks";
+import { useTeamScope } from "@/lib/teamScopeContext";
 import { asSeasonStatus, type SeasonStatus } from "@/lib/seasonLifecycle";
 import {
   LEGACY_TIGERS_BRANDING,
@@ -262,6 +264,8 @@ function normalizePlayer(data: unknown, fallbackId: string): Player | null {
   if (primaryPos) p.primaryPos = primaryPos;
   const linkedFrom = normalizeLinkedFrom(d.linkedFrom);
   if (linkedFrom.length) p.linkedFrom = linkedFrom;
+  const careerLinks = normalizeCareerLinks(d.careerLinks);
+  if (careerLinks.length) p.careerLinks = careerLinks;
 
   return p;
 }
@@ -295,9 +299,17 @@ type RosterSnapshot = {
   /** app/config.currentSeasonId: the coach's administrative season. */
   activeSeasonId: string;
   meta: RosterMeta;
+  /** The season doc has been read (meta is real, not the default). */
+  loaded: boolean;
   players: Player[] | null;
   error: string | null;
 };
+
+/**
+ * Requested-season value meaning "no season": team routes that have not
+ * resolved (or have nothing published) must never follow app/config.
+ */
+export const NO_SEASON = "__none__"; // reserved Firestore id form: never a real season
 
 type Subscriber = {
   /** Requested season, or null to follow the active season. */
@@ -308,6 +320,7 @@ type Subscriber = {
 
 type SeasonWatch = {
   meta: RosterMeta;
+  loaded: boolean;
   players: Player[] | null;
   error: string | null;
   unsubs: Unsubscribe[];
@@ -349,19 +362,20 @@ class RosterWatchManager {
   ): Unsubscribe {
     const sub: Subscriber = { requested, cb, sid: null };
     this.subscribers.add(sub);
-    this.ensureConfig();
+    // Only "follow the active season" subscribers need app/config.
+    if (requested === null) this.ensureConfig();
     this.route(sub);
     this.push(sub);
 
     return () => {
       this.subscribers.delete(sub);
       if (sub.sid) this.release(sub.sid, sub);
-      if (this.subscribers.size === 0) this.scheduleConfigTeardown();
+      if (![...this.subscribers].some((s) => s.requested === null)) this.scheduleConfigTeardown();
     };
   }
 
   private route(sub: Subscriber): void {
-    const next = sub.requested ?? this.activeSeasonId;
+    const next = sub.requested === NO_SEASON ? null : sub.requested ?? this.activeSeasonId;
     if (next === sub.sid) return;
     if (sub.sid) this.release(sub.sid, sub);
     sub.sid = next;
@@ -374,8 +388,9 @@ class RosterWatchManager {
       seasonId: sub.sid ?? "",
       activeSeasonId: this.activeSeasonId ?? "",
       meta: w?.meta ?? DEFAULT_META,
+      loaded: w?.loaded ?? false,
       players: w?.players ?? null,
-      error: w?.error ?? this.configError,
+      error: w?.error ?? (sub.requested === null ? this.configError : null),
     });
   }
 
@@ -418,7 +433,7 @@ class RosterWatchManager {
     if (this.configTeardown) return;
     this.configTeardown = setTimeout(() => {
       this.configTeardown = null;
-      if (this.subscribers.size > 0) return;
+      if ([...this.subscribers].some((s) => s.requested === null)) return;
       this.configUnsub?.();
       this.configUnsub = null;
       this.activeSeasonId = null;
@@ -430,6 +445,7 @@ class RosterWatchManager {
     if (!w) {
       w = {
         meta: DEFAULT_META,
+        loaded: false,
         players: null,
         error: null,
         unsubs: [],
@@ -468,11 +484,13 @@ class RosterWatchManager {
           w.meta = seasonSnap.exists()
             ? normalizeMeta(seasonSnap.data())
             : DEFAULT_META;
+          w.loaded = seasonSnap.exists();
           w.error = null;
           this.emitSeason(seasonId);
         },
         (e) => {
           w.meta = DEFAULT_META;
+          w.loaded = false;
           w.error = e?.message ?? "Failed to load season.";
           this.emitSeason(seasonId);
         },
@@ -506,19 +524,28 @@ const rosterWatch = new RosterWatchManager();
  * Season data for the requested season, or for the active season when
  * `seasonId` is null/undefined. Parent-facing pages pass the viewed season
  * (useViewedSeasonId); admin pages omit it to follow the active season.
+ *
+ * On a team route (Tallies) the team scope decides instead: the route's
+ * verified season, or nothing at all — never app/config. The team's
+ * published current season stands in for the "active" season there.
  */
 export function useRosterPlayers(seasonId?: string | null): {
   seasonId: string;
   activeSeasonId: string;
   meta: RosterMeta;
+  loaded: boolean;
   players: Player[] | null;
   error: string | null;
 } {
-  const requested = seasonId?.trim() || null;
+  const scope = useTeamScope();
+  const requested = scope.inTeam
+    ? (scope.seasonId ?? NO_SEASON)
+    : seasonId?.trim() || null;
   const [snap, setSnap] = React.useState<RosterSnapshot>({
-    seasonId: requested ?? "",
+    seasonId: requested === NO_SEASON ? "" : requested ?? "",
     activeSeasonId: "",
     meta: DEFAULT_META,
+    loaded: false,
     players: null,
     error: null,
   });
@@ -534,6 +561,7 @@ export function useRosterPlayers(seasonId?: string | null): {
     };
   }, [requested]);
 
+  if (scope.inTeam) return { ...snap, activeSeasonId: scope.currentSeasonId ?? "" };
   return snap;
 }
 

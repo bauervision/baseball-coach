@@ -5,36 +5,51 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { getFirestoreDb } from "@/lib/firebase.client";
-import { listSeasons, type SeasonSummary } from "@/lib/seasonStore";
+import { listPublishedTeamSeasons, listSeasons, type SeasonSummary } from "@/lib/seasonStore";
+import { useTeamScope } from "@/lib/teamScope";
+import { useSeasonLinks } from "@/lib/seasonLinks";
 import { seasonTag, visibleToViewers } from "@/lib/seasonLifecycle";
 import { withSeason } from "@/lib/viewedSeason";
 
 // Seasons change rarely: read once per page load, and drop the cache when
-// the coach creates, activates, finalizes, or reopens a season.
-let cache: SeasonSummary[] | null = null;
+// the coach creates, activates, finalizes, or reopens a season. On a team
+// route (Tallies) the list is that team's published seasons only.
+const cache = new Map<string, SeasonSummary[]>();
+const ALL = "";
 
 export function invalidateSeasonList(): void {
-  cache = null;
+  cache.clear();
 }
 
 export function useSeasonList(): SeasonSummary[] | null {
-  const [list, setList] = React.useState<SeasonSummary[] | null>(() => cache);
+  const scope = useTeamScope();
+  const teamId = scope.inTeam ? scope.teamId : null;
+  const key = teamId ?? ALL;
+  const [state, setState] = React.useState<{ key: string; list: SeasonSummary[] } | null>(() => {
+    const hit = cache.get(key);
+    return hit ? { key, list: hit } : null;
+  });
   React.useEffect(() => {
-    if (cache) return;
+    const hit = cache.get(key);
+    if (hit) {
+      setState({ key, list: hit });
+      return;
+    }
     let active = true;
-    listSeasons(getFirestoreDb())
+    const db = getFirestoreDb();
+    (teamId ? listPublishedTeamSeasons(db, teamId) : listSeasons(db))
       .then((l) => {
-        cache = l;
-        if (active) setList(l);
+        cache.set(key, l);
+        if (active) setState({ key, list: l });
       })
       .catch(() => {
-        if (active) setList([]);
+        if (active) setState({ key, list: [] });
       });
     return () => {
       active = false;
     };
-  }, []);
-  return list;
+  }, [key, teamId]);
+  return state?.key === key ? state.list : null;
 }
 
 export function seasonOptionText(s: SeasonSummary, activeSeasonId: string): string {
@@ -63,6 +78,8 @@ export function SeasonSelector(props: {
   const pathname = usePathname();
   const sp = useSearchParams();
   const list = useSeasonList();
+  const links = useSeasonLinks();
+  const scope = useTeamScope();
   const id = React.useId();
 
   const options = (list ?? []).filter(
@@ -72,7 +89,13 @@ export function SeasonSelector(props: {
   );
   const viewingPast = !!activeSeasonId && viewedSeasonId !== activeSeasonId;
   const currentHref = (sid: string) =>
-    hrefFor ? hrefFor(sid) : withSeason(`${pathname}?${sp.toString()}`, sid, activeSeasonId);
+    hrefFor
+      ? hrefFor(sid)
+      : scope.inTeam
+        ? scope.route?.view === "trophies"
+          ? links.trophies(sid)
+          : links.home(sid)
+        : withSeason(`${pathname}?${sp.toString()}`, sid, activeSeasonId);
 
   if (options.length < 2 && !viewingPast) return null;
 

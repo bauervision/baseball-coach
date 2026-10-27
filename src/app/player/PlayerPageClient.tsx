@@ -15,11 +15,13 @@ import {
   type StatKey as LeaderStatKey,
 } from "@/lib/roster";
 import { useRosterPlayers } from "@/lib/rosterStore";
-import { useViewedSeasonId, withSeason } from "@/lib/viewedSeason";
+import { useViewedSeasonId } from "@/lib/viewedSeason";
+import { useSeasonLinks } from "@/lib/seasonLinks";
+import { useTeamScope } from "@/lib/teamScope";
 import { isFinalized } from "@/lib/seasonLifecycle";
 import { SeasonSelector } from "@/components/season/SeasonSelector";
 import { getFirebaseAuth, getFirestoreDb } from "@/lib/firebase.client";
-import { loadCareerSummary, type CareerSummary } from "@/lib/playerCareerStats";
+import { loadCareerSummary, loadPublicCareer, type CareerSummary } from "@/lib/playerCareerStats";
 import { ArrowLeft } from "lucide-react";
 import { computeTrophies, computeRunnerUpAwards } from "@/lib/trophies";
 
@@ -109,14 +111,17 @@ const STAT_HELP: Record<
 
 export default function PlayerPageClient() {
   const sp = useSearchParams();
-  const id = (sp.get("id") ?? "").trim();
+  // Team routes carry the player in the path; legacy pages in ?id=.
+  const scope = useTeamScope();
+  const id = scope.inTeam ? (scope.route?.playerId ?? "") : (sp.get("id") ?? "").trim();
+  const links = useSeasonLinks();
 
   // The viewed season (?season=) drives everything on this page: stats,
   // game log, awards, saved arrangement, recognition sheet, and PDF.
   const viewedSeasonParam = useViewedSeasonId();
   const { seasonId, activeSeasonId, meta, players, error } =
     useRosterPlayers(viewedSeasonParam);
-  const homeHref = withSeason("/", viewedSeasonParam);
+  const homeHref = links.home(viewedSeasonParam);
 
   const [activeStat, setActiveStat] = React.useState<StatKey | null>(null);
   const [viewMode, setViewMode] = React.useState<"plaque" | "season">("season");
@@ -132,7 +137,8 @@ export default function PlayerPageClient() {
   const db = React.useMemo(() => getFirestoreDb(), []);
   const { canEdit: isCoach } = useAdminAuth({ auth, db });
   // Finalized seasons are read-only (also enforced by Firestore rules).
-  const canEdit = isCoach && !isFinalized(meta);
+  // Parents' team pages never show coach controls, even to the coach.
+  const canEdit = !links.publicView && isCoach && !isFinalized(meta);
 
   // Recognition sheet arrangement: `draftOrder` is non-null while editing.
   const [draftOrder, setDraftOrder] = React.useState<string[] | null>(null);
@@ -161,13 +167,15 @@ export default function PlayerPageClient() {
   // Career follows the permanent identity (careerPlayerId) and only
   // explicitly linked seasons; names are never matched.
   const { teamName, seasonLabel, endSeasonMode, finalAwards } = meta;
+  const publicCareer = links.publicView;
   React.useEffect(() => {
-    if (!player?.careerPlayerId || !seasonId) return;
+    if (!player || !seasonId) return;
+    if (publicCareer ? !player.careerLinks?.length : !player.careerPlayerId) return;
 
     let active = true;
     setCareerStatsLoading(true);
 
-    void loadCareerSummary({
+    void (publicCareer ? loadPublicCareer : loadCareerSummary)({
       db: getFirestoreDb(),
       seasonId,
       player,
@@ -186,19 +194,19 @@ export default function PlayerPageClient() {
     return () => {
       active = false;
     };
-  }, [player, seasonId, teamName, seasonLabel, endSeasonMode, finalAwards]);
+  }, [player, seasonId, teamName, seasonLabel, endSeasonMode, finalAwards, publicCareer]);
 
   const playerHrefForSeason = React.useCallback(
     (targetSeasonId: string) => {
       const row = career?.history.find((h) => h.seasonId === targetSeasonId);
       if (targetSeasonId === seasonId && player) {
-        return withSeason(`/player?id=${encodeURIComponent(player.id)}`, targetSeasonId, activeSeasonId);
+        return links.player(targetSeasonId, player.id, activeSeasonId);
       }
       return row
-        ? withSeason(`/player?id=${encodeURIComponent(row.seasonPlayerId)}`, targetSeasonId, activeSeasonId)
-        : withSeason("/", targetSeasonId, activeSeasonId);
+        ? links.player(targetSeasonId, row.seasonPlayerId, activeSeasonId, row.teamId)
+        : links.home(targetSeasonId, activeSeasonId);
     },
-    [career, seasonId, player, activeSeasonId],
+    [career, seasonId, player, activeSeasonId, links],
   );
 
   const leaders = React.useMemo(() => computeLeaders(players ?? []), [players]);

@@ -6,7 +6,8 @@ import Image from "next/image";
 import { Trophy } from "lucide-react";
 
 import { useRosterPlayers } from "@/lib/rosterStore";
-import { useViewedSeasonId, withSeason } from "@/lib/viewedSeason";
+import { useViewedSeasonId } from "@/lib/viewedSeason";
+import { useSeasonLinks } from "@/lib/seasonLinks";
 import { SeasonSelector } from "@/components/season/SeasonSelector";
 import { useTrophyArt } from "@/components/theme/BrandingProvider";
 import {
@@ -48,7 +49,8 @@ export default function TrophiesClient() {
   const viewedSeasonParam = useViewedSeasonId();
   const { seasonId, activeSeasonId, meta, players, error } =
     useRosterPlayers(viewedSeasonParam);
-  const homeHref = withSeason("/", viewedSeasonParam);
+  const links = useSeasonLinks();
+  const homeHref = links.home(viewedSeasonParam);
   const [openHow, setOpenHow] = React.useState(false);
   const isEndSeason = meta.endSeasonMode === true;
   const trophies = React.useMemo(() => getTrophyDefinitions(), []);

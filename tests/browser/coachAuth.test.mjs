@@ -110,21 +110,21 @@ async function noOverflow(page, label) {
   assert.ok(sw <= cw, `${label}: horizontal overflow ${sw} > ${cw}`);
 }
 
-/** Overlay → Coach Login → Continue with Google → lands on /admin/. */
+/** Tallies sign-in → Continue with Google → lands on /admin/. */
 async function signInWithGoogleUi(page) {
-  await page.goto(`${BASE}/`);
-  await page.getByRole("button", { name: "Coach Login" }).click();
+  await page.goto(`${BASE}/signin/`);
   await page.getByRole("button", { name: "Continue with Google" }).click();
   await page.waitForURL(/\/admin\/?$/, { timeout: 30000 });
 }
 
 const gate = (page) => page.locator("[data-coach-gate]");
+const teamIds = (page) => page.locator("[data-team-link-row]").evaluateAll((els) => els.map((e) => e.getAttribute("data-team-link-row")));
 // The coach area is neutral: no legacy team/season labels, no raw rules errors.
 async function neutralShell(page, label) {
   const body = await page.locator("body").innerText();
   assert.doesNotMatch(body, /evaluation error|insufficient permissions|PERMISSION_DENIED/i, `${label}: no raw errors`);
   assert.doesNotMatch(body, /Mustang Tigers|Spring 2026|Fall 2026/, `${label}: no legacy team/season labels`);
-  assert.match(await page.locator("header").first().innerText(), /Baseball Coach/);
+  assert.match(await page.locator("header").first().innerText(), /tallies/);
 }
 
 test("A: the original password coach links Google; UID and access are unchanged (390)", { skip: SKIP }, async () => {
@@ -201,8 +201,8 @@ for (const [tag, viewport] of [["1366", { width: 1366, height: 768 }], ["1440", 
     assert.equal((await db.collection("coachWorkspaces").where("ownerUid", "==", uid).get()).size, 0, "no workspace");
     await noOverflow(page, `${tag} access not enabled`);
     await gate(page).getByRole("button", { name: "Sign out" }).click();
-    await page.getByRole("button", { name: "Coach Login" }).waitFor({ timeout: 20000 });
-    assert.equal(await page.locator("[data-coach-gate]").count(), 0, "protected UI gone after sign-out");
+    await page.locator('[data-coach-gate="signedOut"]').waitFor({ timeout: 20000 });
+    assert.equal(await page.locator('[data-coach-gate="approved"], [data-coach-gate="notApproved"]').count(), 0, "protected UI gone after sign-out");
     assert.deepEqual(page.errors, []);
     await page.context().close();
   });
@@ -217,21 +217,19 @@ test("D: each coach sees only their own workspace teams (1366)", { skip: SKIP },
   const n = await newPage({ width: 1366, height: 768 }, { flags: { multiCoach: true }, googleEmail: NEW_EMAIL });
   await signInWithGoogleUi(n);
   await n.getByRole("list", { name: "Your teams" }).waitFor({ timeout: 30000 });
-  assert.deepEqual(await n.getByRole("list", { name: "Your teams" }).getByRole("listitem").allInnerTexts(), ["Hawks"]);
+  assert.deepEqual(await teamIds(n), ["hawks-0001"]);
   await n.context().close();
 
   // The original coach signs in with the password fallback (Google linked in A).
   const o = await newPage({ width: 1366, height: 768 }, { flags: { multiCoach: true } });
-  await o.goto(`${BASE}/`);
-  await o.getByRole("button", { name: "Coach Login" }).click();
+  await o.goto(`${BASE}/signin/`);
   await o.getByRole("button", { name: "Use email and password instead" }).click();
-  await o.getByPlaceholder("Email").fill(ORIGINAL.email);
-  await o.getByPlaceholder("Password").fill("fixture-pass-123");
-  await o.getByRole("button", { name: "Sign In" }).click();
-  await o.waitForTimeout(2500);
-  await o.goto(`${BASE}/admin/`);
+  await o.getByLabel("Email").fill(ORIGINAL.email);
+  await o.getByLabel("Password").fill("fixture-pass-123");
+  await o.getByRole("button", { name: "Sign in", exact: true }).click();
+  await o.waitForURL(/\/admin\/?$/, { timeout: 30000 });
   await o.getByRole("list", { name: "Your teams" }).waitFor({ timeout: 30000 });
-  assert.deepEqual(await o.getByRole("list", { name: "Your teams" }).getByRole("listitem").allInnerTexts(), ["Falcons"]);
+  assert.deepEqual(await teamIds(o), ["falcons-0001"]);
   assert.equal(await gate(o).getAttribute("data-workspace-id"), "ws_original");
   assert.deepEqual(o.errors, []);
   await o.context().close();

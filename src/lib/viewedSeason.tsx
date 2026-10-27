@@ -8,6 +8,7 @@
 
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
+import { useTeamScope } from "@/lib/teamScopeContext";
 
 const ViewedSeasonContext = React.createContext<string | null>(null);
 
@@ -38,9 +39,15 @@ export function ViewedSeasonProvider(props: { children: React.ReactNode }) {
   );
 }
 
-/** The season id from the URL, or null for "the active season". */
+/**
+ * The season id from the URL, or null for "the active season". On a team
+ * route it is the route's resolved season (null until resolved; data hooks
+ * read the team scope themselves and never fall back to app/config there).
+ */
 export function useViewedSeasonId(): string | null {
-  return React.useContext(ViewedSeasonContext);
+  const fromQuery = React.useContext(ViewedSeasonContext);
+  const scope = useTeamScope();
+  return scope.inTeam ? scope.seasonId : fromQuery;
 }
 
 export { withSeason } from "@/lib/seasonHref";

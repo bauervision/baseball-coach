@@ -1,0 +1,137 @@
+/* Tallies brand surface: public landing, sign-in, coach shell.
+   Scoped to .tallies so team pages keep their own season branding. */
+
+.tallies {
+  --t-bg: #fff8ee;
+  --t-ink: #221b3a;
+  --t-ink-soft: #4a4263;
+  --t-muted: #625a78;
+  --t-card: #ffffff;
+  --t-line: rgba(34, 27, 58, 0.14);
+  --t-coral: #ef4f5a;
+  --t-coral-ink: #b8283a; /* coral for small text on cream (AA) */
+  --t-sun: #ffb627;
+  --t-teal: #1f9d8b;
+  --t-focus: #3b6fe0;
+  --t-btn-bg: #221b3a;
+  --t-btn-fg: #fff8ee;
+
+  min-height: 100dvh;
+  background: var(--t-bg);
+  color: var(--t-ink);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  .tallies {
+    --t-bg: #16122a;
+    --t-ink: #fff4e6;
+    --t-ink-soft: #ddd3ee;
+    --t-muted: #b9b0cf;
+    --t-card: #221c3d;
+    --t-line: rgba(255, 244, 230, 0.14);
+    --t-coral: #ff6b6f;
+    --t-coral-ink: #ff8a8d;
+    --t-sun: #ffc94d;
+    --t-teal: #3cc2b0;
+    --t-focus: #7ea2ff;
+    --t-btn-bg: #fff4e6;
+    --t-btn-fg: #16122a;
+  }
+}
+
+.tallies-wordmark {
+  font-family: var(--font-tallies), "Bubblegum Sans", system-ui, sans-serif;
+  font-weight: 400;
+  line-height: 0.95;
+  letter-spacing: 0.01em;
+  color: var(--t-ink, currentColor);
+}
+
+.tallies :focus-visible {
+  outline: 3px solid var(--t-focus);
+  outline-offset: 2px;
+  border-radius: 10px;
+}
+
+.tallies-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 44px;
+  padding: 0 1.15rem;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  background: var(--t-btn-bg);
+  color: var(--t-btn-fg);
+  border: 2px solid var(--t-btn-bg);
+  transition: transform 120ms ease, box-shadow 120ms ease;
+  box-shadow: 0 3px 0 var(--t-coral);
+}
+.tallies-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 0 var(--t-coral);
+}
+.tallies-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.tallies-btn--quiet {
+  background: transparent;
+  color: var(--t-ink);
+  border-color: var(--t-line);
+  box-shadow: none;
+}
+.tallies-btn--quiet:hover:not(:disabled) {
+  box-shadow: none;
+  border-color: var(--t-ink-soft);
+}
+
+.tallies-link {
+  color: var(--t-ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--t-coral);
+  text-decoration-thickness: 2px;
+}
+
+.tallies-card {
+  background: var(--t-card);
+  border: 1px solid var(--t-line);
+  border-radius: 20px;
+}
+
+.tallies-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 1px solid var(--t-line);
+}
+
+.tallies-input {
+  width: 100%;
+  min-height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--t-line);
+  background: var(--t-bg);
+  color: var(--t-ink);
+  padding: 0 0.85rem;
+  font-size: 0.95rem;
+}
+
+/* Pennant: the hero's single decorative shape. */
+.tallies-pennant {
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+
+/* Headings that receive focus on state changes (screen readers) need no ring. */
+.tallies [tabindex="-1"]:focus-visible {
+  outline: none;
+}

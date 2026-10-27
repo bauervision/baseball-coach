@@ -1,6 +1,8 @@
 import {
   collection,
   getDocs,
+  query,
+  where,
   type DocumentData,
   type Firestore,
 } from "firebase/firestore";
@@ -29,6 +31,8 @@ export type SeasonSummary = {
   lifecycleHistory: LifecycleEvent[];
   /** The season's own branding snapshot; null for legacy seasons. */
   branding: SeasonBranding | null;
+  /** Visible to parents (multi-coach data model); separate from status. */
+  published: boolean;
 };
 
 /**
@@ -65,6 +69,7 @@ export function seasonSummaryFromData(
       ? (data.lifecycleHistory as LifecycleEvent[])
       : [],
     branding: meta.hasBrandingSnapshot ? meta.branding : null,
+    published: data.published === true,
   };
 }
 
@@ -78,6 +83,40 @@ export async function listSeasons(db: Firestore): Promise<SeasonSummary[]> {
         seasonSortKey(b.seasonLabel, b.createdAtMs) -
         seasonSortKey(a.seasonLabel, a.createdAtMs),
     );
+}
+
+function newestFirst(list: SeasonSummary[]): SeasonSummary[] {
+  return list.sort(
+    (a, b) =>
+      seasonSortKey(b.seasonLabel, b.createdAtMs) -
+      seasonSortKey(a.seasonLabel, a.createdAtMs),
+  );
+}
+
+/**
+ * A team's published seasons, most recent first. The query asks only for
+ * what anonymous parents may read (rules are not filters).
+ */
+export async function listPublishedTeamSeasons(
+  db: Firestore,
+  teamId: string,
+): Promise<SeasonSummary[]> {
+  const snap = await getDocs(
+    query(collection(db, "seasons"), where("teamId", "==", teamId), where("published", "==", true)),
+  );
+  return newestFirst(snap.docs.map((d) => seasonSummaryFromData(d.id, d.data())));
+}
+
+/** A coach's own seasons of one team (rules: owner only). */
+export async function listOwnedTeamSeasons(
+  db: Firestore,
+  ownerUid: string,
+  teamId: string,
+): Promise<SeasonSummary[]> {
+  const snap = await getDocs(
+    query(collection(db, "seasons"), where("ownerUid", "==", ownerUid), where("teamId", "==", teamId)),
+  );
+  return newestFirst(snap.docs.map((d) => seasonSummaryFromData(d.id, d.data())));
 }
 
 /** Prior rosters for the returning-player picker. */
